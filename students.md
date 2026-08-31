@@ -15,6 +15,12 @@ For anything not covered here (integrations, Docker deployment, env-var referenc
 
 Clone under a path with **no spaces or apostrophes** (e.g. `C:\dev\...`) — shell scripts in this monorepo break otherwise.
 
+> 💡 **New to Next.js?** Cal.diy's frontend and API routes are built with [Next.js 14](https://nextjs.org/docs). The [Next.js Getting Started tutorial](https://nextjs.org/learn) covers the App Router, server components, and API routes — the three things you'll encounter most.
+
+> 💡 **New to Prisma?** The database schema lives in `packages/prisma/schema.prisma`, and all queries go through the [Prisma Client](https://www.prisma.io/docs/getting-started). The [Prisma quickstart](https://www.prisma.io/docs/getting-started/quickstart-sqlite) explains the schema → migration → query workflow.
+
+> 📖 **Architecture overview:** [docs.cal.com](https://docs.cal.com) has developer guides covering the monorepo layout, booking flows, and API design. Read the *Contributing* section before picking a task.
+
 ## Setup (first time)
 
 ```bash
@@ -119,3 +125,77 @@ yarn dev                              # http://localhost:3000
 ```
 
 Reset the database to a clean seeded state anytime: `yarn workspace @calcom/prisma db-reset` (nukes the Docker volume, re-migrates, re-seeds).
+
+## Contributing workflow
+
+All team members have write access to this repository, so the team uses a **branch-based** workflow — not forks. Here is the background and the commands.
+
+**Why not forks?** Forking is the standard model for contributing to open-source projects where you _don't_ have write access: you fork to your own GitHub account, clone your fork, and open a PR from your fork back to the original. You will encounter this when contributing to the upstream project. But for your course team — where everyone has write access to the shared repo — it just adds confusion: two clones on your machine, two remotes to keep in sync, merge conflicts that are harder to reason about.
+
+**Branch-based workflow** is what most professional teams use internally. You clone the shared repo once, create a short-lived branch for each issue, push the branch back to the same repo, and open a PR from that branch into `main`. One clone, one remote, full PR workflow.
+
+### For each issue you work on
+
+```bash
+# One-time setup: clone the team repo (skip if already done)
+git clone https://github.com/CSCI-435-SE/cal.diy.git
+cd cal.diy
+
+# Before starting each issue: make sure you are on a fresh main
+git checkout main
+git pull origin main
+
+# Create a branch named for the issue
+git checkout -b feat/issue-17-dark-mode      # new feature
+git checkout -b fix/issue-42-toast-dismiss   # bug fix
+
+# ... make your changes, run tests ...
+
+# Stage and commit
+git add <the files you changed>
+git commit -m "feat: add dark mode toggle (#17)"
+
+# Push the branch to the team repo
+git push origin feat/issue-17-dark-mode
+```
+
+After pushing, GitHub shows a **"Compare & pull request"** banner on the repository page. Click it to open a PR from your branch into `main`. Fill in the description (what changed and why), reference the issue (`Closes #17`), and request a review from a teammate.
+
+**Branch naming:**
+
+| Prefix | Use for |
+|---|---|
+| `feat/issue-<N>-short-description` | new features |
+| `fix/issue-<N>-short-description` | bug fixes |
+| `chore/short-description` | docs, config, dependency updates |
+
+> ⚠️ **`main` is protected — direct pushes are blocked.** All changes go through a reviewed PR. If you accidentally commit to `main` locally, move your changes to a branch before pushing:
+>
+> ```bash
+> git checkout -b fix/issue-42-my-fix   # create branch from your current state
+> git checkout main
+> git reset --hard origin/main          # revert local main to match remote
+> ```
+
+**After your PR is merged**, delete the branch to keep the repo tidy:
+
+```bash
+git checkout main
+git pull origin main
+git branch -d feat/issue-17-dark-mode
+```
+
+## Project documentation & policies (required reading)
+
+📚 **Official documentation:** <https://docs.cal.com> — concepts, API reference, and self-hosting guides.
+
+Cal.diy has its own established contribution processes. They are **not restated here** — you are
+responsible for finding, reading, and following them from the sources below:
+
+| You must take care of | Where to find it |
+| --- | --- |
+| How to use the tool | <https://docs.cal.com> |
+| Code review process | [CONTRIBUTING.md — House Rules](CONTRIBUTING.md) |
+| Bug / issue resolution process | [CONTRIBUTING.md — Issues](CONTRIBUTING.md) |
+| Pull request conventions & PR policies | [CONTRIBUTING.md](CONTRIBUTING.md) (PR size: < 500 lines, < 10 files) |
+| AI policies | [AGENTS.md](AGENTS.md) · [CLAUDE.md](CLAUDE.md) |
