@@ -25,7 +25,7 @@ Clone under a path with **no spaces or apostrophes** (e.g. `C:\dev\...`) — she
 
 ```bash
 # 1. Clone (Windows: symlinks flag matters) and install
-git clone -c core.symlinks=true https://github.com/musta55/cal.diy.git
+git clone -c core.symlinks=true https://github.com/CSCI-435-SE/cal.diy.git
 cd cal.diy
 yarn
 
