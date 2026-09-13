@@ -11,7 +11,9 @@ Present tense description of largest changes.
 - `Fix [insert bug here]`
 
 # Pull request process
-Summarize your pull request at the top. If your pull request addresses anything mentioned by existing issues, link those issues in your pull request description. For pull requests that are not ready to be reviewed, they must be prefixed with `WIP:` to indicate they are a work in progress, and therefore should not be reviewed for merging.
+Summarize your pull request at the top. Use the same prefix standard as branch names. (i.e. doc related PR would begin with `doc:`)
+
+If your pull request addresses anything mentioned by existing issues, link those issues in your pull request description. For pull requests that are not ready to be reviewed, they must be prefixed with `WIP:` to indicate they are a work in progress, and therefore should not be reviewed for merging.
 # Testing expectations
 Testing the changes locally is the baseline expectation. Additionally, tests will need to be written for any new features added.
 # AI tool use
