@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import { Controller } from "react-hook-form";
 
 import { useIsPlatform } from "@calcom/atoms/hooks/useIsPlatform";
 import { MAX_EVENT_DURATION_MINUTES, MIN_EVENT_DURATION_MINUTES } from "@calcom/lib/constants";
@@ -15,6 +16,8 @@ import { TextField } from "@calcom/ui/components/form";
 import { Tooltip } from "@calcom/ui/components/tooltip";
 import type { z } from "zod";
 import { createEventTypeInput } from "@calcom/features/eventtypes/lib/types";
+
+import { DurationInput } from "./DurationInput";
 
 type CreateEventTypeFormValues = z.infer<typeof createEventTypeInput>;
 
@@ -128,16 +131,10 @@ export default function CreateEventTypeForm({
           )}
 
           <div className="relative">
-            <TextField
-              type="number"
-              required
-              min={MIN_EVENT_DURATION_MINUTES}
-              max={MAX_EVENT_DURATION_MINUTES}
-              placeholder="15"
-              label={t("duration")}
-              className="pr-4"
-              {...register("length", {
-                valueAsNumber: true,
+            <Controller
+              name="length"
+              control={form.control}
+              rules={{
                 min: {
                   value: MIN_EVENT_DURATION_MINUTES,
                   message: t("duration_min_error", { min: MIN_EVENT_DURATION_MINUTES }),
@@ -146,8 +143,17 @@ export default function CreateEventTypeForm({
                   value: MAX_EVENT_DURATION_MINUTES,
                   message: t("duration_max_error", { max: MAX_EVENT_DURATION_MINUTES }),
                 },
-              })}
-              addOnSuffix={t("minutes").toLowerCase()}
+              }}
+              render={({ field }) => (
+                <DurationInput
+                  required
+                  label={t("duration")}
+                  className="pr-4"
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
           </div>
         </>

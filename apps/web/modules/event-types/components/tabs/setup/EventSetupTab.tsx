@@ -1,4 +1,5 @@
 import { useIsPlatform } from "@calcom/atoms/hooks/useIsPlatform";
+import { DurationInput } from "@calcom/features/eventtypes/components/DurationInput";
 import type { LocationCustomClassNames } from "@calcom/features/eventtypes/components/locations/types";
 import type {
   EventTypeSetupProps,
@@ -307,20 +308,11 @@ export const EventSetupTab = (
               </div>
             </div>
           ) : (
-            <TextField
-              required
-              type="number"
-              containerClassName={classNames(
-                customClassNames?.durationSection?.singleDurationInput?.container
-              )}
-              labelClassName={classNames(customClassNames?.durationSection?.singleDurationInput?.label)}
-              className={classNames(customClassNames?.durationSection?.singleDurationInput?.input)}
-              data-testid="duration"
-              {...(isManagedEventType || isChildrenManagedEventType ? lengthLockedProps : {})}
-              label={t("duration")}
+            <Controller
+              name="length"
+              control={formMethods.control}
               defaultValue={formMethods.getValues("length") ?? 15}
-              {...formMethods.register("length", {
-                valueAsNumber: true,
+              rules={{
                 min: {
                   value: MIN_EVENT_DURATION_MINUTES,
                   message: t("duration_min_error", { min: MIN_EVENT_DURATION_MINUTES }),
@@ -329,10 +321,24 @@ export const EventSetupTab = (
                   value: MAX_EVENT_DURATION_MINUTES,
                   message: t("duration_max_error", { max: MAX_EVENT_DURATION_MINUTES }),
                 },
-              })}
-              addOnSuffix={t("minutes")}
-              min={MIN_EVENT_DURATION_MINUTES}
-              max={MAX_EVENT_DURATION_MINUTES}
+              }}
+              render={({ field }) => (
+                <DurationInput
+                  required
+                  label={t("duration")}
+                  disabled={
+                    isManagedEventType || isChildrenManagedEventType ? lengthLockedProps.disabled : undefined
+                  }
+                  containerClassName={classNames(
+                    customClassNames?.durationSection?.singleDurationInput?.container
+                  )}
+                  labelClassName={classNames(customClassNames?.durationSection?.singleDurationInput?.label)}
+                  className={classNames(customClassNames?.durationSection?.singleDurationInput?.input)}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
           )}
           {!lengthLockedProps.disabled && (
