@@ -522,12 +522,14 @@ graded partly on a coherent DoD. Draft ready at `docs/agent/proposed-definition-
 **4. No release, and an unsettled version number.** §7.
 
 **5. A live file collision between two members' in-flight work.** PR #8 (`zachbowden`, issue #1)
-modifies `packages/features/eventtypes/components/CreateEventTypeForm.tsx` and
-`packages/lib/constants.ts`. The unopened branch for issue #4 modifies **the same two files**.
-Whichever lands first, the other will need a rebase, and the two changes are in adjacent
-territory — the title field and the duration field of the same form. **This should be coordinated
-on Zulip before either is merged.** *(Discovered 2026-09-15 by comparing `gh pr view 8 --json
-files` against the local branch diff; it has not been raised with anyone yet.)*
+and the unopened branch for issue #4 both modify
+`packages/features/eventtypes/components/CreateEventTypeForm.tsx` — the title field and the
+duration field of the same form. The conflict is confined to the import block (issue #4 inserts an
+import at line 4, inside PR #8's `@@ -3,7 @@` hunk); the substantive hunks are 131–150 against
+50–55 and do not meet. Whichever merges second resolves an import-ordering conflict. **Worth a
+word on Zulip before either is merged.** *(Measured 2026-09-15 with `comm -12` over
+`gh pr view 8 --json files` and `git diff --name-only origin/main..feat/issue-4-…`; it has not been
+raised with anyone yet.)*
 
 **6. Documentation that is confidently wrong is a standing hazard.** `students.md` names the wrong
 Node version and the wrong Next.js major; `AGENTS.md` and `agents/rules/**` reference three paths
