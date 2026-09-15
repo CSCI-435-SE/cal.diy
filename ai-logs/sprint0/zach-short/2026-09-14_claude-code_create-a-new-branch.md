@@ -13059,7 +13059,7 @@ _**Agent (claude-opus-5 2026-09-14 21:59:09-0400)**_
 
 Works — it skipped the tab-namer and wrote a convention-named file. But that leaves a duplicate of the same session under two names, so let me settle on one and silence the auth noise:
 
-_**Agent (claude-opus-5 2026-09-14 21:59:10-0400)**_
+_**Agent (claude-opus-5 2026-09-14 21:59:14-0400)**_
 
 <tool-use data-tool-type="shell" data-tool-name="Bash"><details>
 <summary>Tool use: **Bash**</summary>
@@ -13072,4 +13072,883 @@ rm -f ai-logs/sprint0/zach-short/2026-09-14_claude-code_agent-working-standard.m
 echo; echo "=== re-run to prove idempotence ==="; ./scripts/cal log 2>&1 | grep -vE 'Warning|specstory login|^$'
 echo; echo "=== final ai-logs ==="; ls -lh ai-logs/sprint0/zach-short/; echo; echo "=== secret scan ==="; grep -rnE 'ghp_|github_pat_|sk-[A-Za-z0-9]{20,}|AKIA|BEGIN .*PRIVATE KEY' ai-logs/sprint0/zach-short/ | head -3 || true; echo "(no output above = clean)"
 ```
+
+```text
+syntax OK ✓
+
+=== re-run to prove idempotence ===
+skipped (internal tab-namer): 2026-09-14_20-52-28-0400-you-maintain-a-2.md
+wrote 2026-09-14_claude-code_create-a-new-branch.md
+Now scan for secrets before committing:
+  grep -rnE 'ghp_|github_pat_|sk-[A-Za-z0-9]{20,}|AKIA|BEGIN .*PRIVATE KEY' /Users/zachshort/Projects/cal.diy/ai-logs/sprint0/zach-short
+
+=== final ai-logs ===
+total 1320
+-rw-r--r--@ 1 zachshort  staff   656K Sep 14 21:59 2026-09-14_claude-code_create-a-new-branch.md
+
+=== secret scan ===
+ai-logs/sprint0/zach-short/2026-09-14_claude-code_create-a-new-branch.md:10370:`SP=/private/tmp/claude-501/-Users-zachshort-Projects-cal-diy--claude-worktrees-dazzling-blackburn-d0ed04/93f660af-19fa-441c-b706-94c7d6215c83/scratchpad; F="$SP/sslog/2026-09-14_21-10-03-0400-create-a-new-branch.md"; P=/Users/zachshort/Projects/cal.diy; NS=$(grep '^NEXTAUTH_SECRET=' "$P/.env" | cut -d= -f2-); CK=$(grep '^CALENDSO_ENCRYPTION_KEY=' "$P/.env" | cut -d= -f2-); echo "=== do the real .env secret VALUES appear in the transcript? ==="; printf 'NEXTAUTH_SECRET value present:        %s\n' "$( [ -n "$NS" ] && grep -cF -- "$NS" "$F" || echo 'n/a')"; printf 'CALENDSO_ENCRYPTION_KEY present:      %s\n' "$( [ -n "$CK" ] && grep -cF -- "$CK" "$F" || echo 'n/a')"; echo "(0 = clean)"; echo; echo "=== other sensitive patterns ==="; for pat in 'ghp_' 'github_pat_' 'sk-' 'AKIA' 'BEGIN .*PRIVATE KEY' 'Bearer [A-Za-z0-9._-]\{20,\}'; do printf '%-34s %s\n' "$pat" "$(grep -cE "$pat" "$F")"; done; echo; echo "=== specstory redaction markers present? ==="; grep -cE 'REDACTED|redacted' "$F"`
+ai-logs/sprint0/zach-short/2026-09-14_claude-code_create-a-new-branch.md:10381:ghp_                               0
+ai-logs/sprint0/zach-short/2026-09-14_claude-code_create-a-new-branch.md:10382:github_pat_                        0
+(no output above = clean)
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
 </details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 21:59:17-0400)**_
+
+Those hits are my own earlier grep *commands* echoed in the transcript, not actual secrets. The real check is whether the `.env` values themselves appear:
+
+_**Agent (claude-opus-5 2026-09-14 21:59:21-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify no real secret values in transcript
+
+`P=/Users/zachshort/Projects/cal.diy; F="$P/ai-logs/sprint0/zach-short/2026-09-14_claude-code_create-a-new-branch.md"; NS=$(grep '^NEXTAUTH_SECRET=' "$P/.env" | cut -d= -f2-); CK=$(grep '^CALENDSO_ENCRYPTION_KEY=' "$P/.env" | cut -d= -f2-); echo "real NEXTAUTH_SECRET value in transcript:        $(grep -cF -- "$NS" "$F")"; echo "real CALENDSO_ENCRYPTION_KEY value in transcript: $(grep -cF -- "$CK" "$F")"; echo "(0/0 = clean)"; echo; echo "real key SHAPES (not the pattern text):"; echo "  ghp_ tokens:        $(grep -cE 'ghp_[A-Za-z0-9]{20,}' "$F")"; echo "  openai-shaped keys: $(grep -cE '\bsk-[A-Za-z0-9]{20,}' "$F")"; echo "  AWS keys:           $(grep -cE 'AKIA[0-9A-Z]{16}' "$F")"; echo "  private key blocks: $(grep -cE 'BEGIN [A-Z ]*PRIVATE KEY' "$F")"`
+
+```text
+real NEXTAUTH_SECRET value in transcript:        0
+real CALENDSO_ENCRYPTION_KEY value in transcript: 0
+(0/0 = clean)
+
+real key SHAPES (not the pattern text):
+  ghp_ tokens:        0
+  openai-shaped keys: 0
+  AWS keys:           0
+  private key blocks: 0
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 21:59:25-0400)**_
+
+Clean — zero real secret values, zero real key shapes. All fixed.
+
+## What went wrong
+
+**The `git add` failure was my error.** Your shell is in the worktree (`dazzling-blackburn-d0ed04`), the files are in `~/Projects/cal.diy`. I gave you commit blocks with no `cd`. Worse, that worktree is on `claude/agent-working-standard-31cd75`, not `short` — so had the add succeeded, you'd have committed to the wrong branch. Nothing was actually committed; both branches are still at `8f725751d2`.
+
+**`cal log` over-collected**, which is a real defect in the script I handed you:
+- It swept up Claude Code's internal **editor-tab namer** session ("You maintain a 2-3 word tag…") as if it were development work.
+- It dumped `statistics.json` into the deliverable folder.
+- It kept SpecStory's filenames (`2026-09-14_21-10-03-0400-…`), which **don't match** the required `YYYY-MM-DD_<tool>_<slug>.md`.
+- It left `.specstory/` untracked in both checkouts.
+
+Now fixed: it stages to a temp dir, skips internal sessions, renames to the course convention, and is idempotent — I ran it twice and got one file both times. `.specstory/` is in your personal exclude (worth proposing for the team's `.gitignore`, since every teammate using SpecStory will hit it).
+
+**`~/.zshrc` had the snippet twice** — you ran `cal shell >>` twice. Deduped to one, parses clean, backup at `~/.zshrc.bak-2026-09-14`.
+
+## Commit — run these from the repo, not the worktree
+
+```bash
+cal cd
+```
+
+```bash
+git add scripts/cal docs/sprint0/screenshots ai-logs/sprint0/zach-short
+```
+
+```bash
+git commit -m "feat: add cal helper script, sprint 0 screenshots and ai log"
+```
+
+`cal cd` is why the shell function exists — it drops you in `~/Projects/cal.diy` on branch `short`. Check `git status` shows `short` before committing.
+
+One thing you may want to change: the log filename is now `2026-09-14_claude-code_create-a-new-branch.md`, because SpecStory derives the slug from your first prompt. It's a valid slug but undersells a session that ended up covering setup, baselines, and the whole standard. Rename it if you like — just re-run `cal log` afterwards and delete whichever copy you don't want, since the script will regenerate its own name.
+
+---
+
+_**User (2026-09-14 22:00:04-0400)**_
+
+cal cd%                                
+zachshort@Zachs-MacBook-Pro dazzling-blackburn-d0ed04 % cd .. 
+zachshort@Zachs-MacBook-Pro worktrees % cd ..
+zachshort@Zachs-MacBook-Pro .claude % c
+d ..
+zachshort@Zachs-MacBook-Pro cal.diy % c
+al cd
+zachshort@Zachs-MacBook-Pro cal.diy % g
+it add scripts/cal docs/sprint0/screens
+hots ai-logs/sprint0/zach-short
+zachshort@Zachs-MacBook-Pro cal.diy % g
+it commit -m "feat: add cal helper scri
+pt, sprint 0 screenshots and ai log"
+→ No staged files match any configured task.
+• turbo 2.7.1
+• Packages in scope: @calcom/app-store-cli
+• Running build in 1 packages
+• Remote caching disabled
+@calcom/app-store-cli:build: cache hit, replaying logs 3473070b74ce8e16
+@calcom/app-store-cli:build: Formatted 1 file in 22ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 11ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 8ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 17ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 8ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 10ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 12ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 11ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 7ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 5ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 7ms. Fixed 1 file.
+@calcom/app-store-cli:build: Formatted 1 file in 8ms. Fixed 1 file.
+@calcom/app-store-cli:build: Generated analytics.services.generated.ts, apps.metadata.generated.ts, apps.server.generated.ts, apps.browser.generated.tsx, apps.schemas.generated.ts, apps.keys-schemas.generated.ts, bookerApps.metadata.generated.ts, crm.apps.generated.ts, calendar.services.generated.ts, payment.services.generated.ts, video.adapters.generated.ts, redirect-apps.generated.ts
+
+ Tasks:    1 successful, 1 total
+Cached:    1 cached, 1 total
+  Time:    654ms >>> FULL TURBO
+
+[short 9af409b6fb] feat: add cal helper script, sprint 0 screenshots and ai log
+ 7 files changed, 13326 insertions(+)
+ create mode 100644 ai-logs/sprint0/zach-short/.project.json
+ create mode 100644 ai-logs/sprint0/zach-short/2026-09-14_claude-code_create-a-new-branch.md
+ create mode 100644 docs/sprint0/screenshots/app-booking-page.png
+ create mode 100644 docs/sprint0/screenshots/app-booking-slots.png
+ create mode 100644 docs/sprint0/screenshots/app-login.png
+ create mode 100644 docs/sprint0/screenshots/tests-passing.png
+ create mode 100755 scripts/cal
+zachshort@Zachs-MacBook-Pro cal.diy %
+
+---
+
+_**Agent (claude-opus-5 2026-09-14 22:00:12-0400)**_
+
+Commit landed on `short` — but one file shouldn't be in it.
+
+_**Agent (claude-opus-5 2026-09-14 22:00:16-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect commit and the stray metadata file
+
+`P=/Users/zachshort/Projects/cal.diy; cd "$P" || exit 1; echo "=== what's in the commit ==="; git show --stat --oneline HEAD | head -12; echo; echo "=== the stray file ==="; cat ai-logs/sprint0/zach-short/.project.json 2>/dev/null; echo; echo "=== ALL files in the log dir (including dotfiles — this is what I missed) ==="; ls -la ai-logs/sprint0/zach-short/; echo; echo "=== is there a macOS 'cal' that my function shadows? ==="; ls -l /usr/bin/cal 2>/dev/null && /usr/bin/cal 2>/dev/null | head -3`
+
+```text
+=== what's in the commit ===
+9af409b6fb feat: add cal helper script, sprint 0 screenshots and ai log
+ ai-logs/sprint0/zach-short/.project.json           |     7 +
+ .../2026-09-14_claude-code_create-a-new-branch.md  | 13097 +++++++++++++++++++
+ docs/sprint0/screenshots/app-booking-page.png      |   Bin 0 -> 82479 bytes
+ docs/sprint0/screenshots/app-booking-slots.png     |   Bin 0 -> 151866 bytes
+ docs/sprint0/screenshots/app-login.png             |   Bin 0 -> 163421 bytes
+ docs/sprint0/screenshots/tests-passing.png         |   Bin 0 -> 145485 bytes
+ scripts/cal                                        |   222 +
+ 7 files changed, 13326 insertions(+)
+
+=== the stray file ===
+{
+  "workspace_id": "a1df-9dd0-7288-f3be",
+  "workspace_id_at": "2026-09-15T01:57:49Z",
+  "git_id": "1ef4-c057-bf4e-aa41",
+  "git_id_at": "2026-09-15T01:57:49Z",
+  "project_name": "cal.diy"
+}
+=== ALL files in the log dir (including dotfiles — this is what I missed) ===
+total 1328
+drwxr-xr-x@ 4 zachshort  staff     128 Sep 14 21:59 .
+drwxr-xr-x@ 4 zachshort  staff     128 Sep 14 21:44 ..
+-rw-r--r--@ 1 zachshort  staff     191 Sep 14 21:57 .project.json
+-rw-r--r--@ 1 zachshort  staff  671918 Sep 14 21:59 2026-09-14_claude-code_create-a-new-branch.md
+
+=== is there a macOS 'cal' that my function shadows? ===
+-r-xr-xr-x  1 root  wheel  135744 Jun 24 22:29 /usr/bin/cal
+   September 2026     
+Su Mo Tu We Th Fr Sa  
+       1  2  3  4  5
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:00:20-0400)**_
+
+Two real defects, both mine.
+
+**1. `.project.json` got committed** — SpecStory workspace metadata, not a log. I missed it because I verified with `ls -lh`, which hides dotfiles.
+
+**2. `cal` shadows `/usr/bin/cal`** — the macOS calendar. I never mentioned that; you've silently lost `cal` for dates. Fixing both:
+
+_**Agent (claude-opus-5 2026-09-14 22:00:25-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix metadata cleanup and cal command shadowing
+
+```bash
+cd /Users/zachshort/Projects/cal.diy && python3 - <<'PY'
+p='scripts/cal'; s=open(p).read()
+
+# 1. cal log must not leave SpecStory metadata in the deliverable folder.
+old="""  shopt -u nullglob
+  rm -rf "$stage"
+"""
+new="""  shopt -u nullglob
+  rm -rf "$stage"
+  # SpecStory drops .project.json / statistics.json beside its output. They are tooling
+  # metadata, not logs, and a dotfile is easy to miss with plain `ls`.
+  rm -f "$out/.project.json" "$out/statistics.json"
+"""
+assert old in s; s=s.replace(old,new,1)
+
+# 2. Stop shadowing /usr/bin/cal (the macOS calendar) for non-subcommand args.
+old_shell = '''cmd_shell() {
+  cat <<'EOF'
+cal() {
+  if [[ "$1" == "cd" ]]; then cd "$HOME/Projects/cal.diy"; else "$HOME/Projects/cal.diy/scripts/cal" "$@"; fi
+}
+'''
+new_shell = '''cmd_shell() {
+  cat <<'EOF'
+# `cal` is also macOS's calendar (/usr/bin/cal). Only take over for our own subcommands,
+# so `cal 9 2026` still prints September.
+cal() {
+  local subs; subs=("cd" "--complete" $("$HOME/Projects/cal.diy/scripts/cal" --complete | cut -d: -f1))
+  if [[ $# -eq 0 || " ${subs[*]} " == *" $1 "* ]]; then
+    if [[ "$1" == "cd" ]]; then cd "$HOME/Projects/cal.diy"; else "$HOME/Projects/cal.diy/scripts/cal" "$@"; fi
+  else
+    command cal "$@"
+  fi
+}
+'''
+assert old_shell in s; s=s.replace(old_shell,new_shell,1)
+open(p,'w').write(s); print("cal log + cal shell fixed")
+PY
+bash -n scripts/cal && echo "syntax OK ✓"; echo; echo "=== new shell snippet ==="; ./scripts/cal shell
+```
+
+```text
+cal log + cal shell fixed
+syntax OK ✓
+
+=== new shell snippet ===
+# `cal` is also macOS's calendar (/usr/bin/cal). Only take over for our own subcommands,
+# so `cal 9 2026` still prints September.
+cal() {
+  local subs; subs=("cd" "--complete" $("$HOME/Projects/cal.diy/scripts/cal" --complete | cut -d: -f1))
+  if [[ $# -eq 0 || " ${subs[*]} " == *" $1 "* ]]; then
+    if [[ "$1" == "cd" ]]; then cd "$HOME/Projects/cal.diy"; else "$HOME/Projects/cal.diy/scripts/cal" "$@"; fi
+  else
+    command cal "$@"
+  fi
+}
+
+_cal_complete() {
+  local -a subcmds
+  subcmds=("${(@f)$(cal --complete)}")
+  _describe 'command' subcmds
+}
+compdef _cal_complete cal
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:00:28-0400)**_
+
+Let me swap the installed function for the fixed one (backup already exists) and prove it works:
+
+_**Agent (claude-opus-5 2026-09-14 22:00:32-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Install fixed function and test both behaviours
+
+```bash
+cp ~/.zshrc ~/.zshrc.bak2-2026-09-14; python3 - <<'PY'
+import subprocess, re
+new = subprocess.run(['/Users/zachshort/Projects/cal.diy/scripts/cal','shell'],
+                     capture_output=True, text=True).stdout
+p='/Users/zachshort/.zshrc'; s=open(p).read()
+start = s.index('cal() {')
+# the installed block ends at the compdef line
+end = s.index('compdef _cal_complete cal', start) + len('compdef _cal_complete cal')
+s = s[:start] + new.strip().split('\n',2)[2].lstrip('\n') if False else s[:start] + new.strip() + s[end:]
+open(p,'w').write(s)
+print("replaced installed cal block")
+PY
+zsh -n ~/.zshrc && echo "zshrc parses OK ✓"; echo; echo "=== functional test in a fresh zsh ==="; zsh -ic 'cal --complete >/dev/null 2>&1 && echo "cal subcommands: OK"; cal 9 2026 2>/dev/null | head -2' 2>/dev/null; echo; echo "=== definitions present exactly once ==="; grep -c '^cal() {' ~/.zshrc
+```
+
+```text
+replaced installed cal block
+zshrc parses OK ✓
+
+=== functional test in a fresh zsh ===
+cal subcommands: OK
+   September 2026     
+Su Mo Tu We Th Fr Sa  
+
+=== definitions present exactly once ===
+1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:00:37-0400)**_
+
+Both behaviours now work in a fresh shell: `cal test`/`cal cd` hit the script, and `cal 9 2026` still prints September.
+
+## Fix the commit — `.project.json` shouldn't be in it
+
+It's unpushed, so amending is clean. From `~/Projects/cal.diy`:
+
+```bash
+git rm --cached ai-logs/sprint0/zach-short/.project.json && rm -f ai-logs/sprint0/zach-short/.project.json
+```
+
+```bash
+git add scripts/cal && git commit --amend --no-edit
+```
+
+That drops the stray metadata and folds in the two script fixes, keeping one clean commit. Then `exec zsh` to pick up the new shell function.
+
+## What I got wrong
+
+**`.project.json`** — SpecStory writes it beside its output. I verified the folder with `ls -lh`, which doesn't show dotfiles, and declared it clean. Same shape of error as the earlier greps: I checked with a command that couldn't have seen the thing I was claiming wasn't there. `cal log` now deletes it and `statistics.json` explicitly.
+
+**The `cal` name collision.** macOS ships `/usr/bin/cal`, and the function I gave you shadowed it completely — you'd have lost `cal 9 2026` with no warning. I should have checked for an existing command before naming it. The function now only intercepts its own subcommands and passes everything else through to the real `cal`.
+
+Neither was caught by anything automated — the commit succeeded, the script ran, and both defects would have sat there. Worth noting your husky pre-commit hook also ran on that commit and reported *"No staged files match any configured task"*, then rebuilt app-store-cli from cache. It isn't linting these file types, so it wouldn't have caught either.
+
+## Where things stand
+
+Committed on `short` (after the amend): `scripts/cal`, four screenshots, and the AI log. Still open: the Definition of Done draft for @lexzach's PR #7, the two convention conflicts in it, and your GATE 0 answers.
+
+---
+
+_**User (2026-09-14 22:01:14-0400)**_
+
+who is lexzach. is that another member of the project?
+
+---
+
+_**Agent (claude-opus-5 2026-09-14 22:01:18-0400)**_
+
+Yes — let me confirm rather than infer from the email alone:
+
+_**Agent (claude-opus-5 2026-09-14 22:01:22-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Identify lexzach and list repo contributors
+
+`P=/Users/zachshort/Projects/cal.diy; cd "$P" || exit 1; echo "=== PR #7 author ==="; gh pr view 7 --repo CSCI-435-SE/cal.diy --json author,title,createdAt,isDraft,url --jq '"author: \(.author.login)\ntitle:  \(.title)\nopened: \(.createdAt)\nurl:    \(.url)"' 2>/dev/null || echo "(gh unavailable)"; echo; echo "=== all commits by lexzach in fetched refs ==="; git log --all --format='%h  %an <%ae>  %s' --author='lexzach' | head -10; echo; echo "=== every distinct author across fetched refs (recent) ==="; git log --all --format='%an <%ae>' --since='2026-08-01' | sort | uniq -c | sort -rn | head -12`
+
+```text
+=== PR #7 author ===
+author: zachbowden
+title:  WIP: docs: Add standards and guidelines doc
+opened: 2026-09-13T16:54:07Z
+url:    https://github.com/CSCI-435-SE/cal.diy/pull/7
+
+=== all commits by lexzach in fetched refs ===
+09ddf9934a  lexzach <github@zachbowden.com>  Remove standards.md from this branch
+47b0bccfb6  lexzach <github@zachbowden.com>  Add character limit for event creation
+125b0e10a9  lexzach <github@zachbowden.com>  Update standards.md
+86761b40f4  lexzach <git@lexza.ch>  Add standards and guidelines doc
+
+=== every distinct author across fetched refs (recent) ===
+   3 lexzach <github@zachbowden.com>
+   2 Oscar Chaparro <ojcch1@gmail.com>
+   1 zach-short <zach.short@fantomworks.com>
+   1 lexzach <git@lexza.ch>
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:01:27-0400)**_
+
+Yes — **Zachary Bowden**, your Cal.diy teammate.
+
+`lexzach` is the git author name; the GitHub account is **`zachbowden`**, which is what [PR #7](https://github.com/CSCI-435-SE/cal.diy/pull/7) is opened under. The email `github@zachbowden.com` ties them together, and "Zachary Bowden" is second on your team roster in the Sprint 0 announcement.
+
+He's the most active contributor in the repo so far:
+
+| Commit | Branch |
+|---|---|
+| `Add standards and guidelines doc` | `docs/standards-guidelines` (PR #7) |
+| `Update standards.md` | same |
+| `Add character limit for event creation` | `feat/event-title-char-limit` (PR #8) |
+| `Remove standards.md from this branch` | same |
+
+So he has both open PRs — the D3 standards doc and a D5 feature. Note that last commit: he pulled `standards.md` *out* of the feature branch, which is the right instinct (one concern per PR, per `CONTRIBUTING.md`'s size rules).
+
+Worth knowing for the AI-log convention too: the `ai-logs/README.md` I initially missed, and the `docs/sprintN/` scaffolding, came from commit `02e09b9cb3` — which is **yours**, not his.
+
+## Two things this changes
+
+**The Definition of Done is his to merge, not yours to push.** He's actively working that branch — his most recent commit there was moving files around — so pushing into it would collide with someone mid-edit. Send the draft as a PR review comment or on your team's Zulip stream.
+
+**The conventions in his draft conflict with the project spec**, and you said the spec wins. Those are worth raising as review comments rather than silent edits, since he wrote them deliberately:
+
+- `Add …` commit style vs Conventional Commits (required by `AGENTS.md`, and the Sprint 0 spec's own example is `feat: add dark mode toggle (#17)`).
+- The `doc:` PR prefix, which **fails** `semantic-pull-requests.yml` — it accepts `docs:`, not `doc:`. That one's concrete and checkable, so it's an easy review comment to land.
+
+The draft is at `docs/agent/proposed-definition-of-done.md`, paste-ready.
+
+---
+
+_**User (2026-09-14 22:02:02-0400)**_
+
+should i tell him not to insert his personal standardization and convention docs into main so we can have our own conventions?
+
+---
+
+_**Agent (claude-opus-5 2026-09-14 22:02:10-0400)**_
+
+Let me check the premise before answering, since it matters:
+
+_**Agent (claude-opus-5 2026-09-14 22:02:14-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify whether standards doc reached main
+
+`P=/Users/zachshort/Projects/cal.diy; cd "$P" || exit 1; git fetch origin --quiet 2>/dev/null; echo "=== is any of his work actually in main? ==="; git ls-tree -r --name-only origin/main | grep -iE 'standards|convention' || echo "  nothing — main has no standards/convention docs"; echo; echo "=== main's recent history ==="; git log --format='%h %an %s' origin/main -4; echo; echo "=== open PRs ==="; gh pr list --repo CSCI-435-SE/cal.diy --json number,title,author,isDraft,headRefName --jq '.[] | "#\(.number) \(.title)  [\(.author.login)]"' 2>/dev/null`
+
+```text
+=== is any of his work actually in main? ===
+  nothing — main has no standards/convention docs
+
+=== main's recent history ===
+8f725751d2 Oscar Chaparro fix
+02e09b9cb3 Oscar Chaparro update to students' guide and adding folder structure
+57d5359b39 Musta55 docs: add student setup guide for Windows local development
+f004349273 Anirban Singha refactor: rename getEventLocationType to getLocationByType for better clarity (#28567)
+
+=== open PRs ===
+#8 WIP: feat: Event title char limit  [zachbowden]
+#7 WIP: docs: Add standards and guidelines doc  [zachbowden]
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:02:20-0400)**_
+
+I'd push back on this one — the premise doesn't hold up, and acting on it would put you in a bad spot.
+
+## Nothing of his is in `main`
+
+`main` has no standards or convention docs at all. Its last four commits are Oscar's and the TA's. Both of his PRs are open and **explicitly marked `WIP:`** — which, by the very rule he wrote in that doc, means "not ready to be reviewed for merging." He's drafting in the open, not inserting anything.
+
+## And it isn't a personal doc
+
+`docs/sprint0/standards.md` is **D3 — a required deliverable, worth 10 points**, at the exact path the spec mandates. From the Sprint 0 page: *"Each team writes an initial standards and guidelines document."* From the announcement: *"Several deliverables are shared: the standards document (D3), the sprint report (D6), and the release tag (D7) are **all one per team**."*
+
+So there is no version of this where your team has "our own conventions" separate from his. There's one team standards document, and it's graded as a team. Asking him to keep it out of the repo would be asking him to not do an assigned deliverable — and since he's the only person who's started it, that reads poorly whatever the intent.
+
+## What I think you actually want
+
+Influence over what's in it. You have that already — it's a pull request, and the drafting stage is exactly when input is cheapest. Three concrete things to contribute:
+
+1. **The empty Definition of Done.** The section exists with no content, and D3 is graded on "a coherent DoD." That's points off the whole team right now. You have a full draft ready at `docs/agent/proposed-definition-of-done.md`.
+2. **The `doc:` prefix is a bug, not a preference.** `semantic-pull-requests.yml` accepts `docs:` and rejects `doc:` — following his doc literally would fail CI. Objective, easy to land.
+3. **The commit style contradicts `AGENTS.md`** and the sprint spec's own example (`feat: add dark mode toggle (#17)`). D3's own rule says the project's guidelines win where they're more specific.
+
+All three are review comments on PR #7, not a territorial conversation.
+
+## The distinction that's actually useful
+
+There *is* a real line between team standards and personal practice — it's the one this session has been drawing all along. Everything we built for you is **untracked and private** precisely because it's your preference and shouldn't bind anyone else. The team doc should carry only what binds everyone: the repo's conventions, the gates, the DoD.
+
+If what's bothering you is that his draft encodes personal taste as team policy, the productive framing is *"does the project already specify this?"* — and for both conflicts, it does. That argument wins on evidence without anyone defending turf.
+
+---
+
+_**User (2026-09-14 22:03:32-0400)**_
+
+add the definition of done as a review comment on PR 7. no em dashes. no captilzation. keep it like a college student writing a reiew
+
+---
+
+_**Agent (claude-opus-5 2026-09-14 22:03:41-0400)**_
+
+Posting under your GitHub account, so let me get the voice right. Writing it first:
+
+_**Agent (claude-opus-5 2026-09-14 22:03:47-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Draft the PR review comment
+
+````bash
+SP=/private/tmp/claude-501/-Users-zachshort-Projects-cal-diy--claude-worktrees-dazzling-blackburn-d0ed04/93f660af-19fa-441c-b706-94c7d6215c83/scratchpad; cat > "$SP/pr7-review.md" <<'EOF'
+hey, noticed the definition of done section is still just a heading. since d3 gets graded partly on having a coherent one i took a shot at filling it in. feel free to cut whatever doesn't fit, i mostly tried to base it on stuff the repo already enforces instead of making things up.
+
+a few of these came from actually running the gates locally this week, which is where the weird ones come from:
+
+```markdown
+# Definition of Done
+
+an issue is done when all of these are true. where this list and the project's own
+guidelines disagree, the project's guidelines win.
+
+**code**
+- [ ] the change does what the issue asked and nothing unrelated comes with it
+- [ ] `yarn type-check:ci --force` passes
+- [ ] `yarn lint --force` passes with no new findings
+- [ ] follows the repo conventions in `AGENTS.md`: `select` not `include` in prisma queries,
+      no `as any`, no barrel imports, `credential.key` never returned from an api or trpc
+      endpoint, permission checks in `page.tsx` not `layout.tsx`
+- [ ] any user facing string goes through `t()` and is added to
+      `packages/i18n/locales/en/common.json`
+
+**tests**
+- [ ] tests written or updated for whatever changed. a bug fix should have a test that fails
+      before the fix and passes after
+- [ ] `TZ=UTC yarn test` passes
+- [ ] tests assert behavior, not mocks
+
+**review**
+- [ ] at least one teammate reviewed it and left an actual comment, not just an approval
+- [ ] the author can explain every line, including anything ai wrote
+
+**ci**
+- [ ] ci is green, and green means checks actually ran. if nothing ran, say so in the pr
+      description instead of calling it passing
+
+**process**
+- [ ] branch named `feat/issue-<n>-<slug>` or `fix/issue-<n>-<slug>`
+- [ ] pr description links the issue with `Closes #<n>` and explains what changed and why
+- [ ] pr is under 500 lines and 10 code files, or split up
+- [ ] no secrets or `.env` contents in the diff
+
+**docs and ai logs**
+- [ ] developer docs updated if the change needs it, or n/a stated explicitly
+- [ ] ai session log committed to `ai-logs/sprint0/<github-username>/` and linked from the issue
+- [ ] pr description says how ai was used, especially anything you changed or rejected
+```
+
+two of those need explaining because they look like nitpicks and aren't:
+
+**why `--force` on both commands.** turbo caches both of these. i ran `yarn lint` on a clean tree and got `Tasks: 11 successful, Cached: 11 cached >>> FULL TURBO`, which means it replayed an old result and checked zero files while looking completely green. with `--force` it actually checks 3970 files. `AGENTS.md` already says to use `--force` for the type check but says nothing about lint, so lint is the easier one to get fooled by.
+
+**why the ci line is worded weird.** looking at `.github/workflows/pr.yml`, a markdown or docs only pr runs no checks at all and the `required` job still passes, because of the paths filter. and without the `ready-for-e2e` label every build, e2e and integration job gets skipped. so "ci green" on its own doesn't always mean much and it seemed worth writing down.
+
+also spotted two small things elsewhere in the doc that i think conflict with the project's own rules, will leave those as separate comments so this one doesn't get too long.
+EOF
+echo "=== word count: $(wc -w < "$SP/pr7-review.md") ==="; echo "=== em dashes present? ==="; grep -c '—' "$SP/pr7-review.md" || echo "0 (clean)"
+````
+
+```text
+=== word count:      571 ===
+=== em dashes present? ===
+0
+0 (clean)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:03:49-0400)**_
+
+No em dashes, lowercase throughout. Posting it:
+
+_**Agent (claude-opus-5 2026-09-14 22:03:55-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Post the review comment on PR 7
+
+`SP=/private/tmp/claude-501/-Users-zachshort-Projects-cal-diy--claude-worktrees-dazzling-blackburn-d0ed04/93f660af-19fa-441c-b706-94c7d6215c83/scratchpad; gh pr review 7 --repo CSCI-435-SE/cal.diy --comment --body-file "$SP/pr7-review.md" 2>&1 | tail -3; echo; echo "=== verify it posted ==="; gh api repos/CSCI-435-SE/cal.diy/pulls/7/reviews --jq '.[] | "\(.user.login)  \(.state)  \(.submitted_at)"' 2>/dev/null | tail -3`
+
+```text
+=== verify it posted ===
+zach-short  COMMENTED  2026-09-15T02:03:54Z
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:03:59-0400)**_
+
+Posted. Confirmed live on [PR #7](https://github.com/CSCI-435-SE/cal.diy/pull/7) as `zach-short  COMMENTED  2026-09-15T02:03:54Z`.
+
+## What went in
+
+The full definition of done as a paste-ready markdown block, plus two short explanations for the bits that look like nitpicks but aren't:
+
+- **why `--force` on both gate commands** — with the actual evidence, that a clean `yarn lint` printed `Cached: 11 cached >>> FULL TURBO` and checked zero files, versus 3970 files forced
+- **why the ci line is worded oddly** — citing `pr.yml`, that a docs-only PR runs no checks while `required` still passes, and that missing `ready-for-e2e` skips every build and e2e job
+
+Those two are the parts worth having in a team DoD, since they're the difference between "green" meaning something and meaning nothing.
+
+## One judgment call I made
+
+I **didn't** include the two conflicts (the `Add …` commit style, and `doc:` failing `semantic-pull-requests.yml`). The comment closes by saying you'll raise them separately. Reasoning: you asked for the definition of done, and bundling three critiques into one comment reads as a pile-on when the substantive contribution is the section he left empty. They're also a different kind of feedback — the DoD is filling a gap, those are "this contradicts the project spec."
+
+Say the word and I'll post them as a second comment. The `doc:` one is the stronger of the two to lead with, since it's objectively checkable rather than a style opinion.
+
+---
+
+_**User (2026-09-14 22:04:36-0400)**_
+
+post the other two as a second comment. write a pass off prompt for what i need to do next
+
+---
+
+_**Agent (claude-opus-5 2026-09-14 22:04:40-0400)**_
+
+Let me verify the CI claim properly before putting it in a public comment:
+
+_**Agent (claude-opus-5 2026-09-14 22:04:43-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify PR title validation has no types override
+
+`P=/Users/zachshort/Projects/cal.diy; cd "$P" || exit 1; echo "=== full semantic-pull-requests.yml (is there a types: override anywhere?) ==="; cat .github/workflows/semantic-pull-requests.yml; echo; echo "=== does AGENTS.md / CONTRIBUTING.md state commit conventions? ==="; grep -n -i 'conventional commit' AGENTS.md CONTRIBUTING.md | head -5`
+
+```text
+=== full semantic-pull-requests.yml (is there a types: override anywhere?) ===
+name: "Validate PRs"
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+permissions:
+  pull-requests: write
+
+jobs:
+  validate-pr:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        id: lint_pr_title
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: marocchino/sticky-pull-request-comment@v2
+        # When the previous steps fails, the workflow would stop. By adding this
+        # condition you can continue the execution with the populated error message.
+        if: always() && (steps.lint_pr_title.outputs.error_message != null)
+        with:
+          header: pr-title-lint-error
+          message: |
+            Hey there and thank you for opening this pull request! 👋🏼
+
+            We require pull request titles to follow the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/) and it looks like your proposed title needs to be adjusted.
+
+            Details:
+
+            ```
+            ${{ steps.lint_pr_title.outputs.error_message }}
+            ```
+
+=== does AGENTS.md / CONTRIBUTING.md state commit conventions? ===
+AGENTS.md:11:- Use conventional commits: `feat:`, `fix:`, `refactor:`
+AGENTS.md:96:- Follow conventional commits for PR titles
+AGENTS.md:212:- [ ] Title follows conventional commits: `feat(scope): description`
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:04:47-0400)**_
+
+Verified: the `types:` in that file is the workflow trigger, not an allowed-types override, and the action's own failure message links to the Conventional Commits spec. `AGENTS.md` states conventional commits in three places. Posting:
+
+_**Agent (claude-opus-5 2026-09-14 22:04:54-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Post second review comment on PR 7
+
+```bash
+SP=/private/tmp/claude-501/-Users-zachshort-Projects-cal-diy--claude-worktrees-dazzling-blackburn-d0ed04/93f660af-19fa-441c-b706-94c7d6215c83/scratchpad; cat > "$SP/pr7-review2.md" <<'EOF'
+two small things i think conflict with rules the project already has. d3 says where the project's guidelines are more specific we follow the project's, so flagging rather than just having an opinion.
+
+**the `doc:` prefix in the pull request process section would fail ci.** `.github/workflows/semantic-pull-requests.yml` runs `amannn/action-semantic-pull-request@v5` with no allowed types configured, so it falls back to the conventional commits defaults (feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert). `doc` isn't in that list, `docs` is. the workflow's own failure message links to the conventional commits spec. so a pr titled `doc: whatever` gets rejected by the check. easy fix, just `docs:`.
+
+**the commit names section conflicts with conventional commits.** the doc says present tense `Add [feature]` / `Fix [bug]`, but `AGENTS.md` line 11 says "use conventional commits: `feat:`, `fix:`, `refactor:`" and repeats it at lines 96 and 212. the sprint 0 page also uses `git commit -m "feat: add dark mode toggle (#17)"` in its own example workflow. so the project and the assignment both point the same way and our doc is the odd one out.
+
+not a big deal either way, but the first one will actually turn a check red so probably worth changing before this merges.
+EOF
+echo "em dashes: $(grep -c '—' "$SP/pr7-review2.md")"; gh pr review 7 --repo CSCI-435-SE/cal.diy --comment --body-file "$SP/pr7-review2.md" 2>&1 | tail -2; echo; echo "=== reviews on PR 7 now ==="; gh api repos/CSCI-435-SE/cal.diy/pulls/7/reviews --jq '.[] | "\(.user.login)  \(.state)  \(.submitted_at)"' 2>/dev/null
+```
+
+```text
+em dashes: 0
+
+=== reviews on PR 7 now ===
+zach-short  COMMENTED  2026-09-15T02:03:54Z
+zach-short  COMMENTED  2026-09-15T02:04:54Z
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:04:59-0400)**_
+
+Both posted. Before writing the pass-off, let me check what's actually on the board — the spec says the instructor posts issues in week 1, which changes what's next:
+
+_**Agent (claude-opus-5 2026-09-14 22:05:04-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+List open issues on the team repo
+
+`echo "=== open issues ==="; gh issue list --repo CSCI-435-SE/cal.diy --state open --limit 30 --json number,title,author,labels,assignees --jq '.[] | "#\(.number)  [\(.author.login)]  \(.title)   labels:\(.labels|map(.name)|join(","))  assignee:\(.assignees|map(.login)|join(",")//"none")"' 2>/dev/null || echo "(gh unavailable)"; echo; echo "=== total counts ==="; gh issue list --repo CSCI-435-SE/cal.diy --state all --limit 100 --json number --jq 'length' 2>/dev/null`
+
+```text
+=== open issues ===
+#10  [kojoshuay]  User can save event without changing anything   labels:bug,effort:low  assignee:
+#9  [kojoshuay]  Warn user before leaving event edit page with unsaved changes   labels:effort:medium  assignee:
+#6  [zachbowden]  Ability to set a time, not just date for being "out of office"   labels:enhancement,effort:medium  assignee:
+#5  [zachbowden]  Ability to set event theme   labels:enhancement,effort:high  assignee:
+#4  [zachbowden]  Ability to set "duration" in hours and minutes   labels:enhancement,effort:low  assignee:
+#3  [zachbowden]  Website setting to force 2fa for privileged or non-privileged users   labels:enhancement,effort:high  assignee:
+#2  [musta55]  Show a character counter on the event description field   labels:enhancement  assignee:kojoshuay
+#1  [musta55]  Limit the length of event type titles   labels:enhancement  assignee:
+
+=== total counts ===
+8
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:05:11-0400)**_
+
+That changes the picture materially. Here's the real board:
+
+| Who | Issues written | Status |
+|---|---|---|
+| `musta55` (TA) | #1, #2 | the seeded instructor issues |
+| `zachbowden` | #3, #4, #5, #6 | **D2 done** (4) |
+| `kojoshuay` | #9, #10 | 2 of 4 |
+| **`zach-short`** | **none** | **D2 not started** |
+
+`zachbowden` is already implementing #1 via PR #8, and #2 is assigned to `kojoshuay`. Saving the pass-off to the board and giving it to you:
+
+_**Agent (claude-opus-5 2026-09-14 22:05:19-0400)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add next-steps item to the board
+
+```bash
+cd /Users/zachshort/Projects/cal.diy && python3 - <<'PY'
+p='PASSOFF.md'; s=open(p).read()
+s = s.replace(
+"| 3 | Fold in GATE 0 answers; finish the AI-log deliverable | `HELD` | Default | A | Zach's GATE 0 answers + the session link |",
+"| 3 | Fold in GATE 0 answers | `HELD` | Default | A | Zach's GATE 0 answers |")
+s = s.rstrip() + """
+
+---
+
+### 6. Write the D2 issues and pick two D5 issues
+
+*Opened 2026-09-14, out of the issue-tracker state read that day.* Sprint 0 closes
+**2026-09-17, 11:59 PM**. D1 is done and committed. D2 is the largest untouched deliverable
+and the only one Zach can finish without waiting on anybody.
+
+**Model: Opus 5 (Default). Lane A. Waits on nothing for D2; D5 waits on team coordination.**
+
+Board as of 2026-09-14: #1, #2 by `musta55` (the TA's seeded issues); #3-#6 by `zachbowden`;
+#9, #10 by `kojoshuay`. **`zach-short` has written none.** `zachbowden` is implementing #1 via
+PR #8; #2 is assigned to `kojoshuay`.
+
+Do these, in order:
+1. **Draft 4+ issues with Zach** (D2, 20 pts): 2 small/medium he could finish in ~1-1.5 weeks,
+   2 ambitious. Each needs title, summary, user story, rough scope with a one-line
+   justification, and source. Labels: `scope: small|medium|large|xl` plus
+   `type: feature|improvement|bug`. Note the repo's existing labels are shaped differently
+   (`enhancement`, `effort:low|medium|high`) - match what teammates are already using and add
+   the spec's labels where they are missing. Ground every idea in the actual codebase, not
+   generic SaaS features.
+2. **Shortlist two issues written by someone else** for D5. Rule: implement issues you did not
+   write, and no two members take the same one. Unclaimed and plausible: #4 (`effort:low`),
+   #9, #10 (`effort:low`, a bug). Zach confirms on Zulip before coding.
+3. **When he starts a D5 issue, do not locate the code for him.** The sprint spec requires
+   concept location by hand first, then AI to confirm. Wait for his hypothesis.
+4. **Record it.** A new `HANDOFF.md` step and the issue numbers he actually claimed.
+
+Ask before building: which issues he wants to write, and which two he claims.
+Not in scope: opening issues or PRs without his explicit go-ahead; editing `AGENTS.md`,
+`CONTRIBUTING.md` or `agents/rules/**`.
+"""
+open(p,'w').write(s); print("PASSOFF item 6 added")
+PY
+echo ok
+```
+
+```text
+PASSOFF item 6 added
+ok
+Shell cwd was reset to /Users/zachshort/Projects/cal.diy/.claude/worktrees/dazzling-blackburn-d0ed04
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-09-14 22:05:28-0400)**_
+
+Both comments are live on [PR #7](https://github.com/CSCI-435-SE/cal.diy/pull/7). Here's the pass-off.
+
+## Block A — paste into a new chat
+
+```
+## Write the D2 issues and pick two D5 issues
+
+**Model: Opus 5. Lane A. Waits on nothing for D2; D5 waits on team coordination.**
+
+You are picking up cal.diy (`CSCI-435-SE/cal.diy`, a course-org fork of Cal.com), working in
+`~/Projects/cal.diy` on branch `short`. Read `HANDOFF.md` first: the setup recipe, the
+measured gate baselines, the invariants and the hazards are all there, do not re-derive them.
+Then `CONTRIBUTING.md` and `AGENTS.md`, then `docs/AGENT-PRACTICES.md` for process.
+Session rules, inline: absolute dates only; a citation on every claim about the code; grep
+before asserting something does not exist, and show the command; never run `git commit` or
+`git push`, print the two blocks and stop; no `Co-Authored-By` or "Generated with" lines.
+
+**Why this exists.** Sprint 0 is due 2026-09-17 11:59 PM and is 9% of the course grade. D1
+is done and committed. D2 (20 pts) is untouched and is the only remaining deliverable Zach
+can finish without waiting on anyone. D5 (30 pts) depends on team coordination.
+
+**What is fixed. Read before changing anything, do not relitigate.**
+- Use Node 22.14.0: `export PATH="/opt/homebrew/opt/node@22/bin:$PATH"`. The machine default
+  v26.7.0 breaks `yarn prisma generate`. `students.md` says v24 and is wrong.
+- Use `./scripts/cal` for everything: `cal dev`, `cal test`, `cal types`, `cal lint`,
+  `cal gates`, `cal log`, `cal reset`. Each encodes a trap (forced turbo cache, worktree
+  test contamination, build migrating the DB). Do not hand-roll the underlying commands.
+- Baselines, all forced, Node 22: type-check exit 0; lint exit 0 (3970 files, 0 errors);
+  `cal test` exit 0 (407 files, 4119 tests); `SKIP_DB_MIGRATIONS=1 yarn build` exit 0.
+- Postgres 14 runs as a brew service, database `calendso`, seeded (41 users). No Docker,
+  so no Mailhog. Logins `free:free` and `pro:pro`.
+- The standard (`docs/AGENT-PRACTICES.md`, `HANDOFF.md`, `PASSOFF.md`, `CLAUDE.local.md`)
+  is private and untracked. `ai-logs/` and `docs/sprint0/` are tracked deliverables.
+- Never edit `CLAUDE.md` (a symlink to tracked `AGENTS.md`), `CONTRIBUTING.md`, or
+  `agents/rules/**`.
+
+**Issue board as of 2026-09-14.** #1, #2 by `musta55` (the TA's seeded issues); #3-#6 by
+`zachbowden`; #9, #10 by `kojoshuay`. Zach has written none. `zachbowden` is implementing #1
+via PR #8; #2 is assigned to `kojoshuay`.
+
+Do these, in order:
+1. **Draft 4+ issues with Zach** (D2): 2 small/medium doable in ~1-1.5 weeks, 2 ambitious.
+   Each needs title, summary, user story, rough scope with a one-line justification, and
+   source. Labels: `scope: small|medium|large|xl` and `type: feature|improvement|bug`; the
+   repo currently uses `enhancement` and `effort:low|medium|high`, so match teammates and add
+   the spec's labels where missing. Ground every idea in this codebase by reading it, not in
+   generic SaaS features. Do not open any issue without his explicit go-ahead.
+2. **Shortlist two issues written by someone else** for D5. He must implement issues he did
+   not write, and no two teammates may take the same one. Unclaimed and plausible: #4
+   (`effort:low`), #9, #10 (`effort:low`, a bug). He confirms on Zulip before coding.
+3. **When he starts a D5 issue, do NOT locate the code for him.** The sprint spec requires
+   concept location by hand first, then AI to confirm: "Find the relevant code yourself
+   first, without AI ... This order matters." Wait for his hypothesis, then confirm, extend
+   or disprove it.
+4. **Record it.** A new numbered step in `HANDOFF.md` (read the file for the next free
+   number) and the issue numbers he actually claimed.
+
+Ask before building: which issues he wants to write, and which two he claims.
+Not in scope: opening issues or PRs without his go-ahead; editing `AGENTS.md`,
+`CONTRIBUTING.md` or `agents/rules/**`; committing anything from the private standard.
+
+Hand back: the drafted issues for his review, the two D5 candidates, `cal gates` green at or
+above baseline if any code changed, and the two commit blocks. Run `cal log` before ending.
+```
+
+## Block C
+
+`Next session: Opus 5` — judgment and drafting, no silent-failure surface.
+
+## Yours, not an agent's
+
+1. **Amend the commit** to drop `.project.json` (commands in my earlier message), then `exec zsh`.
+2. **Zulip**: claim two D5 issues before anyone else does. This is the one blocking dependency, and three teammates are ahead of you on the board.
+3. **D8 reflection survey** — individual, same deadline.
+4. **GATE 0** — still unanswered, though it matters less now that the course has settled most of it.
+
+Blunt version: **D2 is 20 points and you have zero issues written**, while two teammates have theirs in. That's the gap worth closing tonight.
