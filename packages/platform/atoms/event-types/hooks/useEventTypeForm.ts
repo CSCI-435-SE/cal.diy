@@ -61,7 +61,7 @@ export const useEventTypeForm = ({
       isInstantEvent: eventType.isInstantEvent,
       instantMeetingParameters: eventType.instantMeetingParameters || [],
       instantMeetingExpiryTimeOffsetInSeconds: eventType.instantMeetingExpiryTimeOffsetInSeconds,
-      description: eventType.description ?? undefined,
+      description: eventType.description ?? "",
       schedule: eventType.schedule || undefined,
       instantMeetingSchedule: eventType.instantMeetingSchedule || undefined,
       bookingLimits: eventType.bookingLimits || undefined,
