@@ -8,7 +8,7 @@ import type {
   SelectClassNames,
   SettingsToggleClassNames,
 } from "@calcom/features/eventtypes/lib/types";
-import { MAX_EVENT_DURATION_MINUTES, MIN_EVENT_DURATION_MINUTES } from "@calcom/lib/constants";
+import { MAX_EVENT_DURATION_MINUTES, MIN_EVENT_DURATION_MINUTES, MAX_EVENT_TITLE_LENGTH } from "@calcom/lib/constants";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { md } from "@calcom/lib/markdownIt";
 import { slugify } from "@calcom/lib/slugify";
@@ -124,6 +124,7 @@ export const EventSetupTab = (
             containerClassName={classNames(customClassNames?.titleSection?.titleInput?.container)}
             labelClassName={classNames(customClassNames?.titleSection?.titleInput?.label)}
             className={classNames(customClassNames?.titleSection?.titleInput?.input)}
+            maxLength={MAX_EVENT_TITLE_LENGTH}
             label={t("title")}
             {...(isManagedEventType || isChildrenManagedEventType ? titleLockedProps : {})}
             defaultValue={eventType.title}
