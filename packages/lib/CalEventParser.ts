@@ -608,12 +608,12 @@ export const getRichDescription = (
   return parts;
 };
 
+export const stripRescheduleReasonPrefix = (reason: string): string =>
+  reason.startsWith("$RCH$") ? reason.substring(5).trim() : reason.trim();
+
 export const getCancellationReason = (t: TFunction, cancellationReason?: string | null) => {
   if (!cancellationReason) return "";
-  const sanitized = cancellationReason.startsWith("$RCH$")
-    ? cancellationReason.substring(5).trim()
-    : cancellationReason.trim();
-  return `${t("cancellation_reason")}:\n${sanitized}`;
+  return `${t("cancellation_reason")}:\n${stripRescheduleReasonPrefix(cancellationReason)}`;
 };
 
 export const isDailyVideoCall = (videoCallData?: VideoCallData): boolean => {
