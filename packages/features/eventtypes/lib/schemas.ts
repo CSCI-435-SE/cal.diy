@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { MAX_EVENT_TITLE_LENGTH } from "@calcom/lib/constants";
 import { eventTypeLocations, eventTypeSlug } from "@calcom/lib/zod/eventType";
 import { SchedulingType } from "@calcom/prisma/enums";
 import { EventTypeMetaDataSchema } from "@calcom/prisma/zod-utils";
@@ -86,7 +87,7 @@ export type TCreateEventTypeInput = {
 
 export const createEventTypeInput: z.ZodType<TCreateEventTypeInput> = z
   .object({
-    title: z.string().trim().min(1),
+    title: z.string().trim().min(1).max(MAX_EVENT_TITLE_LENGTH),
     slug: eventTypeSlug,
     description: z.string().nullish(),
     length: z.number().int(),

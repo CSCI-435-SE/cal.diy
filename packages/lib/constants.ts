@@ -73,6 +73,9 @@ export const EMBED_LIB_URL = process.env.NEXT_PUBLIC_EMBED_LIB_URL || `${WEBAPP_
 export const TRIAL_LIMIT_DAYS = 14;
 export const MAX_SEATS_PER_TIME_SLOT = 1000;
 
+/** Maximum amount of characters allowed for the title */
+export const MAX_EVENT_TITLE_LENGTH = 40;
+
 /** Maximum duration allowed for an event in minutes (24 hours) */
 export const MAX_EVENT_DURATION_MINUTES = 1440;
 
