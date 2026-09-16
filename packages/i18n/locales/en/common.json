@@ -14,6 +14,8 @@
   "min_characters": "Min. characters",
   "min_characters_required": "Min. {{count}} characters required",
   "max_characters_allowed": "Max. {{count}} characters allowed",
+  "character_one": "{{count}} character",
+  "character_other": "{{count}} characters",
   "calcom_explained": "{{appName}} provides scheduling infrastructure for absolutely everyone.",
   "calcom_explained_new_user": "Finish setting up your {{appName}} account! You're just a few steps away from solving all your scheduling problems.",
   "have_any_questions": "Have questions? We're here to help.",

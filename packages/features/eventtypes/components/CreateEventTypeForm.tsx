@@ -40,6 +40,7 @@ export default function CreateEventTypeForm({
   const [firstRender, setFirstRender] = useState(true);
 
   const { register } = form;
+  const descriptionValue = form.watch("description");
   return (
     <Form
       form={form}
@@ -126,6 +127,11 @@ export default function CreateEventTypeForm({
               setFirstRender={setFirstRender}
               maxHeight="200px"
             />
+          )}
+          {!isPlatform && (
+            <p className="text-subtle mt-1 text-sm" data-testid="event-description-char-count">
+              {t("character", { count: descriptionValue?.length ?? 0 })}
+            </p>
           )}
 
           <div className="relative">
