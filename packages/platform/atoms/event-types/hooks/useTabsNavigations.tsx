@@ -21,7 +21,12 @@ type Props = {
   team: EventTypeSetupProps["team"];
   eventTypeApps?: EventTypeApps;
 };
-export const useTabsNavigations = ({ formMethods, eventType, team, eventTypeApps }: Props) => {
+export const useTabsNavigations = ({ 
+  formMethods, 
+  eventType, 
+  team, 
+  eventTypeApps 
+}: Props) => {
   const { t } = useLocale();
 
   const length = formMethods.watch("length");
