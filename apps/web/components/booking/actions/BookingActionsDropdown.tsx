@@ -407,6 +407,7 @@ export function BookingActionsDropdown({
         isOpenDialog={isOpenRescheduleDialog}
         setIsOpenDialog={setIsOpenRescheduleDialog}
         bookingUid={booking.uid}
+        requiresRescheduleReason={booking.eventType?.requiresRescheduleReason}
       />
       {isOpenReassignDialog && (
         <ReassignDialog
