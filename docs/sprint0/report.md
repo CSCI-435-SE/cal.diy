@@ -14,3 +14,23 @@ We are the [team name]! We are working on a fork of [cal.diy](https://github.com
 
 
 # Project Overview
+
+# Feature backlog summary
+
+# Standards document summary
+
+# Completed PRs
+
+#31 - [fix: fixed NaN displaying on event edit sidebar](https://github.com/CSCI-435-SE/cal.diy/pull/31)\
+#30 - [feat: event title char limit](https://github.com/CSCI-435-SE/cal.diy/pull/30)\
+#20 - [fix: stop the description editor marking an untouched event type as changed (#10) - #20](https://github.com/CSCI-435-SE/cal.diy/pull/20)\
+#7 - [docs: Add standards and guidelines doc](https://github.com/CSCI-435-SE/cal.diy/pull/7)
+
+# AI tool usage
+
+# Release
+(we will need to create a release in the repo)
+
+# Risks and challenges
+
+# Sprint 1 ideas
