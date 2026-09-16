@@ -1,6 +1,6 @@
 # Our Team
 
-We are the [team name]! We are working on a fork of [cal.diy](https://github.com/calcom/cal.diy), an open source version of [cal.com](https://cal.com/). You can see our fork [here](https://github.com/CSCI-435-SE/cal.diy).
+We are "The Calendars"! We are working on a fork of [cal.diy](https://github.com/calcom/cal.diy), an open source version of [cal.com](https://cal.com/). You can see our fork [here](https://github.com/CSCI-435-SE/cal.diy).
 
 | Name       | GitHub Username     |
 |------------|--------------------|
