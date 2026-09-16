@@ -25,6 +25,7 @@ We are "The Calendars"! We are working on a fork of [cal.diy](https://github.com
 #30 - [feat: event title char limit](https://github.com/CSCI-435-SE/cal.diy/pull/30)\
 #20 - [fix: stop the description editor marking an untouched event type as changed (#10) - #20](https://github.com/CSCI-435-SE/cal.diy/pull/20)\
 #7 - [docs: Add standards and guidelines doc](https://github.com/CSCI-435-SE/cal.diy/pull/7)
+#28 - [feat: add character counter](https://github.com/CSCI-435-SE/cal.diy/pull/28)
 
 # AI tool usage
 Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
