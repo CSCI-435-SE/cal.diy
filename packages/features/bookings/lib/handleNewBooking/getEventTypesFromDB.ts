@@ -23,6 +23,7 @@ const getEventTypesFromDBSelect = {
   disableRescheduling: true,
   minimumRescheduleNotice: true,
   disableCancelling: true,
+  requiresRescheduleReason: true,
   users: {
     select: {
       credentials: {
