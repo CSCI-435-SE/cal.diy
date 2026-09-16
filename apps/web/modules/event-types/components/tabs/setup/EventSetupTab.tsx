@@ -28,10 +28,11 @@ import { Skeleton } from "@calcom/ui/components/skeleton";
 import { Tooltip } from "@calcom/ui/components/tooltip";
 import HostLocations from "@calcom/web/modules/event-types/components/locations/HostLocations";
 import Locations from "@calcom/web/modules/event-types/components/locations/Locations";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Control, FormState, UseFormGetValues, UseFormSetValue } from "react-hook-form";
 import { Controller, useFormContext } from "react-hook-form";
 import type { MultiValue } from "react-select";
+import { createDescriptionEditorGuard } from "./description-editor-guard";
 
 export type EventSetupTabCustomClassNames = {
   wrapper?: string;
@@ -80,6 +81,7 @@ export const EventSetupTab = (
     formMethods.getValues("metadata")?.multipleDuration
   );
   const [firstRender, setFirstRender] = useState(true);
+  const isUserDescriptionEdit = useRef(createDescriptionEditorGuard()).current;
 
   const seatsEnabled = formMethods.watch("seatsPerTimeSlotEnabled");
   const enablePerHostLocations = formMethods.watch("enablePerHostLocations");
@@ -154,6 +156,9 @@ export const EventSetupTab = (
                     // Clean up non-breaking spaces
                     const cleanedValue = value.replace(/&nbsp;/g, " ");
                     const markdownValue = turndown(cleanedValue);
+                    // The editor echoes its own seed value on mount; writing that echo would
+                    // mark an untouched form dirty. See description-editor-guard.
+                    if (!isUserDescriptionEdit(markdownValue)) return;
                     formMethods.setValue("description", markdownValue, { shouldDirty: true });
                   }}
                   placeholder={t("quick_video_meeting")}
