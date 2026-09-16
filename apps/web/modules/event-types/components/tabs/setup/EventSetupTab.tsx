@@ -83,6 +83,7 @@ export const EventSetupTab = (
 
   const seatsEnabled = formMethods.watch("seatsPerTimeSlotEnabled");
   const enablePerHostLocations = formMethods.watch("enablePerHostLocations");
+  const descriptionValue = formMethods.watch("description");
 
   const multipleDurationOptions = [
     5, 10, 15, 20, 25, 30, 40, 45, 50, 60, 75, 80, 90, 120, 150, 180, 240, 300, 360, 420, 480,
@@ -161,6 +162,9 @@ export const EventSetupTab = (
                   firstRender={firstRender}
                   setFirstRender={setFirstRender}
                 />
+                <p className="text-subtle mt-1 text-sm" data-testid="event-description-char-count">
+                  {t("character", { count: descriptionValue?.length ?? 0 })}
+                </p>
               </>
             )}
           </div>
