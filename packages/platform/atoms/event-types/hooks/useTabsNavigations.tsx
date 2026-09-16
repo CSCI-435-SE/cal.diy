@@ -21,12 +21,7 @@ type Props = {
   team: EventTypeSetupProps["team"];
   eventTypeApps?: EventTypeApps;
 };
-export const useTabsNavigations = ({
-  formMethods,
-  eventType,
-  team,
-  eventTypeApps,
-}: Props) => {
+export const useTabsNavigations = ({ formMethods, eventType, team, eventTypeApps }: Props) => {
   const { t } = useLocale();
 
   const length = formMethods.watch("length");
@@ -172,14 +167,15 @@ function getNavigation({
   enabledAppsNumber,
   installedAppsNumber,
 }: getNavigationProps) {
-  const duration = multipleDuration?.map((duration) => ` ${duration}`) || length;
+  const duration =
+    multipleDuration?.map((duration) => ` ${duration}`) || (Number.isFinite(length) ? length : 0);
 
   const baseNavigation: VerticalTabItemProps[] = [
     {
       name: t("basics"),
       href: `/event-types/${id}?tabName=setup`,
       icon: "link",
-      info: `${duration} ${t("minute_timeUnit")}`, // TODO: Get this from props
+      info: `${duration} ${t("minute_timeUnit")}`,
       "data-testid": `basics`,
     },
     {
