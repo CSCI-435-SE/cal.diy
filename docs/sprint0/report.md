@@ -27,6 +27,7 @@ We are the [team name]! We are working on a fork of [cal.diy](https://github.com
 #7 - [docs: Add standards and guidelines doc](https://github.com/CSCI-435-SE/cal.diy/pull/7)
 
 # AI tool usage
+Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
 
 # Release
 (we will need to create a release in the repo)
