@@ -46,6 +46,30 @@ function TestSignupForm() {
 }
 
 describe("Signup form validation mode", () => {
+  it("should show password error while user is typing an invalid password", async () => {
+    const user = userEvent.setup();
+    render(<TestSignupForm />);
+
+    const passwordInput = screen.getByTestId("password-input");
+    fireEvent.blur(passwordInput);
+    await user.type(passwordInput, "test");
+    fireEvent.change(passwordInput);
+
+    expect(screen.queryByTestId("password-error")).toBeInTheDocument();
+  });
+
+  it("should not show password error while user is typing a valid", async () => {
+    const user = userEvent.setup();
+    render(<TestSignupForm />);
+
+    const passwordInput = screen.getByTestId("password-input");
+    fireEvent.blur(passwordInput);
+    await user.type(passwordInput, "testTest123");
+    fireEvent.change(passwordInput);
+
+    expect(screen.queryByTestId("password-error")).not.toBeInTheDocument();
+  });
+  
   it("should not show email error while user is still typing", async () => {
     const user = userEvent.setup();
     render(<TestSignupForm />);
