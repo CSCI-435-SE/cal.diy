@@ -5,7 +5,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { vi } from "vitest";
-
 import { EventTypeSingleLayout } from "./EventTypeLayout";
 
 vi.mock("@calcom/lib/hooks/useLocale", () => ({
