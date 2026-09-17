@@ -25,7 +25,11 @@ import { checkWCAGContrastColor } from "@calcom/lib/getBrandColours";
 import { extractHostTimezone } from "@calcom/lib/hashedLinksUtils";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type { Prisma } from "@calcom/prisma/client";
-import { CancellationReasonRequirement, RescheduleReasonRequirement, SchedulingType } from "@calcom/prisma/enums";
+import {
+  CancellationReasonRequirement,
+  RescheduleReasonRequirement,
+  SchedulingType,
+} from "@calcom/prisma/enums";
 import type { EditableSchema, fieldSchema } from "@calcom/prisma/zod-utils";
 import type { RouterOutputs } from "@calcom/trpc/react";
 import classNames from "@calcom/ui/classNames";
@@ -669,7 +673,9 @@ export const EventAdvancedTab = ({
       {!isPlatform && (
         <Controller
           name="requiresCancellationReason"
-          defaultValue={eventType.requiresCancellationReason ?? CancellationReasonRequirement.MANDATORY_HOST_ONLY}
+          defaultValue={
+            eventType.requiresCancellationReason ?? CancellationReasonRequirement.MANDATORY_HOST_ONLY
+          }
           render={({ field: { value, onChange } }) => {
             const cancellationReasonOptions = [
               { value: CancellationReasonRequirement.MANDATORY_BOTH, label: t("mandatory_for_both") },
@@ -707,7 +713,7 @@ export const EventAdvancedTab = ({
       {!isPlatform && (
         <Controller
           name="requiresRescheduleReason"
-          defaultValue={eventType.requiresRescheduleReason ?? RescheduleReasonRequirement.MANDATORY_HOST_ONLY}
+          defaultValue={eventType.requiresRescheduleReason ?? RescheduleReasonRequirement.OPTIONAL_BOTH}
           render={({ field: { value, onChange } }) => {
             const rescheduleReasonOptions = [
               { value: RescheduleReasonRequirement.MANDATORY_BOTH, label: t("mandatory_for_both") },
@@ -730,7 +736,7 @@ export const EventAdvancedTab = ({
                   </div>
                   <Select
                     value={rescheduleReasonOptions.find(
-                      (opt) => opt.value === (value || RescheduleReasonRequirement.MANDATORY_HOST_ONLY)
+                      (opt) => opt.value === (value || RescheduleReasonRequirement.OPTIONAL_BOTH)
                     )}
                     options={rescheduleReasonOptions}
                     onChange={(selected) => onChange(selected?.value)}
