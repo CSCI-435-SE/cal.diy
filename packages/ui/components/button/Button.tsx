@@ -326,12 +326,13 @@ export const Button = forwardRef<HTMLAnchorElement | HTMLButtonElement, ButtonPr
     </>
   );
 
-  // Render Link or button separately to avoid type conflicts
-  // Link manages its own anchor element, so we don't pass ref to it
+  // Render Link or button separately to avoid type conflicts: `<a>` and `<button>`
+  // accept different, incompatible props (e.g. href) and ref target types.
   if (isLink) {
     return (
       <Link
         {...(passThroughProps as Omit<JSX.IntrinsicElements["a"], "href" | "onClick" | "ref"> & LinkProps)}
+        ref={forwardedRef as React.Ref<HTMLAnchorElement>}
         shallow={shallow && shallow}
         className={buttonClassName}
         onClick={handleClick}>
