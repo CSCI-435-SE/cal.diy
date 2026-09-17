@@ -27,6 +27,7 @@ function TestSignupForm() {
 
   const {
     register,
+    trigger,
     formState: { errors },
   } = formMethods;
 
@@ -38,7 +39,7 @@ function TestSignupForm() {
         {errors.email && <span data-testid="email-error">{errors.email.message}</span>}
 
         <label htmlFor="password">Password</label>
-        <input id="password" type="password" data-testid="password-input" {...register("password")} />
+        <input id="password" type="password" data-testid="password-input" {...register("password", {onChange: () => {trigger("password");}})} />
         {errors.password && <span data-testid="password-error">{errors.password.message}</span>}
       </form>
     </FormProvider>
@@ -51,9 +52,7 @@ describe("Signup form validation mode", () => {
     render(<TestSignupForm />);
 
     const passwordInput = screen.getByTestId("password-input");
-    fireEvent.blur(passwordInput);
     await user.type(passwordInput, "test");
-    fireEvent.change(passwordInput);
 
     expect(screen.queryByTestId("password-error")).toBeInTheDocument();
   });
@@ -63,9 +62,7 @@ describe("Signup form validation mode", () => {
     render(<TestSignupForm />);
 
     const passwordInput = screen.getByTestId("password-input");
-    fireEvent.blur(passwordInput);
     await user.type(passwordInput, "testTest123");
-    fireEvent.change(passwordInput);
 
     expect(screen.queryByTestId("password-error")).not.toBeInTheDocument();
   });

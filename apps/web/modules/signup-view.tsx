@@ -214,11 +214,12 @@ export default function Signup({
   const formMethods = useForm<FormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: prepopulateFormValues satisfies FormValues,
-    mode: "onChange",
+    mode: "onTouched",
   });
   const {
     register,
     watch,
+    trigger,
     formState: { isSubmitting, errors, isSubmitSuccessful },
   } = formMethods;
 
@@ -541,7 +542,7 @@ export default function Signup({
                         data-testid="signup-passwordfield"
                         autoComplete="new-password"
                         label={t("password")}
-                        {...register("password")}
+                        {...register("password",{onChange: () => {trigger("password");}})}
                         hintErrors={["caplow", "min", "num"]}
                       />
                       {/* Cloudflare Turnstile Captcha */}
