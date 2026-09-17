@@ -27,6 +27,7 @@ function TestSignupForm() {
 
   const {
     register,
+    trigger,
     formState: { errors },
   } = formMethods;
 
@@ -38,7 +39,7 @@ function TestSignupForm() {
         {errors.email && <span data-testid="email-error">{errors.email.message}</span>}
 
         <label htmlFor="password">Password</label>
-        <input id="password" type="password" data-testid="password-input" {...register("password")} />
+        <input id="password" type="password" data-testid="password-input" {...register("password", {onChange: () => {trigger("password");}})} />
         {errors.password && <span data-testid="password-error">{errors.password.message}</span>}
       </form>
     </FormProvider>
@@ -46,6 +47,26 @@ function TestSignupForm() {
 }
 
 describe("Signup form validation mode", () => {
+  it("should show password error while user is typing an invalid password", async () => {
+    const user = userEvent.setup();
+    render(<TestSignupForm />);
+
+    const passwordInput = screen.getByTestId("password-input");
+    await user.type(passwordInput, "test");
+
+    expect(screen.queryByTestId("password-error")).toBeInTheDocument();
+  });
+
+  it("should not show password error while user is typing a valid", async () => {
+    const user = userEvent.setup();
+    render(<TestSignupForm />);
+
+    const passwordInput = screen.getByTestId("password-input");
+    await user.type(passwordInput, "testTest123");
+
+    expect(screen.queryByTestId("password-error")).not.toBeInTheDocument();
+  });
+  
   it("should not show email error while user is still typing", async () => {
     const user = userEvent.setup();
     render(<TestSignupForm />);
