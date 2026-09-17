@@ -214,7 +214,7 @@ export default function Signup({
   const formMethods = useForm<FormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: prepopulateFormValues satisfies FormValues,
-    mode: "onTouched",
+    mode: "onChange",
   });
   const {
     register,
