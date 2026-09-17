@@ -1,6 +1,6 @@
 /* eslint-disable playwright/missing-playwright-await */
 import { fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { createRef, useState } from "react";
 import { vi } from "vitest";
 
 import { Button, buttonClasses } from "./Button";
@@ -250,5 +250,27 @@ describe.skip("(Skipped) Test for button as a link", () => {
 
     const linkComponent = screen.getByTestId("link-component");
     expect(linkComponent).toHaveAttribute("shallow", "true");
+  });
+});
+
+describe("Button ref forwarding", () => {
+  test("forwards ref to the underlying anchor element when href is provided", () => {
+    const ref = createRef<HTMLAnchorElement>();
+    render(
+      <Button href="/test" ref={ref}>
+        Test Button
+      </Button>
+    );
+
+    expect(ref.current).not.toBeNull();
+    expect(ref.current?.tagName).toBe("A");
+  });
+
+  test("forwards ref to the underlying button element when href is not provided", () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(<Button ref={ref}>Test Button</Button>);
+
+    expect(ref.current).not.toBeNull();
+    expect(ref.current?.tagName).toBe("BUTTON");
   });
 });

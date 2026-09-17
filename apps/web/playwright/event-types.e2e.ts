@@ -51,6 +51,25 @@ test.describe("Event Types tests", () => {
       expect(count).toBeGreaterThanOrEqual(2);
     });
 
+    test("preview and options buttons show tooltips on hover", async ({ page }) => {
+      const firstElement = await page.waitForSelector(
+        '[data-testid="event-types"] a[href^="/event-types/"] >> nth=0'
+      );
+      const href = await firstElement.getAttribute("href");
+      expect(href).not.toBeNull();
+      const [eventTypeId] = new URL(WEBAPP_URL + href).pathname.split("/").reverse();
+
+      const tooltip = page.locator('[role="tooltip"]');
+
+      await page.locator("[data-testid=preview-link-button]").first().hover();
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toHaveText("Preview");
+
+      await page.locator(`[data-testid=event-type-options-${eventTypeId}]`).first().hover();
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toHaveText("Open options");
+    });
+
     test("can add new event type", async ({ page }) => {
       const nonce = randomString(3);
       const eventTitle = `hello ${nonce}`;
