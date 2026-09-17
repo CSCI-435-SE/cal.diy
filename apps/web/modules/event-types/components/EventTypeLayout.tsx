@@ -180,7 +180,7 @@ function EventTypeSingleLayout({
                     tooltipOffset={4}
                     onClick={() => {
                       navigator.clipboard.writeText(permalink);
-                      showToast("Link copied!", "success");
+                      showToast(t("link_copied"), "success");
                     }}
                   />
                 )}
@@ -237,7 +237,7 @@ function EventTypeSingleLayout({
                   StartIcon="link"
                   onClick={() => {
                     navigator.clipboard.writeText(permalink);
-                    showToast("Link copied!", "success");
+                    showToast(t("link_copied"), "success");
                   }}>
                   {t("copy_link")}
                 </DropdownItem>
