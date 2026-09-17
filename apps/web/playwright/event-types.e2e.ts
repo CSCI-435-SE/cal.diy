@@ -59,15 +59,11 @@ test.describe("Event Types tests", () => {
       expect(href).not.toBeNull();
       const [eventTypeId] = new URL(WEBAPP_URL + href).pathname.split("/").reverse();
 
-      const tooltip = page.locator('[role="tooltip"]');
-
       await page.locator("[data-testid=preview-link-button]").first().hover();
-      await expect(tooltip).toBeVisible();
-      await expect(tooltip).toHaveText("Preview");
+      await expect(page.locator('[role="tooltip"]', { hasText: "Preview" })).toBeVisible();
 
       await page.locator(`[data-testid=event-type-options-${eventTypeId}]`).first().hover();
-      await expect(tooltip).toBeVisible();
-      await expect(tooltip).toHaveText("Open options");
+      await expect(page.locator('[role="tooltip"]', { hasText: "Open options" })).toBeVisible();
     });
 
     test("can add new event type", async ({ page }) => {
