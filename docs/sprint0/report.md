@@ -19,7 +19,7 @@ Cal.diy is a self-hosted scheduling system. Users of the software can define the
 
 # Feature backlog summary
 
-A total of `28` issues have been created, with `7` being closed. A large amount of the issues that were created are features.
+A total of `28` issues have been created, with `8` being closed. A large amount of the issues that were created are features.
 
 # Standards document summary
 
@@ -31,7 +31,8 @@ A total of `28` issues have been created, with `7` being closed. A large amount 
 #7 - [docs: Add standards and guidelines doc](https://github.com/CSCI-435-SE/cal.diy/pull/7)
 #28 - [feat: add character counter](https://github.com/CSCI-435-SE/cal.diy/pull/28)
 #21 - [feat: enter event duration as hours and minutes (#4)](https://github.com/CSCI-435-SE/cal.diy/pull/21)
-#40 - [fix: visual password validation bug -](https://github.com/CSCI-435-SE/cal.diy/pull/40)
+#40 - [fix: visual password validation bug](https://github.com/CSCI-435-SE/cal.diy/pull/40)
+#44 - [feat(event-types): add tooltips to preview and dropdown-menu buttons](https://github.com/CSCI-435-SE/cal.diy/pull/44)
 
 # AI tool usage
 Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
