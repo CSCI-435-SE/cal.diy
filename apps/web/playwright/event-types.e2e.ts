@@ -51,16 +51,18 @@ test.describe("Event Types tests", () => {
       expect(count).toBeGreaterThanOrEqual(2);
     });
 
-    test("preview and options buttons show tooltips on hover", async ({ page }) => {
+    test("preview button shows a tooltip on hover", async ({ page }) => {
+      await page.locator("[data-testid=preview-link-button]").first().hover();
+      await expect(page.locator('[role="tooltip"]', { hasText: "Preview" })).toBeVisible();
+    });
+
+    test("options dropdown button shows a tooltip on hover", async ({ page }) => {
       const firstElement = await page.waitForSelector(
         '[data-testid="event-types"] a[href^="/event-types/"] >> nth=0'
       );
       const href = await firstElement.getAttribute("href");
       expect(href).not.toBeNull();
       const [eventTypeId] = new URL(WEBAPP_URL + href).pathname.split("/").reverse();
-
-      await page.locator("[data-testid=preview-link-button]").first().hover();
-      await expect(page.locator('[role="tooltip"]', { hasText: "Preview" })).toBeVisible();
 
       await page.locator(`[data-testid=event-type-options-${eventTypeId}]`).first().hover();
       await expect(page.locator('[role="tooltip"]', { hasText: "Open options" })).toBeVisible();
