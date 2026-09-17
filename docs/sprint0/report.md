@@ -15,7 +15,11 @@ We are "The Calendars"! We are working on a fork of [cal.diy](https://github.com
 
 # Project Overview
 
+Cal.diy is a self-hosted scheduling system. Users of the software can define their own, custom events that they can either mark as public-facing or unlisted. Cal.diy can be integrated into several calendar services such as google calendar and CalDAV, so that users can automatically have their calendars populated when someone schedules an event.
+
 # Feature backlog summary
+
+A total of `28` issues have been created, with `7` being closed. A large amount of the issues that were created are features.
 
 # Standards document summary
 
