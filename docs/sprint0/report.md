@@ -36,6 +36,9 @@ A total of `28` issues have been created, with `8` being closed. A large amount 
 
 # AI tool usage
 Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
+Joshua Ko: Claude Code across two sessions to implement a bug fix and a small feature. [Session Logs](cal.diy/ai-logs/sprint0/kojoshuay/)  
+- Helpful with starting the app and explaining code
+- I didn't observe difficulties bc the issues are small so far
 
 # Release
 (we will need to create a release in the repo)
