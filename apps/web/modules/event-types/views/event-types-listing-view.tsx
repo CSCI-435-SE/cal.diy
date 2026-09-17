@@ -674,6 +674,7 @@ export const InfiniteEventTypeList = ({
                                   variant="icon"
                                   color="secondary"
                                   StartIcon="ellipsis"
+                                  tooltip={t("open_options")}
                                   // Unusual practice to use radix state open but for some reason this dropdown and only this dropdown clears the border radius of this button.
                                   className="ltr:radix-state-open:rounded-r-(--btn-group-radius) rtl:radix-state-open:rounded-l-(--btn-group-radius)"
                                 />
@@ -745,7 +746,13 @@ export const InfiniteEventTypeList = ({
                   <div className="mx-5 flex min-w-9 sm:hidden">
                     <Dropdown>
                       <DropdownMenuTrigger asChild data-testid={`event-type-options-${type.id}`}>
-                        <Button type="button" variant="icon" color="secondary" StartIcon="ellipsis" />
+                        <Button
+                          type="button"
+                          variant="icon"
+                          color="secondary"
+                          StartIcon="ellipsis"
+                          tooltip={t("open_options")}
+                        />
                       </DropdownMenuTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuContent>
@@ -930,9 +937,7 @@ const CTA = ({ profileOptions }: { profileOptions: ProfileOption[] }) => {
         }}
         placeholder={t("search")}
       />
-      <Button
-        data-testid="new-event-type"
-        href={`?dialog=new&eventPage=${profileOptions[0]?.slug ?? ""}`}>
+      <Button data-testid="new-event-type" href={`?dialog=new&eventPage=${profileOptions[0]?.slug ?? ""}`}>
         {t("new")}
       </Button>
       <CreateEventTypeDialog profileOptions={profileOptions} />
