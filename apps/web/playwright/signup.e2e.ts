@@ -203,6 +203,36 @@ test.describe("Email Signup Flow Test", async () => {
     const verifyEmail = receivedEmails?.items[0];
     expect(verifyEmail?.subject).toBe(`${APP_NAME}: Verify your account`);
   });
+  test("Submit button stays disabled until username, email, and password are all valid", async ({
+    page,
+    users: _users,
+  }) => {
+    await page.goto("/signup");
+    await preventFlakyTest(page);
+
+    // Navigate to email form
+    await page.getByTestId("continue-with-email-button").click();
+
+    const submitButton = page.getByTestId("signup-submit-button");
+
+    // Empty form
+    await expect(submitButton).toBeDisabled();
+
+    // Blank username, valid email + password
+    await page.locator('input[name="email"]').fill("disabled-button-check@example.com");
+    await page.locator('input[name="password"]').fill("Password99!");
+    await expect(submitButton).toBeDisabled();
+
+    // Username filled, but password fails the strength rules
+    await page.locator('input[name="username"]').fill("disabled-button-check");
+    await page.locator('input[name="password"]').fill("weak");
+    await expect(submitButton).toBeDisabled();
+
+    // All fields valid
+    await page.locator('input[name="password"]').fill("Password99!");
+    await expect(submitButton).toBeEnabled();
+  });
+
   test("Checkbox for cookie consent does not need to be checked", async ({ page, users: _users }) => {
     await page.goto("/signup");
     await preventFlakyTest(page);
