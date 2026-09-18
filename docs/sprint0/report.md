@@ -33,7 +33,8 @@ A total of `28` issues have been created, with `8` being closed. A large amount 
 #21 - [feat: enter event duration as hours and minutes (#4)](https://github.com/CSCI-435-SE/cal.diy/pull/21)\
 #40 - [fix: visual password validation bug](https://github.com/CSCI-435-SE/cal.diy/pull/40)\
 #44 - [feat(event-types): add tooltips to preview and dropdown-menu buttons](https://github.com/CSCI-435-SE/cal.diy/pull/44)\
-#47 - [fix: translate copy-link toast on event-type edit page](https://github.com/CSCI-435-SE/cal.diy/pull/47)
+#47 - [fix: translate copy-link toast on event-type edit page](https://github.com/CSCI-435-SE/cal.diy/pull/47)\
+#36 - [feat(bookings): require a reason when rescheduling per EventType setting](https://github.com/CSCI-435-SE/cal.diy/pull/36)
 
 # AI tool usage
 Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
