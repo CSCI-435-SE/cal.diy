@@ -46,6 +46,20 @@ As of now, we are most interested in implementing:
 
 # Standards document summary
 
+- Coding Conventions: Biome enforces formatting; use TypeScript strict mode, select in Prisma queries, direct source imports, appropriate error types, and translation keys for all user-facing strings.
+- Branching & Commits: Branch off main using docs|feat|fix/name naming, write Conventional Commits in present tense, and never force-push or rebase shared branches.
+- Pull Requests: PRs need a prefixed summary matching the branch name, linked issues, and a WIP: prefix if not ready for review.
+- Testing: Aim for ~80%+ test coverage using Vitest for unit tests (UTC timezone) and Playwright for E2E, which only runs in CI under the ready-for-e2e label.
+- AI Tool Use: Contributors must review and understand every line of AI-generated code and take full responsibility for it.
+- Definition of Done: A PR is complete when it passes type-check, Biome, and tests; has no committed secrets; includes translation keys; and has a properly filled-out, self-reviewed PR with updated docs.
+- Branching & Commits: Branch off main using docs|feat|fix/name naming, write Conventional Commits in present tense, and never force-push or rebase shared branches.
+- Pull Requests: PRs need a prefixed summary matching the branch name, linked issues, and a WIP: prefix if not ready for review.
+- Testing: Aim for ~80%+ test coverage using Vitest for unit tests (UTC timezone) and Playwright for E2E, which only runs in CI under the ready-for-e2e label.
+- AI Tool Use: Contributors must review and understand every line of AI-generated code and take full responsibility for it.
+- Definition of Done: A PR is complete when it passes type-check, Biome, and tests; has no committed secrets; includes translation keys; and has a properly filled-out, self-reviewed PR with updated docs.
+
+Almost all of our standards are pulled directly from the existing documentation (e.g. CONTRIBUTING.md, AGENTS.md, and the agents/ folder) and the sprint0 instructions.
+
 # Screenshots of app running locally
 <img width="800" alt="Screenshot 2026-09-08 104349" src="https://github.com/user-attachments/assets/64139f82-4ccf-4712-a897-6b4a1b97c945" />
 <img width="800" alt="Screenshot 2026-09-08 104451" src="https://github.com/user-attachments/assets/dd51e7e1-1698-4cc1-9f48-e8f13da666b7" />
@@ -86,8 +100,12 @@ Dylan Han: Claude Code (CLI) and Claude Web
 - Link to logs: [link](https://github.com/CSCI-435-SE/cal.diy/tree/main/ai-logs/sprint0/dchan01-wm)
 - Worked very well for finding documents / summarizing code; worked well at double checking itself (I was surprised when I asked it to generate test cases, and it went through the codebase and found examples of similar tests and used them as precedent/a pattern for new test cases); I do not think anything worked poorly with the AI, I intentionally followed a plan then implement flow which seemed to smoothen the experience.
 
+Zachary Short: 8 Claude Code Sessions; [link](https://github.com/CSCI-435-SE/cal.diy/tree/main/ai-logs/sprint0/zach-short); writing code, estimating the cost of certain actions, finding bugs/feature ideas
+
 # Release
-(we will need to create a release in the repo)
+[v6.2.0-csci435-s0](https://github.com/CSCI-435-SE/cal.diy/releases/)
+
+*Does not link directly to the release because of chicken and egg situation: the report needs the release link, but to make the release you need the final report!*
 
 # Risks and challenges
 - Understanding the structure of the project was certainly harder than expected. Because of the way the API is layed out, to locate an API call linked to something specific such as a form submission.
