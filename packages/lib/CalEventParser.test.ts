@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CalendarEvent } from "@calcom/types/Calendar";
 
-import { getRichDescription, getUserFieldsResponses } from "./CalEventParser";
+import { getRichDescription, getUserFieldsResponses, stripRescheduleReasonPrefix } from "./CalEventParser";
 
 describe("getRichDescription", () => {
   const t = ((key: string, _args?: Record<string, unknown>) => key) as TFunction;
@@ -112,5 +112,20 @@ describe("getUserFieldsResponses", () => {
     expect(result).not.toContain("Phone Number");
     expect(result).toContain("Name");
     expect(result).toContain("Bob");
+  });
+});
+
+describe("stripRescheduleReasonPrefix", () => {
+  it("strips the $RCH$ prefix", () => {
+    expect(stripRescheduleReasonPrefix("$RCH$My reason")).toBe("My reason");
+  });
+
+  it("leaves an ordinary reason unchanged", () => {
+    expect(stripRescheduleReasonPrefix("My reason")).toBe("My reason");
+  });
+
+  it("trims surrounding whitespace in both cases", () => {
+    expect(stripRescheduleReasonPrefix("$RCH$  My reason  ")).toBe("My reason");
+    expect(stripRescheduleReasonPrefix("  My reason  ")).toBe("My reason");
   });
 });

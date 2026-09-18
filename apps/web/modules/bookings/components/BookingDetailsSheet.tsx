@@ -3,6 +3,7 @@
 import dayjs from "@calcom/dayjs";
 import { useBookingLocation } from "@calcom/features/bookings/hooks";
 import { shouldShowFieldInCustomResponses } from "@calcom/lib/bookings/SystemField";
+import { stripRescheduleReasonPrefix } from "@calcom/lib/CalEventParser";
 import { formatPrice } from "@calcom/lib/currencyConversions";
 import { formatToLocalizedTimezone } from "@calcom/lib/dayjs";
 import { getPlaceholderAvatar } from "@calcom/lib/defaultAvatarImage";
@@ -893,7 +894,7 @@ function OldRescheduledBookingInfo({
       {cancellationReason && (
         <Section title={t("reason")}>
           <p className="whitespace-pre-wrap font-medium text-emphasis text-sm">
-            {cancellationReason}
+            {stripRescheduleReasonPrefix(cancellationReason)}
           </p>
         </Section>
       )}
@@ -935,7 +936,7 @@ function NewRescheduledBookingInfo({ booking }: { booking: BookingOutput }) {
       {cancellationReason && (
         <Section title={t("reschedule_reason")}>
           <p className="whitespace-pre-wrap font-medium text-emphasis text-sm">
-            {cancellationReason}
+            {stripRescheduleReasonPrefix(cancellationReason)}
           </p>
         </Section>
       )}
