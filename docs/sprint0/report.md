@@ -28,11 +28,12 @@ A total of `28` issues have been created, with `8` being closed. A large amount 
 #31 - [fix: fixed NaN displaying on event edit sidebar](https://github.com/CSCI-435-SE/cal.diy/pull/31)\
 #30 - [feat: event title char limit](https://github.com/CSCI-435-SE/cal.diy/pull/30)\
 #20 - [fix: stop the description editor marking an untouched event type as changed (#10) - #20](https://github.com/CSCI-435-SE/cal.diy/pull/20)\
-#7 - [docs: Add standards and guidelines doc](https://github.com/CSCI-435-SE/cal.diy/pull/7)
-#28 - [feat: add character counter](https://github.com/CSCI-435-SE/cal.diy/pull/28)
-#21 - [feat: enter event duration as hours and minutes (#4)](https://github.com/CSCI-435-SE/cal.diy/pull/21)
-#40 - [fix: visual password validation bug](https://github.com/CSCI-435-SE/cal.diy/pull/40)
-#44 - [feat(event-types): add tooltips to preview and dropdown-menu buttons](https://github.com/CSCI-435-SE/cal.diy/pull/44)
+#7 - [docs: Add standards and guidelines doc](https://github.com/CSCI-435-SE/cal.diy/pull/7)\
+#28 - [feat: add character counter](https://github.com/CSCI-435-SE/cal.diy/pull/28)\
+#21 - [feat: enter event duration as hours and minutes (#4)](https://github.com/CSCI-435-SE/cal.diy/pull/21)\
+#40 - [fix: visual password validation bug](https://github.com/CSCI-435-SE/cal.diy/pull/40)\
+#44 - [feat(event-types): add tooltips to preview and dropdown-menu buttons](https://github.com/CSCI-435-SE/cal.diy/pull/44)\
+#47 - [fix: translate copy-link toast on event-type edit page](https://github.com/CSCI-435-SE/cal.diy/pull/47)
 
 # AI tool usage
 Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
