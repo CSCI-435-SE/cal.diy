@@ -35,7 +35,7 @@ We are "The Calendars"! We are working on a fork of [cal.diy](https://github.com
 
 # Feature backlog summary
 
-A total of `33` issues have been created, with `10` being closed. A large amount of the issues that were created are features. Many issues were related to creating an account, allowing the user to input more information / more easily input more information (e.g. split minute field in to hours and minutes, add more fine-grain Out of Office times, calendar UI for inputting available hours), and general new features (AI support for finding settings, add favorite buttons)
+A total of `35` issues have been created, with `11` being closed. A large amount of the issues that were created are features. Many issues were related to creating an account, allowing the user to input more information / more easily input more information (e.g. split minute field in to hours and minutes, add more fine-grain Out of Office times, calendar UI for inputting available hours), and general new features (AI support for finding settings, add favorite buttons)
 
 As of now, we are most interested in implementing:
 - Calendar to input availability - similar to Google Calendar / when2meet; seems useful for the average user
