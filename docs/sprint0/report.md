@@ -23,6 +23,12 @@ A total of `33` issues have been created, with `10` being closed. A large amount
 
 # Standards document summary
 
+# Screenshots of app running locally
+<img width="1892" height="938" alt="Screenshot 2026-09-08 104349" src="https://github.com/user-attachments/assets/ad353e5f-b17c-46a6-84b2-96fd6950ad35" />
+<img width="1568" height="836" alt="Screenshot 2026-09-08 104439" src="https://github.com/user-attachments/assets/c96a2272-fda2-4ba9-8db3-61484b186257" />
+<img width="1912" height="980" alt="Screenshot 2026-09-08 104451" src="https://github.com/user-attachments/assets/f979a0a6-8d78-49e0-8d7d-a33e3544d592" />
+
+
 # Completed PRs
 
 #31 - [fix: fixed NaN displaying on event edit sidebar](https://github.com/CSCI-435-SE/cal.diy/pull/31)\
