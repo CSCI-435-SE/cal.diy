@@ -638,6 +638,7 @@ describe("Webhook Producer – BOOKING_REQUESTED", () => {
               email: booker.email,
               name: booker.name,
               location: { optionValue: "", value: BookingLocations.CalVideo },
+              rescheduleReason: "Rescheduling due to a scheduling conflict",
             },
           },
         });

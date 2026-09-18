@@ -1822,6 +1822,7 @@ export class BookingRepository implements IBookingRepository {
             customReplyToEmail: true,
             bookingFields: true,
             metadata: true,
+            requiresRescheduleReason: true,
             team: {
               select: {
                 id: true,

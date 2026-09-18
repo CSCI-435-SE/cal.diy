@@ -58,6 +58,758 @@ describe("handleNewBooking", () => {
   });
 
   describe("Reschedule", () => {
+    describe("Reschedule Reason Requirement", () => {
+      test("Should block host reschedule submission without reason when requiresRescheduleReason is MANDATORY_BOTH", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-both-host";
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_BOTH",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["daily-video"]],
+          })
+        );
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+          },
+        });
+
+        await expect(
+          handleNewBooking({
+            bookingData: mockBookingData,
+            userId: organizer.id,
+          })
+        ).rejects.toThrow();
+      });
+
+      test("Should block attendee reschedule submission without reason when requiresRescheduleReason is MANDATORY_BOTH", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-both-attendee";
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_BOTH",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["daily-video"]],
+          })
+        );
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+            rescheduledBy: booker.email,
+          },
+        });
+
+        await expect(
+          handleNewBooking({
+            bookingData: mockBookingData,
+          })
+        ).rejects.toThrow();
+      });
+
+      test("Should block host reschedule submission without reason when requiresRescheduleReason is MANDATORY_HOST_ONLY", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-host-only-host";
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_HOST_ONLY",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["daily-video"]],
+          })
+        );
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+          },
+        });
+
+        await expect(
+          handleNewBooking({
+            bookingData: mockBookingData,
+            userId: organizer.id,
+          })
+        ).rejects.toThrow();
+      });
+
+      test("Should allow attendee reschedule submission without reason when requiresRescheduleReason is MANDATORY_HOST_ONLY", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+          credentials: [getGoogleCalendarCredential()],
+          selectedCalendars: [TestData.selectedCalendars.google],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-host-only-attendee";
+        const iCalUID = `${uidOfBookingToBeRescheduled}@Cal.diy`;
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_HOST_ONLY",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+                references: [
+                  {
+                    type: appStoreMetadata.dailyvideo.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASS",
+                    meetingUrl: "http://mock-dailyvideo.example.com",
+                    credentialId: null,
+                  },
+                  {
+                    type: appStoreMetadata.googlecalendar.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASSWORD",
+                    meetingUrl: "https://UNUSED_URL",
+                    externalCalendarId: "MOCK_EXTERNAL_CALENDAR_ID",
+                    credentialId: undefined,
+                  },
+                ],
+                iCalUID,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+          })
+        );
+
+        mockSuccessfulVideoMeetingCreation({ metadataLookupKey: "dailyvideo" });
+        await mockCalendarToHaveNoBusySlots("googlecalendar", {
+          create: { uid: "MOCK_ID" },
+          update: { uid: "UPDATED_MOCK_ID", iCalUID },
+        });
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+            rescheduledBy: booker.email,
+          },
+        });
+
+        const createdBooking = await handleNewBooking({
+          bookingData: mockBookingData,
+        });
+
+        expect(createdBooking).toBeDefined();
+        expect(createdBooking.uid).toBeDefined();
+      });
+
+      test("Should block attendee reschedule submission without reason when requiresRescheduleReason is MANDATORY_ATTENDEE_ONLY", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-attendee-only-attendee";
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_ATTENDEE_ONLY",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["daily-video"]],
+          })
+        );
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+            rescheduledBy: booker.email,
+          },
+        });
+
+        await expect(
+          handleNewBooking({
+            bookingData: mockBookingData,
+          })
+        ).rejects.toThrow();
+      });
+
+      test("Should allow host reschedule submission without reason when requiresRescheduleReason is MANDATORY_ATTENDEE_ONLY", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+          credentials: [getGoogleCalendarCredential()],
+          selectedCalendars: [TestData.selectedCalendars.google],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-attendee-only-host";
+        const iCalUID = `${uidOfBookingToBeRescheduled}@Cal.diy`;
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_ATTENDEE_ONLY",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+                references: [
+                  {
+                    type: appStoreMetadata.dailyvideo.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASS",
+                    meetingUrl: "http://mock-dailyvideo.example.com",
+                    credentialId: null,
+                  },
+                  {
+                    type: appStoreMetadata.googlecalendar.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASSWORD",
+                    meetingUrl: "https://UNUSED_URL",
+                    externalCalendarId: "MOCK_EXTERNAL_CALENDAR_ID",
+                    credentialId: undefined,
+                  },
+                ],
+                iCalUID,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+          })
+        );
+
+        mockSuccessfulVideoMeetingCreation({ metadataLookupKey: "dailyvideo" });
+        await mockCalendarToHaveNoBusySlots("googlecalendar", {
+          create: { uid: "MOCK_ID" },
+          update: { uid: "UPDATED_MOCK_ID", iCalUID },
+        });
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+          },
+        });
+
+        const createdBooking = await handleNewBooking({
+          bookingData: mockBookingData,
+          userId: organizer.id,
+        });
+
+        expect(createdBooking).toBeDefined();
+        expect(createdBooking.uid).toBeDefined();
+      });
+
+      test("Should allow host reschedule submission without reason when requiresRescheduleReason is OPTIONAL_BOTH", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+          credentials: [getGoogleCalendarCredential()],
+          selectedCalendars: [TestData.selectedCalendars.google],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-optional-both-host";
+        const iCalUID = `${uidOfBookingToBeRescheduled}@Cal.diy`;
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "OPTIONAL_BOTH",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+                references: [
+                  {
+                    type: appStoreMetadata.dailyvideo.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASS",
+                    meetingUrl: "http://mock-dailyvideo.example.com",
+                    credentialId: null,
+                  },
+                  {
+                    type: appStoreMetadata.googlecalendar.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASSWORD",
+                    meetingUrl: "https://UNUSED_URL",
+                    externalCalendarId: "MOCK_EXTERNAL_CALENDAR_ID",
+                    credentialId: undefined,
+                  },
+                ],
+                iCalUID,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+          })
+        );
+
+        mockSuccessfulVideoMeetingCreation({ metadataLookupKey: "dailyvideo" });
+        await mockCalendarToHaveNoBusySlots("googlecalendar", {
+          create: { uid: "MOCK_ID" },
+          update: { uid: "UPDATED_MOCK_ID", iCalUID },
+        });
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+          },
+        });
+
+        const createdBooking = await handleNewBooking({
+          bookingData: mockBookingData,
+          userId: organizer.id,
+        });
+
+        expect(createdBooking).toBeDefined();
+        expect(createdBooking.uid).toBeDefined();
+      });
+
+      test("Should allow attendee reschedule submission without reason when requiresRescheduleReason is OPTIONAL_BOTH", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+          credentials: [getGoogleCalendarCredential()],
+          selectedCalendars: [TestData.selectedCalendars.google],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-optional-both-attendee";
+        const iCalUID = `${uidOfBookingToBeRescheduled}@Cal.diy`;
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "OPTIONAL_BOTH",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+                references: [
+                  {
+                    type: appStoreMetadata.dailyvideo.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASS",
+                    meetingUrl: "http://mock-dailyvideo.example.com",
+                    credentialId: null,
+                  },
+                  {
+                    type: appStoreMetadata.googlecalendar.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASSWORD",
+                    meetingUrl: "https://UNUSED_URL",
+                    externalCalendarId: "MOCK_EXTERNAL_CALENDAR_ID",
+                    credentialId: undefined,
+                  },
+                ],
+                iCalUID,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+          })
+        );
+
+        mockSuccessfulVideoMeetingCreation({ metadataLookupKey: "dailyvideo" });
+        await mockCalendarToHaveNoBusySlots("googlecalendar", {
+          create: { uid: "MOCK_ID" },
+          update: { uid: "UPDATED_MOCK_ID", iCalUID },
+        });
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+            rescheduledBy: booker.email,
+          },
+        });
+
+        const createdBooking = await handleNewBooking({
+          bookingData: mockBookingData,
+        });
+
+        expect(createdBooking).toBeDefined();
+        expect(createdBooking.uid).toBeDefined();
+      });
+
+      test("Should allow host reschedule submission with a supplied reason when requiresRescheduleReason is MANDATORY_BOTH", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+          credentials: [getGoogleCalendarCredential()],
+          selectedCalendars: [TestData.selectedCalendars.google],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-mandatory-both-supplied";
+        const iCalUID = `${uidOfBookingToBeRescheduled}@Cal.diy`;
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                requiresRescheduleReason: "MANDATORY_BOTH",
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+                references: [
+                  {
+                    type: appStoreMetadata.dailyvideo.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASS",
+                    meetingUrl: "http://mock-dailyvideo.example.com",
+                    credentialId: null,
+                  },
+                  {
+                    type: appStoreMetadata.googlecalendar.type,
+                    uid: "MOCK_ID",
+                    meetingId: "MOCK_ID",
+                    meetingPassword: "MOCK_PASSWORD",
+                    meetingUrl: "https://UNUSED_URL",
+                    externalCalendarId: "MOCK_EXTERNAL_CALENDAR_ID",
+                    credentialId: undefined,
+                  },
+                ],
+                iCalUID,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+          })
+        );
+
+        mockSuccessfulVideoMeetingCreation({ metadataLookupKey: "dailyvideo" });
+        await mockCalendarToHaveNoBusySlots("googlecalendar", {
+          create: { uid: "MOCK_ID" },
+          update: { uid: "UPDATED_MOCK_ID", iCalUID },
+        });
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+              rescheduleReason: "Conflicting meeting came up",
+            },
+          },
+        });
+
+        const createdBooking = await handleNewBooking({
+          bookingData: mockBookingData,
+          userId: organizer.id,
+        });
+
+        expect(createdBooking).toBeDefined();
+        expect(createdBooking.uid).toBeDefined();
+      });
+
+      test("Should block host reschedule submission without reason when requiresRescheduleReason is unset (defaults to MANDATORY_HOST_ONLY)", async () => {
+        const handleNewBooking = getNewBookingHandler();
+        const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+        const organizer = getOrganizer({
+          name: "Organizer",
+          email: "organizer@example.com",
+          id: 101,
+          schedules: [TestData.schedules.IstWorkHours],
+        });
+        const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+        const uidOfBookingToBeRescheduled = "reschedule-reason-unset-default-host";
+
+        await createBookingScenario(
+          getScenarioData({
+            eventTypes: [
+              {
+                id: 1,
+                slotInterval: 15,
+                length: 15,
+                users: [{ id: 101 }],
+              },
+            ],
+            bookings: [
+              {
+                uid: uidOfBookingToBeRescheduled,
+                eventTypeId: 1,
+                userId: 101,
+                status: BookingStatus.ACCEPTED,
+                startTime: `${plus1DateString}T05:00:00.000Z`,
+                endTime: `${plus1DateString}T05:15:00.000Z`,
+              },
+            ],
+            organizer,
+            apps: [TestData.apps["daily-video"]],
+          })
+        );
+
+        const mockBookingData = getMockRequestDataForBooking({
+          data: {
+            eventTypeId: 1,
+            rescheduleUid: uidOfBookingToBeRescheduled,
+            start: `${plus1DateString}T04:00:00.000Z`,
+            end: `${plus1DateString}T04:15:00.000Z`,
+            responses: {
+              email: booker.email,
+              name: booker.name,
+              location: { optionValue: "", value: BookingLocations.CalVideo },
+            },
+          },
+        });
+
+        await expect(
+          handleNewBooking({
+            bookingData: mockBookingData,
+            userId: organizer.id,
+          })
+        ).rejects.toThrow();
+      });
+    });
+
     describe("User event-type", () => {
       test(
         `should rechedule an existing booking successfully with Cal Video(Daily Video)
@@ -988,6 +1740,7 @@ describe("handleNewBooking", () => {
                   email: booker.email,
                   name: booker.name,
                   location: { optionValue: "", value: BookingLocations.CalVideo },
+                  rescheduleReason: "Rescheduling due to a scheduling conflict",
                 },
               },
             });
@@ -1226,6 +1979,7 @@ describe("handleNewBooking", () => {
                   email: booker.email,
                   name: booker.name,
                   location: { optionValue: "", value: BookingLocations.GoogleMeet },
+                  rescheduleReason: "Rescheduling due to a scheduling conflict",
                 },
               },
             });
@@ -1665,6 +2419,7 @@ describe("handleNewBooking", () => {
                   email: booker.email,
                   name: booker.name,
                   location: { optionValue: "", value: BookingLocations.CalVideo },
+                  rescheduleReason: "Rescheduling due to a scheduling conflict",
                 },
               },
             });

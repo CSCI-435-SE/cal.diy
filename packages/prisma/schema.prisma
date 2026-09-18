@@ -153,6 +153,13 @@ enum CancellationReasonRequirement {
   OPTIONAL_BOTH
 }
 
+enum RescheduleReasonRequirement {
+  MANDATORY_BOTH
+  MANDATORY_HOST_ONLY
+  MANDATORY_ATTENDEE_ONLY
+  OPTIONAL_BOTH
+}
+
 model EventType {
   id                Int     @id @default(autoincrement())
   /// @zod.string.min(1)
@@ -285,6 +292,7 @@ model EventType {
   bookingRequiresAuthentication Boolean                        @default(false)
   rrHostSubsetEnabled           Boolean                        @default(false)
   requiresCancellationReason    CancellationReasonRequirement? @default(MANDATORY_HOST_ONLY)
+  requiresRescheduleReason      RescheduleReasonRequirement?   @default(MANDATORY_HOST_ONLY)
   enablePerHostLocations        Boolean                        @default(false)
 
   createdAt DateTime? @default(now())

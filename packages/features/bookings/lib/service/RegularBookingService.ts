@@ -55,6 +55,7 @@ import type { EventPayloadType, EventTypeInfo } from "@calcom/features/webhooks/
 import { getTranslation } from "@calcom/i18n/server";
 import { groupHostsByGroupId } from "@calcom/lib/bookings/hostGroupUtils";
 import { shouldIgnoreContactOwner } from "@calcom/lib/bookings/routing/utils";
+import { SystemField } from "@calcom/lib/bookings/SystemField";
 import { getVideoCallUrlFromCalEvent } from "@calcom/lib/CalEventParser";
 import { DEFAULT_GROUP_ID, ENABLE_ASYNC_TASKER } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
@@ -70,7 +71,7 @@ import { distributedTracing } from "@calcom/lib/tracing/factory";
 import type { PrismaClient } from "@calcom/prisma";
 import type { AssignmentReasonEnum, DestinationCalendar, Prisma, User } from "@calcom/prisma/client";
 import { BookingStatus, CreationSource, SchedulingType, WebhookTriggerEvents } from "@calcom/prisma/enums";
-import { userMetadata as userMetadataSchema } from "@calcom/prisma/zod-utils";
+import { eventTypeBookingFields, userMetadata as userMetadataSchema } from "@calcom/prisma/zod-utils";
 import type {
   AdditionalInformation,
   AppsStatus,
@@ -99,6 +100,7 @@ import type { getEventTypeResponse } from "../handleNewBooking/getEventTypesFrom
 import { getLocationValuesForDb } from "../handleNewBooking/getLocationValuesForDb";
 import { getRequiresConfirmationFlags } from "../handleNewBooking/getRequiresConfirmationFlags";
 import { getSeatedBooking } from "../handleNewBooking/getSeatedBooking";
+import { isRescheduleReasonRequired } from "../rescheduleReason";
 import { getVideoCallDetails } from "../handleNewBooking/getVideoCallDetails";
 import { handleAppsStatus } from "../handleNewBooking/handleAppsStatus";
 import { loadAndValidateUsers } from "../handleNewBooking/loadAndValidateUsers";
@@ -440,16 +442,16 @@ async function validateRescheduleRestrictions({
   rescheduleUid: string | null | undefined;
   userId: number | null;
   eventType: { seatsPerTimeSlot: number | null; minimumRescheduleNotice: number | null } | null;
-}): Promise<void> {
+}): Promise<{ isRescheduleUserHost: boolean; originalOrganizerEmail: string | null } | null> {
   if (!rescheduleUid || !eventType) {
-    return; // Not a reschedule, skip validation
+    return null; // Not a reschedule, skip validation
   }
 
   const bookingSeat = rescheduleUid ? await getSeatedBooking(rescheduleUid) : null;
   const actualRescheduleUid = bookingSeat ? bookingSeat.booking.uid : rescheduleUid;
 
   if (!actualRescheduleUid) {
-    return; // No valid reschedule UID
+    return null; // No valid reschedule UID
   }
 
   try {
@@ -473,6 +475,11 @@ async function validateRescheduleRestrictions({
         message: "Rescheduling is not allowed within the minimum notice period before the event",
       });
     }
+
+    return {
+      isRescheduleUserHost: !!isUserOrganizer,
+      originalOrganizerEmail: originalRescheduledBooking.user?.email ?? null,
+    };
   } catch (error) {
     // Re-throw HttpError (including our 403 validation error)
     if (error instanceof HttpError) {
@@ -480,6 +487,7 @@ async function validateRescheduleRestrictions({
     }
     // For other errors (like booking not found), let the service handle it later
     // We don't want to fail early validation for these cases
+    return null;
   }
 }
 
@@ -526,7 +534,7 @@ async function handler(
   });
 
   // Early validation: Check reschedule restrictions if rescheduling
-  await validateRescheduleRestrictions({
+  const rescheduleRestrictions = await validateRescheduleRestrictions({
     rescheduleUid: rawBookingData.rescheduleUid,
     userId: userId ?? null,
     eventType: eventType
@@ -537,9 +545,35 @@ async function handler(
       : null,
   });
 
+  // Mirrors handleCancelBooking.ts's isCancellationUserHost: the requester is treated as the
+  // host either when their session matches the original booking's organizer, or when the
+  // (client-supplied) rescheduledBy email matches the organizer's email - same trust posture
+  // cancellation already uses for cancelledBy.
+  const isRescheduleUserHost =
+    !!rescheduleRestrictions?.isRescheduleUserHost ||
+    (!!rescheduleRestrictions?.originalOrganizerEmail &&
+      rescheduleRestrictions.originalOrganizerEmail === rawBookingData.rescheduledBy);
+
+  // The system-field list is branded (HAS_SYSTEM_FIELDS) to prove it went through
+  // getBookingFieldsWithSystemFields; re-validating through the same branded schema (the
+  // pattern getBookingFields.ts:317 itself uses) restores the brand `.map` drops, with an
+  // actual runtime check rather than a type-only assertion.
+  const bookingFieldsForValidation = rawBookingData.rescheduleUid
+    ? eventTypeBookingFields.brand<"HAS_SYSTEM_FIELDS">().parse(
+        eventType.bookingFields.map((field) =>
+          field.name === SystemField.Enum.rescheduleReason
+            ? {
+                ...field,
+                required: isRescheduleReasonRequired(eventType.requiresRescheduleReason, isRescheduleUserHost),
+              }
+            : field
+        )
+      )
+    : eventType.bookingFields;
+
   const bookingDataSchema = bookingDataSchemaGetter({
     view: rawBookingData.rescheduleUid ? "reschedule" : "booking",
-    bookingFields: eventType.bookingFields,
+    bookingFields: bookingFieldsForValidation,
   });
 
   const bookingData = await getBookingData({

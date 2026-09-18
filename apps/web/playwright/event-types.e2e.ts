@@ -2,7 +2,6 @@ import { WEBAPP_URL } from "@calcom/lib/constants";
 import { randomString } from "@calcom/lib/random";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-
 import { test } from "./lib/fixtures";
 import {
   bookTimeSlot,
@@ -49,6 +48,23 @@ test.describe("Event Types tests", () => {
       const $eventTypes = page.locator("[data-testid=event-types] > li a");
       const count = await $eventTypes.count();
       expect(count).toBeGreaterThanOrEqual(2);
+    });
+
+    test("preview button shows a tooltip on hover", async ({ page }) => {
+      await page.locator("[data-testid=preview-link-button]").first().hover();
+      await expect(page.locator('[role="tooltip"]', { hasText: "Preview" })).toBeVisible();
+    });
+
+    test("options dropdown button shows a tooltip on hover", async ({ page }) => {
+      const firstElement = await page.waitForSelector(
+        '[data-testid="event-types"] a[href^="/event-types/"] >> nth=0'
+      );
+      const href = await firstElement.getAttribute("href");
+      expect(href).not.toBeNull();
+      const [eventTypeId] = new URL(WEBAPP_URL + href).pathname.split("/").reverse();
+
+      await page.locator(`[data-testid=event-type-options-${eventTypeId}]`).first().hover();
+      await expect(page.locator('[role="tooltip"]', { hasText: "Open options" })).toBeVisible();
     });
 
     test("can add new event type", async ({ page }) => {

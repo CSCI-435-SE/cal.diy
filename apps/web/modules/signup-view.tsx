@@ -235,6 +235,7 @@ export default function Signup({
   const {
     register,
     watch,
+    trigger,
     formState: { isSubmitting, errors, isSubmitSuccessful },
   } = formMethods;
 
@@ -550,7 +551,7 @@ export default function Signup({
                         data-testid="signup-passwordfield"
                         autoComplete="new-password"
                         label={t("password")}
-                        {...register("password")}
+                        {...register("password",{onChange: () => {trigger("password");}})}
                         hintErrors={["caplow", "min", "num"]}
                       />
                       {/* Cloudflare Turnstile Captcha */}

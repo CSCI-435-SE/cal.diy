@@ -6,6 +6,7 @@ import {
 import dayjs from "@calcom/dayjs";
 import { sendRequestRescheduleEmailAndSMS } from "@calcom/emails/email-manager";
 import { getCalEventResponses } from "@calcom/features/bookings/lib/getCalEventResponses";
+import { isRescheduleReasonRequired } from "@calcom/features/bookings/lib/rescheduleReason";
 import { BookingRepository } from "@calcom/features/bookings/repositories/BookingRepository";
 import { deleteMeeting } from "@calcom/features/conferencing/lib/videoClient";
 import getWebhooks from "@calcom/features/webhooks/lib/getWebhooks";
@@ -77,6 +78,15 @@ export const requestRescheduleHandler = async ({ ctx, input, source }: RequestRe
   }
 
   const event: Partial<EventType> = bookingToReschedule.eventType ?? {};
+
+  // Only the booking's organizer can request a reschedule, so the "host" branch of the
+  // requirement always applies here.
+  const isReasonRequired = isRescheduleReasonRequired(event.requiresRescheduleReason, true);
+
+  if (!cancellationReason?.trim() && isReasonRequired) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Reschedule reason is required" });
+  }
+
   await bookingRepository.updateBookingStatus({
     bookingId: bookingToReschedule.id,
     status: BookingStatus.CANCELLED,
