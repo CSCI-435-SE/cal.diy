@@ -46,7 +46,7 @@ import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { signIn } from "next-auth/react";
 import posthog from "posthog-js";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SubmitHandler } from "react-hook-form";
 import { useForm, useFormContext } from "react-hook-form";
 import { Toaster } from "sonner";
@@ -211,8 +211,24 @@ export default function Signup({
   const searchParams = useCompatSearchParams();
   const { t, i18n } = useLocale();
   const router = useRouter();
+  // Username is optional at the base schema level (org-invite-by-link auto-derives it from the
+  // email on submit, see handleSubmit below), but for an ordinary signup it must be non-blank -
+  // otherwise the submit button would misleadingly enable with no username at all.
+  const signupResolverSchema = useMemo(
+    () =>
+      signupSchema.superRefine((data, ctx) => {
+        if (!isOrgInviteByLink && !data.username?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["username"],
+            message: "required",
+          });
+        }
+      }),
+    [isOrgInviteByLink]
+  );
   const formMethods = useForm<FormValues>({
-    resolver: zodResolver(signupSchema),
+    resolver: zodResolver(signupResolverSchema),
     defaultValues: prepopulateFormValues satisfies FormValues,
     mode: "onTouched",
   });
@@ -512,15 +528,8 @@ export default function Signup({
                           setPremium={(value) => setPremiumUsername(value)}
                           addOnLeading={
                             orgSlug
-                              ? truncateDomain(
-                                  `${WEBAPP_URL.replace(
-                                    URL_PROTOCOL_REGEX,
-                                    ""
-                                  )}/`
-                                )
-                              : truncateDomain(
-                                  `${WEBSITE_URL.replace(URL_PROTOCOL_REGEX, "")}/`
-                                )
+                              ? truncateDomain(`${WEBAPP_URL.replace(URL_PROTOCOL_REGEX, "")}/`)
+                              : truncateDomain(`${WEBSITE_URL.replace(URL_PROTOCOL_REGEX, "")}/`)
                           }
                         />
                       ) : null}
@@ -581,10 +590,7 @@ export default function Signup({
                         className="my-2 w-full justify-center"
                         loading={loadingSubmitState}
                         disabled={
-                          !!formMethods.formState.errors.username ||
-                          !!formMethods.formState.errors.email ||
-                          !formMethods.getValues("email") ||
-                          !formMethods.getValues("password") ||
+                          !formMethods.formState.isValid ||
                           (CLOUDFLARE_SITE_ID && !process.env.NEXT_PUBLIC_IS_E2E && !watch("cfToken")) ||
                           isSubmitting ||
                           usernameTaken
