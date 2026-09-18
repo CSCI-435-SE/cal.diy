@@ -19,7 +19,7 @@ Cal.diy is a self-hosted scheduling system. Users of the software can define the
 
 # Feature backlog summary
 
-A total of `28` issues have been created, with `8` being closed. A large amount of the issues that were created are features.
+A total of `33` issues have been created, with `10` being closed. A large amount of the issues that were created are features.
 
 # Standards document summary
 
@@ -37,7 +37,7 @@ A total of `28` issues have been created, with `8` being closed. A large amount 
 #36 - [feat(bookings): require a reason when rescheduling per EventType setting](https://github.com/CSCI-435-SE/cal.diy/pull/36)
 
 # AI tool usage
-Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size.
+Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size. [Session Logs](cal.diy/ai-logs/sprint0/zachbowden/) \
 Joshua Ko: Claude Code across two sessions to implement a bug fix and a small feature. [Session Logs](cal.diy/ai-logs/sprint0/kojoshuay/)  
 - Helpful with starting the app and explaining code
 - I didn't observe difficulties bc the issues are small so far
@@ -46,5 +46,6 @@ Joshua Ko: Claude Code across two sessions to implement a bug fix and a small fe
 (we will need to create a release in the repo)
 
 # Risks and challenges
+Understanding the structure of the project was certainly harder than expected. Because of the way the API is layed out, to locate an API call linked to something specific such as a form submission.
 
 # Sprint 1 ideas
