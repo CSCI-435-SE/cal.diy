@@ -28,7 +28,11 @@ import { useDebounce } from "@calcom/lib/hooks/useDebounce";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { INVALID_CLOUDFLARE_TOKEN_ERROR } from "@calcom/lib/server/checkCfTurnstileToken";
 import { IS_EUROPE } from "@calcom/lib/timezoneConstants";
-import { signupSchema as apiSignupSchema } from "@calcom/prisma/zod-utils";
+import {
+  MIN_USERNAME_LENGTH,
+  signupSchema as apiSignupSchema,
+  usernameRegex,
+} from "@calcom/prisma/zod-utils";
 import type { inferSSRProps } from "@calcom/types/inferSSRProps";
 import classNames from "@calcom/ui/classNames";
 import { Alert } from "@calcom/ui/components/alert";
@@ -53,8 +57,17 @@ import { Toaster } from "sonner";
 import { z } from "zod";
 
 const signupSchema = apiSignupSchema.extend({
-  apiError: z.string().optional(), // Needed to display API errors doesn't get passed to the API
+  apiError: z.string().optional(),
   cfToken: z.string().optional(),
+  username: z
+    .string()
+    .optional()
+    .refine((value) => !value || value.length >= MIN_USERNAME_LENGTH, {
+      message: `Username must be at least ${MIN_USERNAME_LENGTH} characters`,
+    })
+    .refine((value) => !value || usernameRegex.test(value), {
+      message: "Invalid username",
+    }),
 });
 
 const TurnstileCaptcha = dynamic(() => import("@calcom/web/modules/auth/components/Turnstile"), {

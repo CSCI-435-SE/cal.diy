@@ -26,6 +26,9 @@ export const emailRegex =
  */
 const MAX_EMAIL_LENGTH = 254;
 
+export const usernameRegex = /^[a-z0-9]+(?:[-.][a-z0-9]+)*$/;
+export const MIN_USERNAME_LENGTH = 2;
+
 const emailRegexSchema = z
   .string()
   .max(MAX_EMAIL_LENGTH, { message: "Email address is too long" })
