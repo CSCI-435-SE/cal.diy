@@ -24,11 +24,6 @@ A total of `33` issues have been created, with `10` being closed. A large amount
 # Standards document summary
 
 # Screenshots of app running locally
-![Claude Code Session 1](https://github.com/user-attachments/assets/ad353e5f-b17c-46a6-84b2-96fd6950ad35)
-
-![Claude Code Session 2](https://github.com/user-attachments/assets/c96a2272-fda2-4ba9-8db3-61484b186257)
-
-![GitLab Log Verification](https://github.com/user-attachments/assets/f979a0a6-8d78-49e0-8d7d-a33e3544d592)
 
 
 # Completed PRs
