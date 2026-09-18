@@ -15,7 +15,23 @@ We are "The Calendars"! We are working on a fork of [cal.diy](https://github.com
 
 # Project Overview
 
-Cal.diy is a self-hosted scheduling system. Users of the software can define their own, custom events that they can either mark as public-facing or unlisted. Cal.diy can be integrated into several calendar services such as google calendar and CalDAV, so that users can automatically have their calendars populated when someone schedules an event.
+**What does the system do? Who are its users? What are its main features?**
+- Cal.diy is a self-hosted, open-source scheduling/booking platform (a Cal.com fork). Users are hosts (individuals or teams who share booking links) and the guests who book time with them. Main features: customizable event types, calendar sync, availability rules and team/round-robin scheduling, automated workflows/notifications, an embeddable booking widget, and an app-store for third-party integrations.
+
+**What are the main components and how do they interact?**
+- `apps/web` (Next.js frontend + API routes) calls into `packages/trpc` (type-safe API layer), which delegates to `packages/features` (business logic, organized as vertical slices) and `packages/lib` (shared utilities). Those read/write through `packages/prisma` (Prisma ORM over PostgreSQL). `apps/api` is a separate REST API (v1/v2) that reuses the same underlying logic via `packages/platform/libraries` rather than importing `features`/`trpc` directly. `packages/app-store` plugs in third-party calendar/video/payment integrations, and `packages/ui`/`coss-ui` supply shared UI components consumed by `apps/web`.
+
+**What are the major technologies, frameworks, and external services?**
+- Next.js, TypeScript, tRPC, Prisma + PostgreSQL, NextAuth.js for auth, Tailwind CSS, Vitest (unit) + Playwright (E2E), next-i18next for translations, Biome for lint/format, all inside a Yarn 4 + Turborepo monorepo. External integrations include Google Calendar, Office365/Outlook, CalDAV, Stripe for payments, and video-conferencing apps (Zoom, Google Meet, Daily.co); Mailhog and Docker Postgres are used for local development.
+
+**How is the code organized (directory structure, key packages/modules)?**
+- `apps/web` — the main Next.js app; `apps/api` — standalone REST API v1/v2; `packages/prisma` — DB schema and migrations; `packages/trpc` — tRPC routers; `packages/features` — feature-specific business logic; `packages/lib` — shared utilities; `packages/ui` / `packages/coss-ui` — shared UI components; `packages/app-store` — third-party app integrations; `packages/platform` — SDK/atoms and shared libraries for embeds and API v2; `packages/i18n` — translation files.
+
+**How do developers typically contribute? What is the PR and code review workflow?**
+- The team uses a branch-based workflow: branch off a freshly-pulled `main` with a `feat/issue-<N>-...`, `fix/issue-<N>-...`, or `chore/...` name, push, and open a PR back into `main` (which is branch-protected — no direct pushes). PRs are opened in draft mode, kept under ~500 lines/10 files, titled with Conventional Commits, and must link the issue (`Closes #N`), fill out the PR template (summary, demo if user-facing, self-review, tests), pass type-check/Biome/tests, and get at least one reviewer comment before merging.
+
+**What are the standards for issue reporting, triage, and management?**
+- Contributors check existing issues/PRs first to avoid duplicates and use the repo's issue templates. Feature requests need the `🚨 needs approval` label removed by a core team member before work starts; bugs, security, performance, and docs issues can be picked up immediately. Issues are triaged by priority label (Low, Medium, High, Urgent) based on whether they touch core flows (booking, login, email) versus minor UX polish.
 
 # Feature backlog summary
 
