@@ -24,7 +24,13 @@ A total of `33` issues have been created, with `10` being closed. A large amount
 # Standards document summary
 
 # Screenshots of app running locally
+<img width="800" alt="Screenshot 2026-09-08 104349" src="https://github.com/user-attachments/assets/64139f82-4ccf-4712-a897-6b4a1b97c945" />
+<img width="800" alt="Screenshot 2026-09-08 104451" src="https://github.com/user-attachments/assets/dd51e7e1-1698-4cc1-9f48-e8f13da666b7" />
+<img width="800" alt="Screenshot 2026-09-08 104439" src="https://github.com/user-attachments/assets/4b31d46b-0909-42c9-a929-9db28515ea10" />
 
+# Screenshots of the test suite
+<img width="800" alt="test_suite_1" src="https://github.com/user-attachments/assets/275ced3e-4323-4c8f-a25b-90873883d5a1" />
+<img width="800" height="171" alt="test_suite_2" src="https://github.com/user-attachments/assets/85886a35-1da9-4c77-bac7-c2dd07e366b9" />
 
 # Completed PRs
 
