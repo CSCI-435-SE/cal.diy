@@ -154,6 +154,10 @@ const BaseEventTypeUpdateInput: z.ZodType<TUpdateInputSchema> = z
       .enum(["MANDATORY_BOTH", "MANDATORY_HOST_ONLY", "MANDATORY_ATTENDEE_ONLY", "OPTIONAL_BOTH"])
       .nullable()
       .optional(),
+    requiresRescheduleReason: z
+      .enum(["MANDATORY_BOTH", "MANDATORY_HOST_ONLY", "MANDATORY_ATTENDEE_ONLY", "OPTIONAL_BOTH"])
+      .nullable()
+      .optional(),
     minimumRescheduleNotice: z.number().min(0).nullable().optional(),
     seatsShowAttendees: z.boolean().nullable().optional(),
     seatsShowAvailabilityCount: z.boolean().nullable().optional(),
