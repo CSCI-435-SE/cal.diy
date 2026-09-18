@@ -114,7 +114,7 @@ describe("Handler: requestReschedule", () => {
           user: loggedInUser,
           input: {
             bookingUid,
-            rescheduleReason: "",
+            rescheduleReason: "Rescheduling due to a scheduling conflict",
           },
         })
       );
@@ -234,7 +234,7 @@ describe("Handler: requestReschedule", () => {
           user: loggedInUser,
           input: {
             bookingUid,
-            rescheduleReason: "",
+            rescheduleReason: "Rescheduling due to a scheduling conflict",
           },
         })
       );
@@ -377,6 +377,338 @@ describe("Handler: requestReschedule", () => {
     });
 
     test.todo("Verify that the email should go to organizer as well as the team members");
+  });
+
+  describe("Reschedule Reason Requirement", () => {
+    test("Should block host request-reschedule without reason when requiresRescheduleReason is MANDATORY_BOTH", async () => {
+      const { requestRescheduleHandler } = await import(
+        "@calcom/trpc/server/routers/viewer/bookings/requestReschedule.handler"
+      );
+      const booker = getBooker({
+        email: "booker@example.com",
+        name: "Booker",
+      });
+      const organizer = getOrganizer({
+        name: "Organizer",
+        email: "organizer@example.com",
+        id: 101,
+        schedules: [TestData.schedules.IstWorkHours],
+        credentials: [getGoogleCalendarCredential()],
+        selectedCalendars: [TestData.selectedCalendars.google],
+      });
+      const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+      const bookingUid = "reschedule-reason-mandatory-both-host";
+
+      await createBookingScenario(
+        getScenarioData({
+          eventTypes: [
+            {
+              id: 1,
+              slotInterval: 45,
+              length: 45,
+              requiresRescheduleReason: "MANDATORY_BOTH",
+              users: [{ id: 101 }],
+            },
+          ],
+          bookings: [
+            {
+              uid: bookingUid,
+              eventTypeId: 1,
+              userId: 101,
+              status: BookingStatus.ACCEPTED,
+              startTime: `${plus1DateString}T05:00:00.000Z`,
+              endTime: `${plus1DateString}T05:15:00.000Z`,
+              attendees: [
+                getMockBookingAttendee({
+                  id: 2,
+                  name: booker.name,
+                  email: booker.email,
+                  locale: "hi",
+                  timeZone: "Asia/Kolkata",
+                  noShow: false,
+                }),
+              ],
+            },
+          ],
+          organizer,
+          apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+        })
+      );
+
+      const loggedInUser = {
+        organizationId: null,
+        id: 101,
+        username: "reschedule-requester",
+        name: "Reschedule Requester",
+        email: "reschedule-requester@example.com",
+      };
+
+      await expect(
+        requestRescheduleHandler(
+          getTrpcHandlerData({
+            user: loggedInUser,
+            input: {
+              bookingUid,
+              rescheduleReason: "",
+            },
+          })
+        )
+      ).rejects.toThrow("Reschedule reason is required");
+    });
+
+    test("Should block host request-reschedule without reason when requiresRescheduleReason is MANDATORY_HOST_ONLY", async () => {
+      const { requestRescheduleHandler } = await import(
+        "@calcom/trpc/server/routers/viewer/bookings/requestReschedule.handler"
+      );
+      const booker = getBooker({
+        email: "booker@example.com",
+        name: "Booker",
+      });
+      const organizer = getOrganizer({
+        name: "Organizer",
+        email: "organizer@example.com",
+        id: 101,
+        schedules: [TestData.schedules.IstWorkHours],
+        credentials: [getGoogleCalendarCredential()],
+        selectedCalendars: [TestData.selectedCalendars.google],
+      });
+      const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+      const bookingUid = "reschedule-reason-mandatory-host-only";
+
+      await createBookingScenario(
+        getScenarioData({
+          eventTypes: [
+            {
+              id: 1,
+              slotInterval: 45,
+              length: 45,
+              requiresRescheduleReason: "MANDATORY_HOST_ONLY",
+              users: [{ id: 101 }],
+            },
+          ],
+          bookings: [
+            {
+              uid: bookingUid,
+              eventTypeId: 1,
+              userId: 101,
+              status: BookingStatus.ACCEPTED,
+              startTime: `${plus1DateString}T05:00:00.000Z`,
+              endTime: `${plus1DateString}T05:15:00.000Z`,
+              attendees: [
+                getMockBookingAttendee({
+                  id: 2,
+                  name: booker.name,
+                  email: booker.email,
+                  locale: "hi",
+                  timeZone: "Asia/Kolkata",
+                  noShow: false,
+                }),
+              ],
+            },
+          ],
+          organizer,
+          apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+        })
+      );
+
+      const loggedInUser = {
+        organizationId: null,
+        id: 101,
+        username: "reschedule-requester",
+        name: "Reschedule Requester",
+        email: "reschedule-requester@example.com",
+      };
+
+      await expect(
+        requestRescheduleHandler(
+          getTrpcHandlerData({
+            user: loggedInUser,
+            input: {
+              bookingUid,
+              rescheduleReason: "",
+            },
+          })
+        )
+      ).rejects.toThrow("Reschedule reason is required");
+    });
+
+    test("Should allow host request-reschedule without reason when requiresRescheduleReason is MANDATORY_ATTENDEE_ONLY", async ({
+      emails,
+    }) => {
+      const { requestRescheduleHandler } = await import(
+        "@calcom/trpc/server/routers/viewer/bookings/requestReschedule.handler"
+      );
+      const booker = getBooker({
+        email: "booker@example.com",
+        name: "Booker",
+      });
+      const organizer = getOrganizer({
+        name: "Organizer",
+        email: "organizer@example.com",
+        id: 101,
+        schedules: [TestData.schedules.IstWorkHours],
+        credentials: [getGoogleCalendarCredential()],
+        selectedCalendars: [TestData.selectedCalendars.google],
+      });
+      const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+      const bookingUid = "reschedule-reason-mandatory-attendee-only";
+      const eventTypeSlug = "event-type-1";
+
+      await createBookingScenario(
+        getScenarioData({
+          eventTypes: [
+            {
+              id: 1,
+              slug: eventTypeSlug,
+              slotInterval: 45,
+              length: 45,
+              requiresRescheduleReason: "MANDATORY_ATTENDEE_ONLY",
+              users: [{ id: 101 }],
+            },
+          ],
+          bookings: [
+            {
+              uid: bookingUid,
+              eventTypeId: 1,
+              userId: 101,
+              status: BookingStatus.ACCEPTED,
+              startTime: `${plus1DateString}T05:00:00.000Z`,
+              endTime: `${plus1DateString}T05:15:00.000Z`,
+              attendees: [
+                getMockBookingAttendee({
+                  id: 2,
+                  name: booker.name,
+                  email: booker.email,
+                  locale: "hi",
+                  timeZone: "Asia/Kolkata",
+                  noShow: false,
+                }),
+              ],
+            },
+          ],
+          organizer,
+          apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+        })
+      );
+
+      const loggedInUser = {
+        organizationId: null,
+        id: 101,
+        username: "reschedule-requester",
+        name: "Reschedule Requester",
+        email: "reschedule-requester@example.com",
+      };
+
+      await requestRescheduleHandler(
+        getTrpcHandlerData({
+          user: loggedInUser,
+          input: {
+            bookingUid,
+            rescheduleReason: "",
+          },
+        })
+      );
+
+      expectBookingRequestRescheduledEmails({
+        booking: {
+          uid: bookingUid,
+        },
+        booker,
+        organizer,
+        loggedInUser,
+        emails,
+        bookNewTimePath: `/${organizer.username}/${eventTypeSlug}`,
+      });
+    });
+
+    test("Should allow host request-reschedule without reason when requiresRescheduleReason is OPTIONAL_BOTH", async ({
+      emails,
+    }) => {
+      const { requestRescheduleHandler } = await import(
+        "@calcom/trpc/server/routers/viewer/bookings/requestReschedule.handler"
+      );
+      const booker = getBooker({
+        email: "booker@example.com",
+        name: "Booker",
+      });
+      const organizer = getOrganizer({
+        name: "Organizer",
+        email: "organizer@example.com",
+        id: 101,
+        schedules: [TestData.schedules.IstWorkHours],
+        credentials: [getGoogleCalendarCredential()],
+        selectedCalendars: [TestData.selectedCalendars.google],
+      });
+      const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+      const bookingUid = "reschedule-reason-optional-both";
+      const eventTypeSlug = "event-type-1";
+
+      await createBookingScenario(
+        getScenarioData({
+          eventTypes: [
+            {
+              id: 1,
+              slug: eventTypeSlug,
+              slotInterval: 45,
+              length: 45,
+              requiresRescheduleReason: "OPTIONAL_BOTH",
+              users: [{ id: 101 }],
+            },
+          ],
+          bookings: [
+            {
+              uid: bookingUid,
+              eventTypeId: 1,
+              userId: 101,
+              status: BookingStatus.ACCEPTED,
+              startTime: `${plus1DateString}T05:00:00.000Z`,
+              endTime: `${plus1DateString}T05:15:00.000Z`,
+              attendees: [
+                getMockBookingAttendee({
+                  id: 2,
+                  name: booker.name,
+                  email: booker.email,
+                  locale: "hi",
+                  timeZone: "Asia/Kolkata",
+                  noShow: false,
+                }),
+              ],
+            },
+          ],
+          organizer,
+          apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+        })
+      );
+
+      const loggedInUser = {
+        organizationId: null,
+        id: 101,
+        username: "reschedule-requester",
+        name: "Reschedule Requester",
+        email: "reschedule-requester@example.com",
+      };
+
+      await requestRescheduleHandler(
+        getTrpcHandlerData({
+          user: loggedInUser,
+          input: {
+            bookingUid,
+            rescheduleReason: "",
+          },
+        })
+      );
+
+      expectBookingRequestRescheduledEmails({
+        booking: {
+          uid: bookingUid,
+        },
+        booker,
+        organizer,
+        loggedInUser,
+        emails,
+        bookNewTimePath: `/${organizer.username}/${eventTypeSlug}`,
+      });
+    });
   });
 });
 
