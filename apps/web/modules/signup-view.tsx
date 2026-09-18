@@ -131,7 +131,7 @@ function UsernameField({
   setUsernameTaken: (value: boolean) => void;
 }) {
   const { t } = useLocale();
-  const { register, formState } = useFormContext<FormValues>();
+  const { register, formState, trigger } = useFormContext<FormValues>();
   const debouncedUsername = useDebounce(username, 600);
 
   useEffect(() => {
@@ -167,7 +167,11 @@ function UsernameField({
       <TextField
         disabled={disabled}
         {...props}
-        {...register("username")}
+        {...register("username", {
+          onChange: () => {
+            trigger("username");
+          },
+        })}
         data-testid="signup-usernamefield"
       />
       {(!formState.isSubmitting || !formState.isSubmitted) && (
@@ -227,7 +231,7 @@ export default function Signup({
   const formMethods = useForm<FormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: prepopulateFormValues satisfies FormValues,
-    mode: "onChange",
+    mode: "onTouched",
   });
   const {
     register,
@@ -538,9 +542,13 @@ export default function Signup({
                         />
                       ) : null}
                       {/* Email */}
-                      <TextField
+                        <TextField
                         id="signup-email"
-                        {...register("email")}
+                        {...register("email", {
+                          onChange: () => {
+                            trigger("email");
+                          },
+                        })}
                         label={t("email")}
                         placeholder="john@doe.com"
                         type="email"

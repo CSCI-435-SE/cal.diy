@@ -35,7 +35,7 @@ function TestSignupForm() {
       email: "",
       password: "",
     },
-    mode: "onChange",
+    mode: "onTouched",
   });
 
   const {
@@ -48,11 +48,11 @@ function TestSignupForm() {
     <FormProvider {...formMethods}>
       <form>
         <label htmlFor="username">Username</label>
-        <input id="username" data-testid="username-input" {...register("username")} />
+        <input id="username" data-testid="username-input" {...register("username", {onChange: () => {trigger("username");}})} />
         {errors.username && <span data-testid="username-error">{errors.username.message}</span>}
 
         <label htmlFor="email">Email</label>
-        <input id="email" type="email" data-testid="email-input" {...register("email")} />
+        <input id="email" type="email" data-testid="email-input" {...register("email", {onChange: () => {trigger("email");}})} />
         {errors.email && <span data-testid="email-error">{errors.email.message}</span>}
 
         <label htmlFor="password">Password</label>
