@@ -35,7 +35,14 @@ We are "The Calendars"! We are working on a fork of [cal.diy](https://github.com
 
 # Feature backlog summary
 
-A total of `33` issues have been created, with `10` being closed. A large amount of the issues that were created are features.
+A total of `33` issues have been created, with `10` being closed. A large amount of the issues that were created are features. Many issues were related to creating an account, allowing the user to input more information / more easily input more information (e.g. split minute field in to hours and minutes, add more fine-grain Out of Office times, calendar UI for inputting available hours), and general new features (AI support for finding settings, add favorite buttons)
+
+As of now, we are most interested in implementing:
+- Calendar to input availability - similar to Google Calendar / when2meet; seems useful for the average user
+- setting event themes - the ability to customize the appearance of events and their booking pages seem like fun to use
+- insights dashboard - apparently the original Cal.com has a dashboard for seeing data about their events: the busiest times, most and least booked events, cancellation reasons, etc. - this seems like it could make the user's life easier with one place to see all the data
+
+[Link to issues](https://github.com/CSCI-435-SE/cal.diy/issues)
 
 # Standards document summary
 
@@ -73,10 +80,24 @@ Julissa Hernandez: Claude code across 2 sessions to implement a bug and a medium
 - Helped with finding the files and editing. 
 - Also helped with double checking things and Answering questions about the repo.
 
+Dylan Han: Claude Code (CLI) and Claude Web
+- Types of Tasks: planning (implementation plan), debugging, generating code (test cases, feature implementations), explaining concepts (better understand how React/TS works, what the guidelines of the repository are)
+- Total sessions: 5 (2 Web, 3 CLI)
+- Link to logs: [link](https://github.com/CSCI-435-SE/cal.diy/tree/main/ai-logs/sprint0/dchan01-wm)
+- Worked very well for finding documents / summarizing code; worked well at double checking itself (I was surprised when I asked it to generate test cases, and it went through the codebase and found examples of similar tests and used them as precedent/a pattern for new test cases); I do not think anything worked poorly with the AI, I intentionally followed a plan then implement flow which seemed to smoothen the experience.
+
 # Release
 (we will need to create a release in the repo)
 
 # Risks and challenges
-Understanding the structure of the project was certainly harder than expected. Because of the way the API is layed out, to locate an API call linked to something specific such as a form submission.
+- Understanding the structure of the project was certainly harder than expected. Because of the way the API is layed out, to locate an API call linked to something specific such as a form submission.
+- Concept location, especially with an unfamiliar framework (React). Finding where a given element was defined as very difficult with all of the subfolders of components
+- Finding features: it was legitimately difficult to think of features because it seemed like the project implemented most of the basic, required features for a good booking app. If we had an idea, it was probable that it was already implemented
+- How can we think of more features?
+- How can we more effectively find components in order to know what to modify?
+- How can we use our experience in Sprint 0 to improve our AI workflow in Sprint 1?
+- Potential to slow progress: most of the Issue backlog is medium/high effort changes. Most of the features we have implemented were fairly simple, so tackling more difficult changes could slow down Sprint 1
 
 # Sprint 1 ideas
+- we would potentially like to focus on granularity: allowing the user to input more precise information aboutbookings. For example, saying that you are out of office from 10AM to 3PM instead of just "All Day".
+- we would also like to implement some smaller things, like favorite buttons or default landing pages (where you go after logging in), which could subtly improve the user experience.
