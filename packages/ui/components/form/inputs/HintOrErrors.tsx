@@ -46,7 +46,7 @@ export function HintsOrErrors<T extends FieldValues = FieldValues>({
       <div className="text-gray text-default mt-2 flex items-center text-sm">
         <ul className="ml-2">
           {hintErrors.map((key: string) => {
-            const submitted = formState.isSubmitted;
+            const submitted = formState.dirtyFields[fieldName] ;
             const error = fieldErrors[key] || fieldErrors.message;
             return (
               <li
