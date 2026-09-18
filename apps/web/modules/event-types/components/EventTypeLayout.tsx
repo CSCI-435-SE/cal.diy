@@ -172,6 +172,7 @@ function EventTypeSingleLayout({
                 {!isPlatform && (
                   <Button
                     color="secondary"
+                    data-testid="copy-link-button"
                     variant="icon"
                     StartIcon="link"
                     tooltip={t("copy_link")}
@@ -179,7 +180,7 @@ function EventTypeSingleLayout({
                     tooltipOffset={4}
                     onClick={() => {
                       navigator.clipboard.writeText(permalink);
-                      showToast("Link copied!", "success");
+                      showToast(t("link_copied"), "success");
                     }}
                   />
                 )}
@@ -232,10 +233,11 @@ function EventTypeSingleLayout({
               <DropdownMenuItem className="focus:ring-muted">
                 <DropdownItem
                   type="button"
+                  data-testid="copy-link-dropdown-item"
                   StartIcon="link"
                   onClick={() => {
                     navigator.clipboard.writeText(permalink);
-                    showToast("Link copied!", "success");
+                    showToast(t("link_copied"), "success");
                   }}>
                   {t("copy_link")}
                 </DropdownItem>
