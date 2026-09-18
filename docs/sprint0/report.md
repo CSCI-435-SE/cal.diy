@@ -37,13 +37,19 @@ A total of `33` issues have been created, with `10` being closed. A large amount
 #40 - [fix: visual password validation bug](https://github.com/CSCI-435-SE/cal.diy/pull/40)\
 #44 - [feat(event-types): add tooltips to preview and dropdown-menu buttons](https://github.com/CSCI-435-SE/cal.diy/pull/44)\
 #47 - [fix: translate copy-link toast on event-type edit page](https://github.com/CSCI-435-SE/cal.diy/pull/47)\
-#36 - [feat(bookings): require a reason when rescheduling per EventType setting](https://github.com/CSCI-435-SE/cal.diy/pull/36)
+#36 - [feat(bookings): require a reason when rescheduling per EventType setting](https://github.com/CSCI-435-SE/cal.diy/pull/36)\
+#37 - [feat(event-types): add "Require reschedule reason" setting and dialog gating](https://github.com/CSCI-435-SE/cal.diy/pull/37)\
+#42 - [fix(auth): gate signup submit button on real form validity-#42](https://github.com/CSCI-435-SE/cal.diy/pull/42)\
 
 # AI tool usage
 Zach Bowden: Claude Code, one session, used to locate several things in the codebase and change a line in the API function governing title size. [Session Logs](cal.diy/ai-logs/sprint0/zachbowden/) \
 Joshua Ko: Claude Code across two sessions to implement a bug fix and a small feature. [Session Logs](cal.diy/ai-logs/sprint0/kojoshuay/)  
 - Helpful with starting the app and explaining code
-- I didn't observe difficulties bc the issues are small so far
+- I didn't observe difficulties bc the issues are small so far\
+
+Julissa Hernandez: Claude code across 2 sessions to implement a bug and a medium feature.  [Session Logs](cal.diy/ai-logs/sprint0/julissaehp/) 
+- Helped with finding the files and editing. 
+- Also helped with double checking things and Answering questions about the repo.
 
 # Release
 (we will need to create a release in the repo)
