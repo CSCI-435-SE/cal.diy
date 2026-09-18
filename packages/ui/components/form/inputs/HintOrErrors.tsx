@@ -1,6 +1,5 @@
 import type { FieldValues } from "react-hook-form";
 import { useFormContext } from "react-hook-form";
-
 import { Icon } from "../../icon";
 import { InputError } from "./InputError";
 
@@ -20,8 +19,15 @@ export function HintsOrErrors<T extends FieldValues = FieldValues>({
   if (!methods) return null;
   const { formState } = methods;
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
+  // @ts-expect-error
   const fieldErrors: FieldErrors<T> | undefined = formState.errors[fieldName];
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-expect-error
+  const fieldValue: unknown = methods.getValues(fieldName);
+  // dirtyFields[fieldName] stays true even after the field is cleared back to empty
+  // (RHF never un-dirties a field), so use the live value to gate colored hints instead -
+  // otherwise typing then deleting a character leaves every hint stuck red.
+  const hasValue = typeof fieldValue === "string" ? fieldValue.length > 0 : !!fieldValue;
 
   if (!hintErrors && fieldErrors && !fieldErrors.message) {
     // no hints passed, field errors exist and they are custom ones
@@ -46,15 +52,14 @@ export function HintsOrErrors<T extends FieldValues = FieldValues>({
       <div className="text-gray text-default mt-2 flex items-center text-sm">
         <ul className="ml-2">
           {hintErrors.map((key: string) => {
-            const dirty = formState.dirtyFields[fieldName] ;
             const error = fieldErrors[key] || fieldErrors.message;
             return (
               <li
                 key={key}
                 data-testid="hint-error"
-                className={error !== undefined ? (dirty ? "text-error" : "") : "text-green-600"}>
+                className={error !== undefined ? (hasValue ? "text-error" : "") : "text-green-600"}>
                 {error !== undefined ? (
-                  dirty ? (
+                  hasValue ? (
                     <Icon
                       name="x"
                       size="12"
@@ -98,11 +103,10 @@ export function HintsOrErrors<T extends FieldValues = FieldValues>({
     <div className="text-gray text-default mt-2 flex items-center text-sm">
       <ul className="ml-2">
         {hintErrors.map((key: string) => {
-          // if field was changed, as no error exist, show checked status and color
-          const dirty = formState.dirtyFields[fieldName];
+          // if field has content, and no error exist, show checked status and color
           return (
-            <li key={key} className={!!dirty ? "text-green-600" : ""}>
-              {!!dirty ? (
+            <li key={key} className={hasValue ? "text-green-600" : ""}>
+              {hasValue ? (
                 <Icon
                   name="check"
                   size="12"

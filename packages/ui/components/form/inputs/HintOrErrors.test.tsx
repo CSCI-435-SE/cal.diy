@@ -1,11 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FormProvider, useForm } from "react-hook-form";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { TooltipProvider } from "@radix-ui/react-tooltip";
-
 import { PasswordField } from "./Input";
 
 // Mirrors the "caplow" / "num" / "min" breakdown used by the real signup password schema
@@ -39,15 +38,15 @@ function TestPasswordForm() {
     <FormProvider {...formMethods}>
       <form>
         <TooltipProvider>
-        <PasswordField
-          label="Password"
-          {...formMethods.register("password", {
-            onChange: () => {
-              formMethods.trigger("password");
-            },
-          })}
-          hintErrors={["caplow", "min", "num"]}
-        />
+          <PasswordField
+            label="Password"
+            {...formMethods.register("password", {
+              onChange: () => {
+                formMethods.trigger("password");
+              },
+            })}
+            hintErrors={["caplow", "min", "num"]}
+          />
         </TooltipProvider>
       </form>
     </FormProvider>
@@ -93,5 +92,21 @@ describe("HintsOrErrors password hint styling", () => {
 
     const hints = await screen.findAllByTestId("hint-error");
     expect(hints.some((hint) => hint.className.includes("text-error"))).toBe(true);
+  });
+
+  it("returns to neutral styling once a typed character is deleted back to empty", async () => {
+    const user = userEvent.setup();
+    render(<TestPasswordForm />);
+
+    const passwordInput = screen.getByLabelText("Password");
+    await user.type(passwordInput, "a");
+    await user.clear(passwordInput);
+
+    const hints = await screen.findAllByRole("listitem");
+    expect(hints).toHaveLength(3);
+    hints.forEach((hint) => {
+      expect(hint.className).not.toContain("text-error");
+      expect(hint.className).not.toContain("text-green-600");
+    });
   });
 });
