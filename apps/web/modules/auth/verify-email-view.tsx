@@ -1,10 +1,5 @@
 "use client";
 
-import { signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import posthog from "posthog-js";
-import { useEffect } from "react";
-
 import { SIGNUP_DRAFT_KEY } from "@calcom/features/auth/signup/constants";
 import { useFlagMap } from "@calcom/features/flags/context/provider";
 import { APP_NAME } from "@calcom/lib/constants";
@@ -14,6 +9,11 @@ import useEmailVerifyCheck from "@calcom/trpc/react/hooks/useEmailVerifyCheck";
 import { Button } from "@calcom/ui/components/button";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { showToast } from "@calcom/ui/components/toast";
+import { useRouter } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
+import posthog from "posthog-js";
+import { useEffect } from "react";
+import { Toaster } from "sonner";
 
 const EMAIL_CLIENTS = [
   {
@@ -115,7 +115,11 @@ function VerifyEmailPage() {
                         try {
                           // The unverified account still holds the username, so it must go before the
                           // user can resubmit the signup form with a new email.
-                          await discardSignup.mutateAsync();
+                          const { ok } = await discardSignup.mutateAsync();
+                          if (!ok) {
+                            showToast(t("use_different_email_expired"), "error");
+                            return;
+                          }
                         } catch {
                           showToast(t("unexpected_error_try_again"), "error");
                           return;
@@ -131,6 +135,7 @@ function VerifyEmailPage() {
           />
         </div>
       </div>
+      <Toaster position="bottom-right" />
     </div>
   );
 }

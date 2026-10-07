@@ -23,7 +23,7 @@ describe("discardUnverifiedSignupHandler", () => {
   it("refuses a verified account", async () => {
     await expect(
       discardUnverifiedSignupHandler({ ctx: makeCtx({ emailVerified: new Date(), createdDate: new Date() }) })
-    ).rejects.toThrow();
+    ).resolves.toEqual({ ok: false });
     expect(deleteMany).not.toHaveBeenCalled();
   });
 
@@ -31,7 +31,7 @@ describe("discardUnverifiedSignupHandler", () => {
     const createdDate = new Date(Date.now() - 6 * 60 * 1000);
     await expect(
       discardUnverifiedSignupHandler({ ctx: makeCtx({ emailVerified: null, createdDate }) })
-    ).rejects.toThrow();
+    ).resolves.toEqual({ ok: false });
     expect(deleteMany).not.toHaveBeenCalled();
   });
 });
