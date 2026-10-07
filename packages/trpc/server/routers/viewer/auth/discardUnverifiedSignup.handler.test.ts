@@ -28,7 +28,7 @@ describe("discardUnverifiedSignupHandler", () => {
   });
 
   it("refuses an old unverified account", async () => {
-    const createdDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const createdDate = new Date(Date.now() - 6 * 60 * 1000);
     await expect(
       discardUnverifiedSignupHandler({ ctx: makeCtx({ emailVerified: null, createdDate }) })
     ).rejects.toThrow();

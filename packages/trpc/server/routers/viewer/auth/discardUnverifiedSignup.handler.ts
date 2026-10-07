@@ -4,7 +4,7 @@ import type { TrpcSessionUser } from "../../../types";
 
 // Only accounts that were just created and never verified may be discarded, so an older
 // account that merely lacks verification can't be wiped through the "use different email" flow.
-const MAX_ACCOUNT_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_ACCOUNT_AGE_MS = 5 * 60 * 1000;
 
 export const discardUnverifiedSignupHandler = async ({
   ctx,
