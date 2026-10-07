@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useEffect } from "react";
 
+import { SIGNUP_DRAFT_KEY } from "@calcom/features/auth/signup/constants";
 import { useFlagMap } from "@calcom/features/flags/context/provider";
 import { APP_NAME } from "@calcom/lib/constants";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
@@ -37,16 +38,28 @@ const EMAIL_CLIENTS = [
   },
 ] as const;
 
+function hasSignupDraft(): boolean {
+  try {
+    return sessionStorage.getItem(SIGNUP_DRAFT_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 function VerifyEmailPage() {
   const { data } = useEmailVerifyCheck();
   const { data: session } = useSession();
   const router = useRouter();
   const { t, isLocaleReady } = useLocale();
   const mutation = trpc.viewer.auth.resendVerifyEmail.useMutation();
+  const discardSignup = trpc.viewer.auth.discardUnverifiedSignup.useMutation();
   const flags = useFlagMap();
 
   useEffect(() => {
     if (data?.isVerified) {
+      try {
+        sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
+      } catch {}
       posthog.capture("verify_email_already_verified", {
         onboarding_v3_enabled: flags["onboarding-v3"],
       });
@@ -96,7 +109,18 @@ function VerifyEmailPage() {
                   </Button>
                   <Button
                     color="minimal"
-                    onClick={() => {
+                    loading={discardSignup.isPending}
+                    onClick={async () => {
+                      if (hasSignupDraft()) {
+                        try {
+                          // The unverified account still holds the username, so it must go before the
+                          // user can resubmit the signup form with a new email.
+                          await discardSignup.mutateAsync();
+                        } catch {
+                          showToast(t("unexpected_error_try_again"), "error");
+                          return;
+                        }
+                      }
                       signOut({ callbackUrl: "/signup" });
                     }}>
                     {t("use_different_email")}
