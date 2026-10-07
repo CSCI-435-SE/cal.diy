@@ -199,6 +199,8 @@
   "password_reset_instructions": "If you didn't request this, you can safely ignore this email and your password will not be changed.",
   "event_awaiting_approval_subject": "Awaiting approval: {{title}} at {{date}}",
   "event_still_awaiting_approval": "An event is still waiting for your approval",
+  "booking_reminder_subject": "Reminder: {{title}} at {{date}}",
+  "booking_reminder_title": "Your event starts in 24 hours",
   "booking_submitted_subject": "Booking submitted: {{title}} at {{date}}",
   "download_recording_subject": "Download recording: {{title}} at {{date}}",
   "download_transcript_email_subject": "Download transcript: {{title}} at {{date}}",
