@@ -63,6 +63,12 @@ export const authRouter = router({
     });
   }),
 
+  discardUnverifiedSignup: authedProcedure.mutation(async ({ ctx }) => {
+    const { discardUnverifiedSignupHandler } = await import("./discardUnverifiedSignup.handler");
+
+    return discardUnverifiedSignupHandler({ ctx });
+  }),
+
   createAccountPassword: authedProcedure.mutation(async ({ ctx }) => {
     const { createAccountPasswordHandler } = await import("./createAccountPassword.handler");
 

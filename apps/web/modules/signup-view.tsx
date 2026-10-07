@@ -8,6 +8,7 @@ import {
   isAccountUnderReview,
   isUserAlreadyExistsError,
 } from "@calcom/features/auth/signup/lib/fetchSignup";
+import { SIGNUP_DRAFT_KEY } from "@calcom/features/auth/signup/constants";
 import { getOrgUsernameFromEmail } from "@calcom/features/auth/signup/utils/getOrgUsernameFromEmail";
 import ServerTrans from "@calcom/lib/components/ServerTrans";
 import {
@@ -239,6 +240,18 @@ export default function Signup({
     formState: { isSubmitting, errors, isSubmitSuccessful },
   } = formMethods;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: restore the draft once on mount only
+  useEffect(() => {
+    if (token) return;
+    try {
+      const draft = sessionStorage.getItem(SIGNUP_DRAFT_KEY);
+      if (!draft) return;
+      sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
+      formMethods.reset({ ...formMethods.getValues(), ...JSON.parse(draft) });
+      setDisplayEmailForm(true);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (redirectUrl) {
       localStorage.setItem("onBoardingRedirect", redirectUrl);
@@ -306,6 +319,17 @@ export default function Signup({
 
       if (process.env.NEXT_PUBLIC_GTM_ID) {
         pushGTMEvent("create_account", { email: data.email, user: data.username, lang: data.language });
+      }
+
+      if (emailVerificationEnabled && !token && !isOrgInviteByLink) {
+        // Lets "use a different email" on the verify page bring the user back to a filled-in form.
+        // Tab-scoped, and cleared once read back or once the email is verified.
+        try {
+          sessionStorage.setItem(
+            SIGNUP_DRAFT_KEY,
+            JSON.stringify({ username: data.username, email: data.email, password: data.password })
+          );
+        } catch {}
       }
 
       const gettingStartedPath = onboardingV3Enabled ? "onboarding/getting-started" : "getting-started";
