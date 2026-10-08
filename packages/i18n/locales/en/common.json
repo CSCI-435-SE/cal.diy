@@ -4779,5 +4779,7 @@
   "favorites": "Favorites",
   "add_to_favorites": "Add to favorites",
   "remove_from_favorites": "Remove from favorites",
+  "ooo_all_day": "All day",
+  "ooo_end_time_must_be_after_start_time": "End time must be after start time",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }

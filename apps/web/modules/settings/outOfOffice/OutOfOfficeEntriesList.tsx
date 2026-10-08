@@ -2,6 +2,7 @@
 
 import dayjs from "@calcom/dayjs";
 import { ColumnFilterType, ZDateRangeFilterValue } from "@calcom/features/data-table";
+import { isWholeDayOutOfOffice } from "@calcom/features/schedules/lib/date-ranges";
 import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 import ServerTrans from "@calcom/lib/components/ServerTrans";
 import { useCompatSearchParams } from "@calcom/lib/hooks/useCompatSearchParams";
@@ -35,6 +36,19 @@ import { useSegments } from "~/data-table/hooks/useSegments";
 import CreateNewOutOfOfficeEntryButton from "./CreateNewOutOfOfficeEntryButton";
 import { OutOfOfficeTab, OutOfOfficeToggleGroup } from "./OutOfOfficeToggleGroup";
 import type { BookingRedirectForm } from "./types";
+
+// Stored values are the host's wall-clock time in UTC columns, so they are formatted in UTC.
+const formatOutOfOfficePeriod = ({ start, end }: { start: Date; end: Date }) => {
+  const startDay = dayjs.utc(start);
+  const endDay = dayjs.utc(end);
+  if (isWholeDayOutOfOffice({ start, end })) {
+    return `${startDay.format("ll")} - ${endDay.format("ll")}`;
+  }
+  if (startDay.isSame(endDay, "day")) {
+    return `${startDay.format("ll LT")} - ${endDay.format("LT")}`;
+  }
+  return `${startDay.format("ll LT")} - ${endDay.format("ll LT")}`;
+};
 
 interface OutOfOfficeEntry {
   id: number;
@@ -182,9 +196,7 @@ function OutOfOfficeEntriesListContent({
                   </div>
 
                   <div className="flex flex-col">
-                    <p className="font-bold">
-                      {dayjs.utc(item.start).format("ll")} - {dayjs.utc(item.end).format("ll")}
-                    </p>
+                    <p className="font-bold">{formatOutOfOfficePeriod(item)}</p>
                     <p>
                       {item.toUser?.username ? (
                         <ServerTrans
@@ -239,11 +251,18 @@ function OutOfOfficeEntriesListContent({
                         const outOfOfficeEntryData: BookingRedirectForm = {
                           uuid: item.uuid,
                           dateRange: {
-                            startDate: dayjs(item.start).subtract(startDateOffset, "minute").toDate(),
+                            startDate: dayjs(item.start)
+                              .subtract(startDateOffset, "minute")
+                              .startOf("d")
+                              .toDate(),
                             endDate: dayjs(item.end).subtract(endDateOffset, "minute").startOf("d").toDate(),
                           },
                           startDateOffset,
                           endDateOffset,
+                          allDay: isWholeDayOutOfOffice(item),
+                          // Stored values are the host's wall-clock time in UTC columns; 23:59:59.999 reads as 23:59.
+                          startTime: dayjs.utc(item.start).format("HH:mm"),
+                          endTime: dayjs.utc(item.end).format("HH:mm"),
                           toTeamUserId: item.toUserId,
                           reasonId: item.reason?.id ?? 1,
                           notes: item.notes ?? undefined,

@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-
 import dayjs from "@calcom/dayjs";
-
+import { describe, expect, it, vi } from "vitest";
 import {
   buildDateRanges,
+  getPartialDayOutOfOfficeRanges,
   intersect,
+  isWholeDayOutOfOffice,
   processDateOverride,
   processWorkingHours,
   subtract,
@@ -1258,5 +1258,118 @@ describe("intersect function comprehensive tests", () => {
       expect(result[1].end.toISOString()).toBe("2024-06-01T12:30:00.000Z"); // Correct: no extension
       expect(result.find((r) => r.start.toISOString() === "2024-06-02T04:00:00.000Z")).toBeUndefined(); // Correct: June 2 excluded
     });
+  });
+});
+
+describe("isWholeDayOutOfOffice", () => {
+  it("is true for the shape every whole-day entry is stored in", () => {
+    expect(
+      isWholeDayOutOfOffice({
+        start: new Date("2026-10-08T00:00:00.000Z"),
+        end: new Date("2026-10-10T23:59:59.999Z"),
+      })
+    ).toBe(true);
+  });
+
+  it("is false when either end carries a time of day", () => {
+    expect(
+      isWholeDayOutOfOffice({
+        start: new Date("2026-10-08T14:00:00.000Z"),
+        end: new Date("2026-10-08T16:00:00.000Z"),
+      })
+    ).toBe(false);
+    expect(
+      isWholeDayOutOfOffice({
+        start: new Date("2026-10-08T00:00:00.000Z"),
+        end: new Date("2026-10-08T16:00:00.000Z"),
+      })
+    ).toBe(false);
+    expect(
+      isWholeDayOutOfOffice({
+        start: new Date("2026-10-08T00:00:00.000Z"),
+        end: new Date("2026-10-08T23:59:00.000Z"),
+      })
+    ).toBe(false);
+  });
+});
+
+describe("getPartialDayOutOfOfficeRanges", () => {
+  const timeZone = "America/New_York";
+
+  it("drops whole-day entries and keeps partial-day entries", () => {
+    const ranges = getPartialDayOutOfOfficeRanges(
+      [
+        { start: new Date("2026-10-07T00:00:00.000Z"), end: new Date("2026-10-07T23:59:59.999Z") },
+        { start: new Date("2026-10-08T14:00:00.000Z"), end: new Date("2026-10-08T16:00:00.000Z") },
+      ],
+      timeZone
+    );
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0].start.toISOString()).toBe("2026-10-08T18:00:00.000Z");
+  });
+
+  it("reads the stored wall-clock time in the host's timezone", () => {
+    const [range] = getPartialDayOutOfOfficeRanges(
+      [{ start: new Date("2026-10-08T14:00:00.000Z"), end: new Date("2026-10-08T16:00:00.000Z") }],
+      timeZone
+    );
+
+    // 14:00-16:00 EDT (UTC-4)
+    expect(range.start.format()).toBe("2026-10-08T14:00:00-04:00");
+    expect(range.end.format()).toBe("2026-10-08T16:00:00-04:00");
+    expect(range.start.toISOString()).toBe("2026-10-08T18:00:00.000Z");
+    expect(range.end.toISOString()).toBe("2026-10-08T20:00:00.000Z");
+  });
+
+  it("uses the offset in force on each side of the spring DST change (2026-03-08)", () => {
+    const [before, after] = getPartialDayOutOfOfficeRanges(
+      [
+        { start: new Date("2026-03-07T14:00:00.000Z"), end: new Date("2026-03-07T16:00:00.000Z") },
+        { start: new Date("2026-03-08T14:00:00.000Z"), end: new Date("2026-03-08T16:00:00.000Z") },
+      ],
+      timeZone
+    );
+
+    expect(before.start.toISOString()).toBe("2026-03-07T19:00:00.000Z"); // EST, UTC-5
+    expect(after.start.toISOString()).toBe("2026-03-08T18:00:00.000Z"); // EDT, UTC-4
+  });
+
+  it("keeps a window that spans the spring DST change at its wall-clock edges", () => {
+    // The clocks jump from 02:00 to 03:00, so 01:30 EST to 03:30 EDT is one real hour.
+    const [range] = getPartialDayOutOfOfficeRanges(
+      [{ start: new Date("2026-03-08T01:30:00.000Z"), end: new Date("2026-03-08T03:30:00.000Z") }],
+      timeZone
+    );
+
+    expect(range.start.toISOString()).toBe("2026-03-08T06:30:00.000Z");
+    expect(range.end.toISOString()).toBe("2026-03-08T07:30:00.000Z");
+  });
+
+  it("keeps a window that spans the autumn DST change at its wall-clock edges", () => {
+    // 01:00-02:00 happens twice, so 00:30 EDT to 03:30 EST is four real hours.
+    const [range] = getPartialDayOutOfOfficeRanges(
+      [{ start: new Date("2026-11-01T00:30:00.000Z"), end: new Date("2026-11-01T03:30:00.000Z") }],
+      timeZone
+    );
+
+    expect(range.start.toISOString()).toBe("2026-11-01T04:30:00.000Z");
+    expect(range.end.toISOString()).toBe("2026-11-01T08:30:00.000Z");
+  });
+
+  it("removes exactly the window when subtracted from a working day", () => {
+    // Working hours 09:00-17:00 EDT on 2026-10-08, away 14:00-16:00.
+    const workingDay = [{ start: dayjs("2026-10-08T13:00:00.000Z"), end: dayjs("2026-10-08T21:00:00.000Z") }];
+    const away = getPartialDayOutOfOfficeRanges(
+      [{ start: new Date("2026-10-08T14:00:00.000Z"), end: new Date("2026-10-08T16:00:00.000Z") }],
+      timeZone
+    );
+
+    const result = subtract(workingDay, away);
+
+    expect(result.map((range) => [range.start.toISOString(), range.end.toISOString()])).toEqual([
+      ["2026-10-08T13:00:00.000Z", "2026-10-08T18:00:00.000Z"],
+      ["2026-10-08T20:00:00.000Z", "2026-10-08T21:00:00.000Z"],
+    ]);
   });
 });
