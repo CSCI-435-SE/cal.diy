@@ -20,6 +20,8 @@ const tasks: Record<TaskTypes, () => Promise<TaskHandler>> = {
     import("./analytics/sendAnalyticsEvent").then((module) => module.sendAnalyticsEvent),
   sendAwaitingPaymentEmail: () =>
     import("./sendAwaitingPaymentEmail").then((module) => module.sendAwaitingPaymentEmail),
+  sendBookingReminderEmail: () =>
+    import("./sendBookingReminderEmail").then((module) => module.sendBookingReminderEmail),
   bookingAudit: () => import("./bookingAudit").then((module) => module.bookingAudit),
   webhookDelivery: () => import("./webhookDelivery").then((module) => module.webhookDelivery),
 };
