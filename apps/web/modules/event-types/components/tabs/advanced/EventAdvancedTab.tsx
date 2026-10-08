@@ -25,7 +25,7 @@ import { checkWCAGContrastColor } from "@calcom/lib/getBrandColours";
 import { extractHostTimezone } from "@calcom/lib/hashedLinksUtils";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type { Prisma } from "@calcom/prisma/client";
-import { CancellationReasonRequirement, SchedulingType } from "@calcom/prisma/enums";
+import { CancellationReasonRequirement, RescheduleReasonRequirement, SchedulingType } from "@calcom/prisma/enums";
 import type { EditableSchema, fieldSchema } from "@calcom/prisma/zod-utils";
 import type { RouterOutputs } from "@calcom/trpc/react";
 import classNames from "@calcom/ui/classNames";
@@ -695,6 +695,44 @@ export const EventAdvancedTab = ({
                       (opt) => opt.value === (value || CancellationReasonRequirement.MANDATORY_HOST_ONLY)
                     )}
                     options={cancellationReasonOptions}
+                    onChange={(selected) => onChange(selected?.value)}
+                    className="w-52"
+                  />
+                </div>
+              </div>
+            );
+          }}
+        />
+      )}
+      {!isPlatform && (
+        <Controller
+          name="requiresRescheduleReason"
+          defaultValue={eventType.requiresRescheduleReason ?? RescheduleReasonRequirement.MANDATORY_HOST_ONLY}
+          render={({ field: { value, onChange } }) => {
+            const rescheduleReasonOptions = [
+              { value: RescheduleReasonRequirement.MANDATORY_BOTH, label: t("mandatory_for_both") },
+              {
+                value: RescheduleReasonRequirement.MANDATORY_HOST_ONLY,
+                label: t("mandatory_for_host_only"),
+              },
+              {
+                value: RescheduleReasonRequirement.MANDATORY_ATTENDEE_ONLY,
+                label: t("mandatory_for_attendee_only"),
+              },
+              { value: RescheduleReasonRequirement.OPTIONAL_BOTH, label: t("optional_for_both") },
+            ];
+            return (
+              <div className="border-subtle rounded-lg border px-4 py-6 sm:px-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-default text-sm font-semibold">{t("require_reschedule_reason")}</p>
+                    <p className="text-default text-sm">{t("require_reschedule_reason_description")}</p>
+                  </div>
+                  <Select
+                    value={rescheduleReasonOptions.find(
+                      (opt) => opt.value === (value || RescheduleReasonRequirement.MANDATORY_HOST_ONLY)
+                    )}
+                    options={rescheduleReasonOptions}
                     onChange={(selected) => onChange(selected?.value)}
                     className="w-52"
                   />
