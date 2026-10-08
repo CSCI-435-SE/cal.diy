@@ -1,3 +1,4 @@
+import { getEventTypeFavoriteService } from "@calcom/features/eventtypes/di/EventTypeFavorite.container";
 import { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { hasFilter } from "@calcom/features/filters/lib/hasFilter";
 import { checkRateLimitAndThrowError } from "@calcom/lib/checkRateLimitAndThrowError";
@@ -36,7 +37,7 @@ export const getEventTypesFromGroup = async ({
   });
 
   const userProfile = ctx.user.profile;
-  const { group, limit, cursor, filters, searchQuery } = input;
+  const { group, limit, cursor, filters, searchQuery, favorites } = input;
   const { teamId, parentId } = group;
 
   const isFilterSet = (filters && hasFilter(filters)) || !!teamId;
@@ -47,12 +48,14 @@ export const getEventTypesFromGroup = async ({
 
   const eventTypes: EventType[] = [];
   const eventTypeRepo = new EventTypeRepository(ctx.prisma);
+  const favoritesCondition = await getFavoritesCondition({ userId: ctx.user.id, favorites });
 
   if (shouldListUserEvents || !teamId) {
     const baseQueryConditions = {
       teamId: null,
       schedulingType: null,
       ...(searchQuery ? { title: { contains: searchQuery, mode: "insensitive" as Prisma.QueryMode } } : {}),
+      ...favoritesCondition,
     };
 
     const [nonChildEventTypes, childEventTypes] = await Promise.all([
@@ -130,6 +133,7 @@ export const getEventTypesFromGroup = async ({
               }
             : null),
           ...(searchQuery ? { title: { contains: searchQuery, mode: "insensitive" } } : {}),
+          ...favoritesCondition,
         },
         orderBy: [
           {
@@ -194,3 +198,16 @@ export const getEventTypesFromGroup = async ({
 
   return { eventTypes: eventTypesWithHostFlag, nextCursor: nextCursor ?? undefined };
 };
+
+async function getFavoritesCondition({
+  userId,
+  favorites,
+}: {
+  userId: number;
+  favorites: TGetEventTypesFromGroupSchema["favorites"];
+}): Promise<Prisma.EventTypeWhereInput> {
+  if (!favorites) return {};
+
+  const favoriteIds = await getEventTypeFavoriteService().listFavoriteIds({ userId });
+  return { id: favorites === "only" ? { in: favoriteIds } : { notIn: favoriteIds } };
+}
