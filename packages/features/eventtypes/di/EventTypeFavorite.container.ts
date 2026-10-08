@@ -17,8 +17,8 @@ const eventTypeFavoriteContainer = createContainer();
 // would only work because the favorites repository module happens to load it
 eventTypeFavoriteContainer.load(DI_TOKENS.PRISMA_MODULE, prismaModule);
 
-// app code should use getEventTypeFavoriteService; this getter exists so the integration test
-// can exercise the repository's DI wiring against a real database
+// For integration tests only.
+// All application features and API routes should use getEventTypeFavoriteService().
 export function getEventTypeFavoriteRepository(): EventTypeFavoriteRepository {
   // tells the container how to create the repository and what dependencies to give it.
   eventTypeFavoriteRepositoryModuleLoader.loadModule(eventTypeFavoriteContainer);
