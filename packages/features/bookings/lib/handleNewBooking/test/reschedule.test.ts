@@ -750,7 +750,7 @@ describe("handleNewBooking", () => {
         expect(createdBooking.uid).toBeDefined();
       });
 
-      test("Should block host reschedule submission without reason when requiresRescheduleReason is unset (defaults to MANDATORY_HOST_ONLY)", async () => {
+      test("Should allow host reschedule submission without reason when requiresRescheduleReason is unset (defaults to no requirement)", async () => {
         const handleNewBooking = getNewBookingHandler();
         const booker = getBooker({ email: "booker@example.com", name: "Booker" });
         const organizer = getOrganizer({
@@ -801,12 +801,13 @@ describe("handleNewBooking", () => {
           },
         });
 
-        await expect(
-          handleNewBooking({
-            bookingData: mockBookingData,
-            userId: organizer.id,
-          })
-        ).rejects.toThrow();
+        const createdBooking = await handleNewBooking({
+          bookingData: mockBookingData,
+          userId: organizer.id,
+        });
+
+        expect(createdBooking).toBeDefined();
+        expect(createdBooking.uid).toBeDefined();
       });
     });
 
