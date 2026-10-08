@@ -378,7 +378,9 @@ export async function handleConfirmation(args: {
     await Promise.all(scheduleTriggerPromises);
 
     const reminderResults = await Promise.allSettled(
-      updatedBookings.map((updatedBooking) => scheduleBookingReminderEmail(updatedBooking))
+      updatedBookings.map((updatedBooking) =>
+        scheduleBookingReminderEmail(updatedBooking, eventTypeMetadata?.bookingReminderMinutes)
+      )
     );
     for (const result of reminderResults) {
       if (result.status === "rejected") {

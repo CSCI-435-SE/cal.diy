@@ -2,6 +2,10 @@ import { getPaymentAppData } from "@calcom/app-store/_utils/payments/getPaymentA
 import { useAtomsContext } from "@calcom/atoms/hooks/useAtomsContext";
 import { useIsPlatform } from "@calcom/atoms/hooks/useIsPlatform";
 import { Timezone as PlatformTimzoneSelect } from "@calcom/atoms/timezone";
+import {
+  BOOKING_REMINDER_MINUTE_OPTIONS,
+  DEFAULT_BOOKING_REMINDER_MINUTES,
+} from "@calcom/features/bookings/lib/bookingReminderOptions";
 import getLocationsOptionsForSelect from "@calcom/features/bookings/lib/getLocationOptionsForSelect";
 import DestinationCalendarSelector from "@calcom/features/calendars/components/DestinationCalendarSelector";
 import { LearnMoreLink } from "@calcom/features/eventtypes/components/LearnMoreLink";
@@ -669,7 +673,9 @@ export const EventAdvancedTab = ({
       {!isPlatform && (
         <Controller
           name="requiresCancellationReason"
-          defaultValue={eventType.requiresCancellationReason ?? CancellationReasonRequirement.MANDATORY_HOST_ONLY}
+          defaultValue={
+            eventType.requiresCancellationReason ?? CancellationReasonRequirement.MANDATORY_HOST_ONLY
+          }
           render={({ field: { value, onChange } }) => {
             const cancellationReasonOptions = [
               { value: CancellationReasonRequirement.MANDATORY_BOTH, label: t("mandatory_for_both") },
@@ -695,6 +701,36 @@ export const EventAdvancedTab = ({
                       (opt) => opt.value === (value || CancellationReasonRequirement.MANDATORY_HOST_ONLY)
                     )}
                     options={cancellationReasonOptions}
+                    onChange={(selected) => onChange(selected?.value)}
+                    className="w-52"
+                  />
+                </div>
+              </div>
+            );
+          }}
+        />
+      )}
+      {!isPlatform && (
+        <Controller
+          name="metadata.bookingReminderMinutes"
+          render={({ field: { value, onChange } }) => {
+            const reminderOptions = BOOKING_REMINDER_MINUTE_OPTIONS.map((minutes) => ({
+              value: minutes,
+              label: minutes < 60 ? t("minute", { count: minutes }) : t("hour", { count: minutes / 60 }),
+            }));
+            return (
+              <div className="border-subtle rounded-lg border px-4 py-6 sm:px-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-default text-sm font-semibold">{t("booking_reminder_email_time")}</p>
+                    <p className="text-default text-sm">{t("booking_reminder_email_time_description")}</p>
+                  </div>
+                  <Select
+                    data-testid="booking-reminder-minutes-select"
+                    value={reminderOptions.find(
+                      (opt) => opt.value === (value ?? DEFAULT_BOOKING_REMINDER_MINUTES)
+                    )}
+                    options={reminderOptions}
                     onChange={(selected) => onChange(selected?.value)}
                     className="w-52"
                   />
