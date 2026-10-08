@@ -18,6 +18,7 @@ import { ZGetHostsWithLocationOptionsInputSchema } from "./getHostsWithLocationO
 import { ZMassApplyHostLocationInputSchema } from "./massApplyHostLocation.schema";
 import { get } from "./procedures/get";
 import { ZSearchTeamMembersInputSchema } from "./searchTeamMembers.schema";
+import { ZSetFavoriteInputSchema } from "./setFavorite.schema";
 import { createEventPbacProcedure } from "./util";
 
 export const eventTypesRouter = router({
@@ -247,4 +248,13 @@ export const eventTypesRouter = router({
         input,
       });
     }),
+
+  setFavorite: authedProcedure.input(ZSetFavoriteInputSchema).mutation(async ({ ctx, input }) => {
+    const { setFavoriteHandler } = await import("./setFavorite.handler");
+
+    return setFavoriteHandler({
+      ctx,
+      input,
+    });
+  }),
 });

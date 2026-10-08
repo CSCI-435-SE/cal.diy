@@ -1,5 +1,5 @@
 // uses public getter to test real container setup and database connections
-import { getEventTypeFavoriteRepository } from "@calcom/features/eventtypes/di/EventTypeFavoriteRepository.container";
+import { getEventTypeFavoriteRepository } from "@calcom/features/eventtypes/di/EventTypeFavorite.container";
 import { prisma } from "@calcom/prisma";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { EventTypeFavoriteRepository } from "./EventTypeFavoriteRepository";
