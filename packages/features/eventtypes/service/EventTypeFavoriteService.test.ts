@@ -19,6 +19,9 @@ function setup({ hasAccess }: { hasAccess: boolean }) {
 
 describe("EventTypeFavoriteService", () => {
   describe("setFavorite", () => {
+
+    // tests that when a user is allowed to view an event, the permission check
+    // runs with the right IDs and the star is saved
     it("adds the favorite when the user has access", async () => {
       const { service, eventTypeFavoriteRepository, eventTypeRepository } = setup({ hasAccess: true });
 
@@ -28,6 +31,7 @@ describe("EventTypeFavoriteService", () => {
       expect(eventTypeFavoriteRepository.create).toHaveBeenCalledWith({ userId: 1, eventTypeId: 42 });
     });
 
+    // tests when access is denied, the operation stops 
     it("throws EventTypeNotFound and writes nothing when the user has no access", async () => {
       const { service, eventTypeFavoriteRepository } = setup({ hasAccess: false });
 
@@ -37,6 +41,8 @@ describe("EventTypeFavoriteService", () => {
       expect(eventTypeFavoriteRepository.create).not.toHaveBeenCalled();
     });
 
+    // tests that unstarring an event deletes the favorite immediately
+    // unstarring must work even if the user lost access to the event type
     it("removes the favorite without checking access", async () => {
       const { service, eventTypeFavoriteRepository, eventTypeRepository } = setup({ hasAccess: false });
 
