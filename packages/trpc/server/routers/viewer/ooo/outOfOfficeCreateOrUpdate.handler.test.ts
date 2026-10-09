@@ -1,8 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { vi } from "vitest";
-
 import prisma from "@calcom/prisma";
-
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { outOfOfficeCreateOrUpdate } from "./outOfOfficeCreateOrUpdate.handler";
 
 vi.mock("@calcom/prisma", () => {
@@ -83,6 +80,87 @@ describe("outOfOfficeCreateOrUpdate", () => {
     await expect(outOfOfficeCreateOrUpdate({ ctx: { user: mockUser }, input })).rejects.toThrow(
       "start_date_must_be_before_end_date"
     );
+  });
+
+  // Local midnight on 2026-10-07 in America/New_York (UTC-4), as the form sends it.
+  const newYorkInput = {
+    dateRange: {
+      startDate: new Date("2026-10-07T04:00:00.000Z"),
+      endDate: new Date("2026-10-07T04:00:00.000Z"),
+    },
+    startDateOffset: -240,
+    endDateOffset: -240,
+    reasonId: 1,
+    notes: "",
+    toTeamUserId: null,
+  };
+
+  const upsertedWith = (key: "create" | "update", start: string, end: string) =>
+    expect(prisma.outOfOfficeEntry.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ [key]: expect.objectContaining({ start, end }) })
+    );
+
+  it("stores the chosen times as the host's wall-clock time when startTime and endTime are given", async () => {
+    await outOfOfficeCreateOrUpdate({
+      ctx: { user: mockUser },
+      input: { ...newYorkInput, startTime: "14:00", endTime: "16:00" },
+    });
+
+    upsertedWith("create", "2026-10-07T14:00:00.000Z", "2026-10-07T16:00:00.000Z");
+  });
+
+  it("re-saves an entry created before times existed without moving its start or end", async () => {
+    // The list seeds the edit form of a stored 2026-10-07T00:00:00.000Z - 2026-10-09T23:59:59.999Z entry
+    // as local midnights and sends no times.
+    await outOfOfficeCreateOrUpdate({
+      ctx: { user: mockUser },
+      input: {
+        ...newYorkInput,
+        uuid: "existing-entry",
+        dateRange: { ...newYorkInput.dateRange, endDate: new Date("2026-10-09T04:00:00.000Z") },
+      },
+    });
+
+    upsertedWith("update", "2026-10-07T00:00:00.000Z", "2026-10-09T23:59:59.999Z");
+  });
+
+  it("treats an end time of 23:59 as the end of that day", async () => {
+    await outOfOfficeCreateOrUpdate({
+      ctx: { user: mockUser },
+      input: { ...newYorkInput, startTime: "00:00", endTime: "23:59" },
+    });
+
+    upsertedWith("create", "2026-10-07T00:00:00.000Z", "2026-10-07T23:59:59.999Z");
+  });
+
+  it("lets a window run past midnight into the next day", async () => {
+    await outOfOfficeCreateOrUpdate({
+      ctx: { user: mockUser },
+      input: {
+        ...newYorkInput,
+        dateRange: { ...newYorkInput.dateRange, endDate: new Date("2026-10-08T04:00:00.000Z") },
+        startTime: "23:00",
+        endTime: "02:00",
+      },
+    });
+
+    upsertedWith("create", "2026-10-07T23:00:00.000Z", "2026-10-08T02:00:00.000Z");
+  });
+
+  it("rejects an end time that is not after the start time on the same day", async () => {
+    await expect(
+      outOfOfficeCreateOrUpdate({
+        ctx: { user: mockUser },
+        input: { ...newYorkInput, startTime: "16:00", endTime: "14:00" },
+      })
+    ).rejects.toThrow("start_date_must_be_before_end_date");
+    await expect(
+      outOfOfficeCreateOrUpdate({
+        ctx: { user: mockUser },
+        input: { ...newYorkInput, startTime: "14:00", endTime: "14:00" },
+      })
+    ).rejects.toThrow("start_date_must_be_before_end_date");
+    expect(prisma.outOfOfficeEntry.upsert).not.toHaveBeenCalled();
   });
 
   it("should handle timezone offset correctly", async () => {

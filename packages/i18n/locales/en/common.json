@@ -4787,5 +4787,7 @@
   "unsaved_changes": "Unsaved changes",
   "unsaved_changes_event_type_description": "You have unsaved changes to this event type. Do you want to save them before you leave?",
   "dont_save_and_leave": "Don't save and leave",
+  "ooo_all_day": "All day",
+  "ooo_end_time_must_be_after_start_time": "End time must be after start time",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }

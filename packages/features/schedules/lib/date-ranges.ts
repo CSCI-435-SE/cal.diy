@@ -223,6 +223,40 @@ function processOOO(outOfOffice: Dayjs, timeZone: string) {
   };
 }
 
+// The create handler strips the client's UTC offset before saving, so OutOfOfficeEntry.start and .end hold
+// the host's wall-clock time in UTC columns. An entry saved as whole days spans 00:00:00.000 to 23:59:59.999.
+export function isWholeDayOutOfOffice({ start, end }: { start: Date; end: Date }): boolean {
+  return (
+    start.getUTCHours() === 0 &&
+    start.getUTCMinutes() === 0 &&
+    start.getUTCSeconds() === 0 &&
+    start.getUTCMilliseconds() === 0 &&
+    end.getUTCHours() === 23 &&
+    end.getUTCMinutes() === 59 &&
+    end.getUTCSeconds() === 59 &&
+    end.getUTCMilliseconds() === 999
+  );
+}
+
+// `.tz(timeZone, true)` (keepLocalTime, which processOOO uses for midnight) resolves a wall-clock time that
+// falls within a few hours of a DST change against the wrong offset: 03:30 on 2026-03-08 in America/New_York
+// came back as 04:30-05:00. Parsing the wall-clock string in the zone returns 03:30-04:00.
+function wallClockToTimeZone(stored: Date, timeZone: string): Dayjs {
+  return dayjs.tz(dayjs.utc(stored).format("YYYY-MM-DDTHH:mm:ss.SSS"), timeZone);
+}
+
+export function getPartialDayOutOfOfficeRanges(
+  entries: { start: Date; end: Date }[],
+  timeZone: string
+): DateRange[] {
+  return entries
+    .filter((entry) => !isWholeDayOutOfOffice(entry))
+    .map(({ start, end }) => ({
+      start: wallClockToTimeZone(start, timeZone),
+      end: wallClockToTimeZone(end, timeZone),
+    }));
+}
+
 export function buildDateRanges({
   availability,
   timeZone /* Organizer timeZone */,

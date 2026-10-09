@@ -12,7 +12,12 @@ import type { PrismaHolidayRepository } from "@calcom/features/holidays/reposito
 import type { PrismaOOORepository } from "@calcom/features/ooo/repositories/PrismaOOORepository";
 import type { IRedisService } from "@calcom/features/redis/IRedisService";
 import type { DateOverride, WorkingHours } from "@calcom/features/schedules/lib/date-ranges";
-import { buildDateRanges, subtract } from "@calcom/features/schedules/lib/date-ranges";
+import {
+  buildDateRanges,
+  getPartialDayOutOfOfficeRanges,
+  isWholeDayOutOfOffice,
+  subtract,
+} from "@calcom/features/schedules/lib/date-ranges";
 import { getWorkingHours } from "@calcom/lib/availability";
 import { stringToDayjsZod } from "@calcom/lib/dayjs";
 import { ErrorCode } from "@calcom/lib/errorCodes";
@@ -471,7 +476,10 @@ export class UserAvailabilityService {
         dateTo: dateTo.toISOString(),
       }));
 
+    // Whole-day entries fill the per-day "away" map the booker renders. Entries with a time of day block
+    // only their window: they are subtracted together with the busy times below and never reach the map.
     const datesOutOfOffice: IOutOfOfficeData = this.calculateOutOfOfficeRanges(outOfOfficeDays, availability);
+    const partialDayOutOfOfficeRanges = getPartialDayOutOfOfficeRanges(outOfOfficeDays, finalTimezone);
 
     const holidayBlockedDates = await this.calculateHolidayBlockedDates(
       user.id,
@@ -640,10 +648,13 @@ export class UserAvailabilityService {
       })}`
     );
 
-    const formattedBusyTimes = detailedBusyTimes.map((busy) => ({
-      start: dayjs(busy.start),
-      end: dayjs(busy.end),
-    }));
+    const formattedBusyTimes = [
+      ...detailedBusyTimes.map((busy) => ({
+        start: dayjs(busy.start),
+        end: dayjs(busy.end),
+      })),
+      ...partialDayOutOfOfficeRanges,
+    ];
 
     const dateRangesInWhichUserIsAvailable = subtract(dateRanges, formattedBusyTimes);
     const dateRangesInWhichUserIsAvailableWithoutOOO = subtract(oooExcludedDateRanges, formattedBusyTimes);
@@ -734,6 +745,9 @@ export class UserAvailabilityService {
 
     return outOfOfficeDays.reduce(
       (acc: IOutOfOfficeData, { start, end, toUser, user, reason, notes, showNotePublicly }) => {
+        if (!isWholeDayOutOfOffice({ start, end })) {
+          return acc;
+        }
         // here we should use startDate or today if start is before today
         // consider timezone in start and end date range
         const startDateRange = dayjs(start).utc().isBefore(dayjs().startOf("day").utc())

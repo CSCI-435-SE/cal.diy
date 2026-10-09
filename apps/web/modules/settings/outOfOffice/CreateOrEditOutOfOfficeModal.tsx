@@ -1,3 +1,4 @@
+import type { Dayjs } from "@calcom/dayjs";
 import dayjs from "@calcom/dayjs";
 import { Dialog } from "@calcom/features/components/controlled-dialog";
 import { useCompatSearchParams } from "@calcom/lib/hooks/useCompatSearchParams";
@@ -13,6 +14,7 @@ import {
   Checkbox,
   DateRangePicker,
   Input,
+  InputError,
   Label,
   Select,
   Switch,
@@ -28,6 +30,50 @@ export type { BookingRedirectForm } from "~/settings/outOfOffice/types";
 import type { BookingRedirectForm } from "~/settings/outOfOffice/types";
 
 type Option = { value: number; label: string };
+type TimeOption = { value: string; label: string };
+
+const TIME_OPTION_STEP_MINUTES = 15;
+
+const buildTimeOptions = (timeFormat: number | null | undefined): TimeOption[] => {
+  const labelFormat = timeFormat === 12 ? "h:mma" : "HH:mm";
+  const dayStart = dayjs.utc("1970-01-01T00:00:00Z");
+  const options: TimeOption[] = [];
+  for (let minutes = 0; minutes < 24 * 60; minutes += TIME_OPTION_STEP_MINUTES) {
+    const time = dayStart.add(minutes, "minute");
+    options.push({ value: time.format("HH:mm"), label: time.format(labelFormat) });
+  }
+  // The availability editor also ends its list with 23:59; the server stores it as the end of the day.
+  const dayEnd = dayStart.add(23, "hour").add(59, "minute");
+  options.push({ value: dayEnd.format("HH:mm"), label: dayEnd.format(labelFormat) });
+  return options;
+};
+
+const toLocalDate = (value: Dayjs) => new Date(value.year(), value.month(), value.date());
+
+const TimeOfDaySelect = ({
+  inputId,
+  options,
+  value,
+  onChange,
+}: {
+  inputId: string;
+  options: TimeOption[];
+  value: string;
+  onChange: (value: string) => void;
+}) => (
+  <Select<TimeOption>
+    inputId={inputId}
+    data-testid={`${inputId}-select`}
+    menuPlacement="bottom"
+    options={options}
+    value={options.find((option) => option.value === value)}
+    onChange={(selectedOption) => {
+      if (selectedOption) {
+        onChange(selectedOption.value);
+      }
+    }}
+  />
+);
 
 export const CreateOrEditOutOfOfficeEntryModal = ({
   openModal,
@@ -143,6 +189,12 @@ export const CreateOrEditOutOfOfficeEntryModal = ({
 
   const hasTeamPlan = false;
 
+  // The times apply in the host's timezone, so the defaults come from the clock there: the next full hour and
+  // three hours later, which can fall on the next day. The browser clock is used until the profile has loaded.
+  const nowForHost = me.data?.timeZone ? dayjs().tz(me.data.timeZone) : dayjs();
+  const defaultStart = nowForHost.add(1, "hour").startOf("hour");
+  const defaultEnd = defaultStart.add(3, "hour");
+
   const {
     handleSubmit,
     setValue,
@@ -156,11 +208,14 @@ export const CreateOrEditOutOfOfficeEntryModal = ({
       ? currentlyEditingOutOfOfficeEntry
       : {
           dateRange: {
-            startDate: dayjs().startOf("d").toDate(),
-            endDate: dayjs().startOf("d").add(2, "d").toDate(),
+            startDate: toLocalDate(defaultStart),
+            endDate: toLocalDate(defaultEnd),
           },
           startDateOffset: dayjs().utcOffset(),
           endDateOffset: dayjs().utcOffset(),
+          allDay: false,
+          startTime: defaultStart.format("HH:mm"),
+          endTime: defaultEnd.format("HH:mm"),
           toTeamUserId: null,
           reasonId: 1,
           forUserId: null,
@@ -171,8 +226,22 @@ export const CreateOrEditOutOfOfficeEntryModal = ({
   const watchedTeamUserId = watch("toTeamUserId");
   const watchForUserId = watch("forUserId");
   const watchedDateRange = watch("dateRange");
+  const watchedAllDay = watch("allDay");
+  const watchedStartTime = watch("startTime");
+  const watchedEndTime = watch("endTime");
   const watchedNotes = watch("notes");
   const hasValidNotes = Boolean(watchedNotes?.trim());
+
+  const timeOptions = useMemo(() => buildTimeOptions(me.data?.timeFormat), [me.data?.timeFormat]);
+
+  // Compared as "YYYY-MM-DDTHH:mm" strings, so the order of the two wall-clock values depends on no timezone.
+  const startKey = watchedDateRange?.startDate
+    ? `${dayjs(watchedDateRange.startDate).format("YYYY-MM-DD")}T${watchedAllDay ? "00:00" : watchedStartTime}`
+    : null;
+  const endKey = watchedDateRange?.endDate
+    ? `${dayjs(watchedDateRange.endDate).format("YYYY-MM-DD")}T${watchedAllDay ? "23:59" : watchedEndTime}`
+    : null;
+  const endIsAfterStart = !startKey || !endKey || endKey > startKey;
 
   // Fetch user's holiday settings to show warning if OOO dates overlap with holidays
   const { data: holidaySettings } = trpc.viewer.holidays.getUserSettings.useQuery({});
@@ -226,11 +295,13 @@ export const CreateOrEditOutOfOfficeEntryModal = ({
           onSubmit={handleSubmit((data) => {
             if (!data.dateRange.endDate) {
               showToast(t("end_date_not_selected"), "error");
-            } else {
+            } else if (endIsAfterStart) {
               createOrEditOutOfOfficeEntry.mutate({
                 ...data,
                 startDateOffset: -1 * data.dateRange.startDate.getTimezoneOffset(),
                 endDateOffset: -1 * data.dateRange.endDate.getTimezoneOffset(),
+                startTime: data.allDay ? undefined : data.startTime,
+                endTime: data.allDay ? undefined : data.endTime,
               });
             }
           })}>
@@ -260,6 +331,59 @@ export const CreateOrEditOutOfOfficeEntryModal = ({
                   )}
                 />
               </div>
+
+              <div className="mt-3">
+                <Controller
+                  name="allDay"
+                  control={control}
+                  render={({ field: { onChange, value } }) => (
+                    <Switch
+                      id="ooo-all-day-switch"
+                      data-testid="ooo-all-day-switch"
+                      checked={value}
+                      onCheckedChange={onChange}
+                      label={t("ooo_all_day")}
+                    />
+                  )}
+                />
+              </div>
+
+              {!watchedAllDay && (
+                <div className="mt-3 flex gap-3">
+                  <div className="flex-1">
+                    <Label htmlFor="ooo-start-time">{t("start_time")}</Label>
+                    <Controller
+                      name="startTime"
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <TimeOfDaySelect
+                          inputId="ooo-start-time"
+                          options={timeOptions}
+                          value={value}
+                          onChange={onChange}
+                        />
+                      )}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="ooo-end-time">{t("end_time")}</Label>
+                    <Controller
+                      name="endTime"
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <TimeOfDaySelect
+                          inputId="ooo-end-time"
+                          options={timeOptions}
+                          value={value}
+                          onChange={onChange}
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!endIsAfterStart && <InputError message={t("ooo_end_time_must_be_after_start_time")} />}
 
               {/* Holiday overlap warning */}
               {overlappingHolidays.length > 0 && (
