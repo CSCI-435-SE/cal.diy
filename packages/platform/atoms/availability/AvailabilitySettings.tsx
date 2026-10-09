@@ -28,8 +28,9 @@ import {
   ScheduleComponent as PlatformSchedule,
 } from "@calcom/features/schedules/components/ScheduleComponent";
 import { WeeklyAvailabilityGrid } from "@calcom/features/schedules/components/WeeklyAvailabilityGrid";
+import type { WeeklyGridSelectionChange } from "@calcom/features/schedules/hooks/useWeeklyGridDrag";
 import { AVAILABILITY_SLOT_INTERVAL_MINUTES } from "@calcom/features/schedules/lib/constants";
-import { scheduleToSlotGrid } from "@calcom/features/schedules/lib/weekly-grid";
+import { applyDragToTimeRanges, scheduleToSlotGrid } from "@calcom/features/schedules/lib/weekly-grid";
 import WebSchedule from "@calcom/web/modules/schedules/components/Schedule";
 import { availabilityAsString } from "@calcom/lib/availability";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
@@ -287,13 +288,30 @@ const WeeklyAvailabilityGridField = ({
   weekStart: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   timeFormat: number | null;
 }) => {
+  const { getValues, setValue } = useFormContext<AvailabilityFormValues>();
   const schedule = useWatch<AvailabilityFormValues, "schedule">({ name: "schedule" });
   const value = useMemo(
     () => scheduleToSlotGrid(schedule ?? [], AVAILABILITY_SLOT_INTERVAL_MINUTES),
     [schedule]
   );
 
-  return <WeeklyAvailabilityGrid value={value} weekStart={weekStart} timeFormat={timeFormat} />;
+  // Writes to the same form field the text fields use, so both views and Save share one source of truth
+  const handleSelectionChange = useCallback(
+    ({ day, ...change }: WeeklyGridSelectionChange) => {
+      const dayRanges = getValues(`schedule.${day}`) ?? [];
+      setValue(`schedule.${day}`, applyDragToTimeRanges(dayRanges, change), { shouldDirty: true });
+    },
+    [getValues, setValue]
+  );
+
+  return (
+    <WeeklyAvailabilityGrid
+      value={value}
+      weekStart={weekStart}
+      timeFormat={timeFormat}
+      onSelectionChange={handleSelectionChange}
+    />
+  );
 };
 
 // Simplify logic by assuming this will never be opened on a large screen
