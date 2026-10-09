@@ -21,6 +21,7 @@ import { useListAutoSelector } from "~/bookings/hooks/useListAutoSelector";
 import { DataTableFilters, DataTableSegment } from "~/data-table/components";
 import { useDataTable } from "~/data-table/hooks/useDataTable";
 import { useDisplayedFilterCount } from "~/data-table/hooks/useDisplayedFilterCount";
+import { useBulkCancelSelection } from "../hooks/useBulkCancelSelection";
 import {
   BookingDetailsSheetStoreProvider,
   useBookingDetailsSheetStore,
@@ -28,6 +29,7 @@ import {
 import type { BookingListingStatus, BookingsGetOutput, RowData } from "../types";
 import { BookingDetailsSheet } from "./BookingDetailsSheet";
 import { BookingList } from "./BookingList";
+import { BulkCancelBookings } from "./BulkCancelBookings";
 import { ViewToggleButton } from "./ViewToggleButton";
 
 interface FilterButtonProps {
@@ -74,6 +76,7 @@ interface BookingListInnerProps extends BookingListContainerProps {
   errorMessage?: string;
   totalRowCount?: number;
   bookings: BookingsGetOutput["bookings"];
+  selectionResetKey: string;
 }
 
 function BookingListInner({
@@ -87,6 +90,7 @@ function BookingListInner({
   hasError,
   errorMessage,
   totalRowCount,
+  selectionResetKey,
 }: BookingListInnerProps) {
   const { t } = useLocale();
   const user = useMeQuery().data;
@@ -108,12 +112,20 @@ function BookingListInner({
     [setSelectedBookingUid]
   );
 
+  const bulkCancel = useBulkCancelSelection({
+    bookings,
+    enabled: status === "upcoming",
+    userId: user?.id,
+    resetKey: selectionResetKey,
+  });
+
   const columns = useBookingListColumns({
     user,
     status,
     canReadOthersBookings: permissions.canReadOthersBookings,
     bookingsV3Enabled,
     handleBookingClick,
+    selection: bulkCancel.selection,
   });
 
   const finalData = useBookingListData({
@@ -216,6 +228,14 @@ function BookingListInner({
           hasError={hasError}
         />
       </div>
+      <BulkCancelBookings
+        selectedBookings={bulkCancel.selectedBookings}
+        canSelectMore={bulkCancel.canSelectMore}
+        userEmail={user?.email}
+        onSelectAll={bulkCancel.selectAll}
+        onClearSelection={bulkCancel.clearSelection}
+        onCancelled={bulkCancel.deselect}
+      />
 
       {bookingsV3Enabled && (
         <BookingDetailsSheet
@@ -296,6 +316,7 @@ export function BookingListContainer(props: BookingListContainerProps) {
         errorMessage={query.error?.message}
         totalRowCount={query.data?.totalCount}
         bookings={bookings}
+        selectionResetKey={JSON.stringify(queryInput)}
       />
     </BookingDetailsSheetStoreProvider>
   );
