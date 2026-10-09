@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installPointerEventPolyfill } from "../test-utils/pointer-events";
 import type { WeeklyGridSelectionChange } from "./useWeeklyGridDrag";
 import { useWeeklyGridDrag } from "./useWeeklyGridDrag";
 
@@ -8,21 +9,7 @@ const SLOTS_PER_DAY = 96;
 const SLOT_HEIGHT = 10;
 const SCROLL_BOX_HEIGHT = 600;
 
-// jsdom does not implement PointerEvent; fireEvent falls back to a plain Event without these fields
-if (typeof window.PointerEvent === "undefined") {
-  class PointerEventPolyfill extends MouseEvent {
-    pointerId: number;
-    pointerType: string;
-    isPrimary: boolean;
-    constructor(type: string, init: PointerEventInit = {}) {
-      super(type, init);
-      this.pointerId = init.pointerId ?? 1;
-      this.pointerType = init.pointerType ?? "mouse";
-      this.isPrimary = init.isPrimary ?? true;
-    }
-  }
-  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
-}
+installPointerEventPolyfill();
 
 const SLOT_NUMBERS = Array.from({ length: SLOTS_PER_DAY }, (_, slot) => slot);
 
