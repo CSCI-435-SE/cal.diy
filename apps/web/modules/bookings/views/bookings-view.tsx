@@ -79,7 +79,7 @@ function BookingsContent({ status, permissions, bookingsV3Enabled, bookingAuditE
   const [view] = useBookingsView({ bookingsV3Enabled });
 
   return (
-    <div className={classNames(view === "calendar" && "-mb-8")}>
+    <div className={classNames(view !== "list" && "-mb-8")}>
       {view === "list" && (
         <BookingListContainer
           status={status}
@@ -88,8 +88,9 @@ function BookingsContent({ status, permissions, bookingsV3Enabled, bookingAuditE
           bookingAuditEnabled={bookingAuditEnabled}
         />
       )}
-      {bookingsV3Enabled && view === "calendar" && (
+      {bookingsV3Enabled && view !== "list" && (
         <BookingCalendarContainer
+          mode={view === "month" ? "month" : "week"}
           status={status}
           permissions={permissions}
           bookingsV3Enabled={bookingsV3Enabled}

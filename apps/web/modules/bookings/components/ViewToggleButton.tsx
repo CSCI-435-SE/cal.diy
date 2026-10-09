@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
-
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import useMediaQuery from "@calcom/lib/hooks/useMediaQuery";
 import { ToggleGroup } from "@calcom/ui/components/form";
-import { CalendarIcon, MenuIcon } from "@coss/ui/icons";
-
-import { useBookingsView } from "../hooks/useBookingsView";
+import { CalendarDaysIcon, CalendarIcon, MenuIcon } from "@coss/ui/icons";
+import { useEffect } from "react";
+import { isBookingView, useBookingsView } from "../hooks/useBookingsView";
 
 type ViewToggleButtonProps = {
   bookingsV3Enabled: boolean;
@@ -20,7 +18,7 @@ export function ViewToggleButton({ bookingsV3Enabled }: ViewToggleButtonProps) {
 
   useEffect(() => {
     // Force list view on mobile
-    if (isMobile && view === "calendar") {
+    if (isMobile && view !== "list") {
       setView("list");
     }
   }, [isMobile, view, setView]);
@@ -32,23 +30,30 @@ export function ViewToggleButton({ bookingsV3Enabled }: ViewToggleButtonProps) {
   return (
     <div className="hidden sm:block">
       <ToggleGroup
+        aria-label={t("bookings_view")}
         value={view}
-        onValueChange={(value: "list" | "calendar") => {
-          if (!value) return;
+        onValueChange={(value) => {
+          if (!isBookingView(value)) return;
           setView(value);
         }}
         options={[
           {
             value: "list",
-            label: "",
+            label: t("bookings_view_list"),
             tooltip: t("list_view"),
             iconLeft: <MenuIcon className="h-4 w-4" />,
           },
           {
             value: "calendar",
-            label: "",
-            tooltip: t("calendar_view"),
+            label: t("bookings_view_week"),
+            tooltip: t("week_view"),
             iconLeft: <CalendarIcon className="h-4 w-4" />,
+          },
+          {
+            value: "month",
+            label: t("bookings_view_month"),
+            tooltip: t("month_view"),
+            iconLeft: <CalendarDaysIcon className="h-4 w-4" />,
           },
         ]}
       />
