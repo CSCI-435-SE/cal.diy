@@ -27,10 +27,13 @@ import DateOverrideList from "@calcom/features/schedules/components/DateOverride
 import {
   ScheduleComponent as PlatformSchedule,
 } from "@calcom/features/schedules/components/ScheduleComponent";
+import { WeeklyAvailabilityGrid } from "@calcom/features/schedules/components/WeeklyAvailabilityGrid";
+import { AVAILABILITY_SLOT_INTERVAL_MINUTES } from "@calcom/features/schedules/lib/constants";
+import { scheduleToSlotGrid } from "@calcom/features/schedules/lib/weekly-grid";
 import WebSchedule from "@calcom/web/modules/schedules/components/Schedule";
 import { availabilityAsString } from "@calcom/lib/availability";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
-import { sortAvailabilityStrings } from "@calcom/lib/weekstart";
+import { sortAvailabilityStrings, weekStartNum } from "@calcom/lib/weekstart";
 import type { TravelScheduleRepository } from "@calcom/features/travelSchedule/repositories/TravelScheduleRepository";
 import type { TimeRange, WorkingHours } from "@calcom/types/schedule";
 import classNames from "@calcom/ui/classNames";
@@ -116,6 +119,7 @@ type AvailabilitySettingsProps = {
   customClassNames?: CustomClassNames;
   disableEditableHeading?: boolean;
   enableOverrides?: boolean;
+  availabilityView?: "list" | "grid";
   onFormStateChange?: (formState: AvailabilityFormValues) => void;
   bulkUpdateModalProps?: {
     isOpen: boolean;
@@ -275,6 +279,23 @@ const DateOverride = ({
   );
 };
 
+// Kept separate so watching the schedule only re-renders the grid, not the whole settings form
+const WeeklyAvailabilityGridField = ({
+  weekStart,
+  timeFormat,
+}: {
+  weekStart: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  timeFormat: number | null;
+}) => {
+  const schedule = useWatch<AvailabilityFormValues, "schedule">({ name: "schedule" });
+  const value = useMemo(
+    () => scheduleToSlotGrid(schedule ?? [], AVAILABILITY_SLOT_INTERVAL_MINUTES),
+    [schedule]
+  );
+
+  return <WeeklyAvailabilityGrid value={value} weekStart={weekStart} timeFormat={timeFormat} />;
+};
+
 // Simplify logic by assuming this will never be opened on a large screen
 const SmallScreenSideBar = ({ open, children }: { open: boolean; children: JSX.Element }) => {
   return (
@@ -310,6 +331,7 @@ export const AvailabilitySettings = forwardRef<AvailabilitySettingsFormRef, Avai
       customClassNames,
       disableEditableHeading = false,
       enableOverrides = false,
+      availabilityView = "list",
       onFormStateChange,
       bulkUpdateModalProps,
       allowSetToDefault = true,
@@ -319,6 +341,7 @@ export const AvailabilitySettings = forwardRef<AvailabilitySettingsFormRef, Avai
     } = props;
     const [openSidebar, setOpenSidebar] = useState(false);
     const { t, i18n } = useLocale();
+    const weekStartIndex = weekStartNum(weekStart);
 
     const form = useForm<AvailabilityFormValues>({
       defaultValues: {
@@ -671,32 +694,25 @@ export const AvailabilitySettings = forwardRef<AvailabilitySettingsFormRef, Avai
                   customClassNames?.scheduleClassNames?.scheduleContainer
                 )}>
                 <div>
-                  {typeof weekStart === "string" && (
-                    <Schedule
-                      labels={{
-                        addTime: t("add_time_availability"),
-                        copyTime: t("copy_times_to"),
-                        deleteTime: t("delete"),
-                      }}
-                      classNames={
-                        customClassNames?.scheduleClassNames ? { ...customClassNames.scheduleClassNames } : {}
-                      }
-                      control={form.control}
-                      name="schedule"
-                      userTimeFormat={timeFormat}
-                      weekStart={
-                        [
-                          "Sunday",
-                          "Monday",
-                          "Tuesday",
-                          "Wednesday",
-                          "Thursday",
-                          "Friday",
-                          "Saturday",
-                        ].indexOf(weekStart) as 0 | 1 | 2 | 3 | 4 | 5 | 6
-                      }
-                    />
-                  )}
+                  {typeof weekStart === "string" &&
+                    (availabilityView === "grid" ? (
+                      <WeeklyAvailabilityGridField weekStart={weekStartIndex} timeFormat={timeFormat} />
+                    ) : (
+                      <Schedule
+                        labels={{
+                          addTime: t("add_time_availability"),
+                          copyTime: t("copy_times_to"),
+                          deleteTime: t("delete"),
+                        }}
+                        classNames={
+                          customClassNames?.scheduleClassNames ? { ...customClassNames.scheduleClassNames } : {}
+                        }
+                        control={form.control}
+                        name="schedule"
+                        userTimeFormat={timeFormat}
+                        weekStart={weekStartIndex}
+                      />
+                    ))}
                 </div>
               </div>
               {enableOverrides && (
@@ -708,17 +724,7 @@ export const AvailabilitySettings = forwardRef<AvailabilitySettingsFormRef, Avai
                       userTimeFormat={timeFormat}
                       handleSubmit={handleSubmit}
                       travelSchedules={travelSchedules}
-                      weekStart={
-                        [
-                          "Sunday",
-                          "Monday",
-                          "Tuesday",
-                          "Wednesday",
-                          "Thursday",
-                          "Friday",
-                          "Saturday",
-                        ].indexOf(weekStart) as 0 | 1 | 2 | 3 | 4 | 5 | 6
-                      }
+                      weekStart={weekStartIndex}
                       overridesModalClassNames={customClassNames?.overridesModalClassNames}
                       classNames={customClassNames?.dateOverrideClassNames}
                     />

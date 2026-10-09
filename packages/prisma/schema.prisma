@@ -84,6 +84,18 @@ model Host {
   @@index([scheduleId])
 }
 
+/// table holds the current (not historical) favorites of all users
+model EventTypeFavorite {
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  eventTypeId Int
+  createdAt   DateTime  @default(now())
+
+  @@id([userId, eventTypeId])
+  @@index([eventTypeId])
+}
+
 model HostGroup {
   id          String     @id @default(uuid())
   name        String
@@ -288,6 +300,8 @@ model EventType {
   restrictionScheduleId Int?
   restrictionSchedule   Schedule?   @relation("restrictionSchedule", fields: [restrictionScheduleId], references: [id])
   hostGroups            HostGroup[]
+
+  favorites EventTypeFavorite[]
 
   bookingRequiresAuthentication Boolean                        @default(false)
   rrHostSubsetEnabled           Boolean                        @default(false)
@@ -510,6 +524,7 @@ model User {
   createdOrganizationOnboardings OrganizationOnboarding[]      @relation("CreatedOrganizationOnboardings")
   filterSegments                 FilterSegment[]
   filterSegmentPreferences       UserFilterSegmentPreference[]
+  favoriteEventTypes             EventTypeFavorite[]
   creditBalance                  CreditBalance?
   calAiPhoneNumbers              CalAiPhoneNumber[]
   agents                         Agent[]

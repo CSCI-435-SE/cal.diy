@@ -7,6 +7,7 @@ vi.mock("@calcom/prisma", () => ({
   readonlyPrisma: {
     eventType: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
     },
     team: {
       findMany: vi.fn(),
@@ -192,6 +193,27 @@ describe("EventTypeRepository", () => {
             user: mockUser,
           })
         ).rejects.toThrow("User is not part of a team/org");
+      });
+    });
+  });
+
+  describe("existsWithUserAccess", () => {
+    it("queries by id across the four access paths and selects only id", async () => {
+      vi.mocked(readonlyPrisma.eventType.findFirst).mockResolvedValue({ id: 42 });
+
+      await eventTypeRepository.existsWithUserAccess({ id: 42, userId: 1 });
+
+      expect(readonlyPrisma.eventType.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 42,
+          OR: [
+            { userId: 1 },
+            { users: { some: { id: 1 } } },
+            { hosts: { some: { userId: 1 } } },
+            { team: { members: { some: { userId: 1, accepted: true } } } },
+          ],
+        },
+        select: { id: true },
       });
     });
   });

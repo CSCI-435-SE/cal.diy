@@ -542,6 +542,22 @@ export class EventTypeRepository implements IEventTypesRepository {
     });
   }
 
+  async existsWithUserAccess({ id, userId }: { id: number; userId: number }): Promise<boolean> {
+    const eventType = await this.prismaClient.eventType.findFirst({
+      where: {
+        id,
+        OR: [
+          { userId },
+          { users: { some: { id: userId } } },
+          { hosts: { some: { userId } } },
+          { team: { members: { some: { userId, accepted: true } } } },
+        ],
+      },
+      select: { id: true },
+    });
+    return !!eventType;
+  }
+
   async findById({ id, userId }: { id: number; userId: number }) {
     const userSelect = {
       name: true,

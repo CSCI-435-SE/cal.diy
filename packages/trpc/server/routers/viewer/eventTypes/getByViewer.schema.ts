@@ -32,6 +32,7 @@ export type TGetEventTypesFromGroupSchemaInput = {
   limit?: number;
   group: { teamId?: number | null; parentId?: number | null };
   searchQuery?: string;
+  favorites?: "only" | "exclude";
 };
 
 export type TGetEventTypesFromGroupSchema = {
@@ -40,6 +41,7 @@ export type TGetEventTypesFromGroupSchema = {
   limit: number;
   group: { teamId?: number | null; parentId?: number | null };
   searchQuery?: string;
+  favorites?: "only" | "exclude";
 };
 
 export const ZGetEventTypesFromGroupSchema: z.ZodType<TGetEventTypesFromGroupSchema, z.ZodTypeDef, TGetEventTypesFromGroupSchemaInput> = z.object({
@@ -48,4 +50,5 @@ export const ZGetEventTypesFromGroupSchema: z.ZodType<TGetEventTypesFromGroupSch
   limit: z.number().default(10),
   group: z.object({ teamId: z.number().nullish(), parentId: z.number().nullish() }),
   searchQuery: z.string().optional(),
+  favorites: z.enum(["only", "exclude"]).optional(),
 });

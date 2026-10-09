@@ -100,12 +100,12 @@ import type { getEventTypeResponse } from "../handleNewBooking/getEventTypesFrom
 import { getLocationValuesForDb } from "../handleNewBooking/getLocationValuesForDb";
 import { getRequiresConfirmationFlags } from "../handleNewBooking/getRequiresConfirmationFlags";
 import { getSeatedBooking } from "../handleNewBooking/getSeatedBooking";
-import { isRescheduleReasonRequired } from "../rescheduleReason";
 import { getVideoCallDetails } from "../handleNewBooking/getVideoCallDetails";
 import { handleAppsStatus } from "../handleNewBooking/handleAppsStatus";
 import { loadAndValidateUsers } from "../handleNewBooking/loadAndValidateUsers";
 import type { BookingType } from "../handleNewBooking/originalRescheduledBookingUtils";
 import { getOriginalRescheduledBooking } from "../handleNewBooking/originalRescheduledBookingUtils";
+import { scheduleBookingReminderEmail } from "../handleNewBooking/scheduleBookingReminderEmail";
 import { scheduleNoShowTriggers } from "../handleNewBooking/scheduleNoShowTriggers";
 import type { IEventTypePaymentCredentialType, Invitee, IsFixedAwareUser } from "../handleNewBooking/types";
 import { validateBookingTimeIsNotOutOfBounds } from "../handleNewBooking/validateBookingTimeIsNotOutOfBounds";
@@ -115,6 +115,7 @@ import type { IBookingService } from "../interfaces/IBookingService";
 import type { BookingEventHandlerService } from "../onBookingEvents/BookingEventHandlerService";
 import type { BookingRescheduledPayload } from "../onBookingEvents/types";
 import { isWithinMinimumRescheduleNotice } from "../reschedule/isWithinMinimumRescheduleNotice";
+import { isRescheduleReasonRequired } from "../rescheduleReason";
 
 const translator = short();
 
@@ -564,7 +565,10 @@ async function handler(
           field.name === SystemField.Enum.rescheduleReason
             ? {
                 ...field,
-                required: isRescheduleReasonRequired(eventType.requiresRescheduleReason, isRescheduleUserHost),
+                required: isRescheduleReasonRequired(
+                  eventType.requiresRescheduleReason,
+                  isRescheduleUserHost
+                ),
               }
             : field
         )
@@ -2544,6 +2548,14 @@ async function handler(
     }
   } catch (error) {
     tracingLogger.error("Error while scheduling no show triggers", JSON.stringify({ error }));
+  }
+
+  try {
+    if (isConfirmedByDefault && !isDryRun) {
+      await scheduleBookingReminderEmail(booking);
+    }
+  } catch (error) {
+    tracingLogger.error("Error while scheduling booking reminder email", safeStringify(error));
   }
 
   if (!isDryRun) {

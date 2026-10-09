@@ -18,6 +18,7 @@ import type { PlatformClientParams } from "@calcom/prisma/zod-utils";
 import { EventTypeMetaDataSchema } from "@calcom/prisma/zod-utils";
 import type { AdditionalInformation, CalendarEvent } from "@calcom/types/Calendar";
 import { getCalEventResponses } from "./getCalEventResponses";
+import { scheduleBookingReminderEmail } from "./handleNewBooking/scheduleBookingReminderEmail";
 import { scheduleNoShowTriggers } from "./handleNewBooking/scheduleNoShowTriggers";
 
 export async function handleConfirmation(args: {
@@ -375,6 +376,15 @@ export async function handleConfirmation(args: {
     });
 
     await Promise.all(scheduleTriggerPromises);
+
+    const reminderResults = await Promise.allSettled(
+      updatedBookings.map((updatedBooking) => scheduleBookingReminderEmail(updatedBooking))
+    );
+    for (const result of reminderResults) {
+      if (result.status === "rejected") {
+        tracingLogger.error("Error while scheduling booking reminder email", safeStringify(result.reason));
+      }
+    }
 
     await scheduleNoShowTriggers({
       booking: {

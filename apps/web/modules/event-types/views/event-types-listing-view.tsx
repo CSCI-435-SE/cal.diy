@@ -32,6 +32,7 @@ import {
 } from "@calcom/ui/components/dropdown";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { Label, Switch, TextField } from "@calcom/ui/components/form";
+import { Icon } from "@calcom/ui/components/icon";
 import { HorizontalTabs } from "@calcom/ui/components/navigation";
 import { Skeleton } from "@calcom/ui/components/skeleton";
 import { showToast } from "@calcom/ui/components/toast";
@@ -69,6 +70,7 @@ type EventTypeGroup = EventTypeGroups[number];
 type EventType = EventTypeGroup["eventTypes"][number];
 
 const LIMIT = 10;
+type FavoritesFilter = "only" | "exclude";
 
 interface SearchContextType {
   searchTerm: string;
@@ -101,6 +103,7 @@ interface InfiniteEventTypeListProps {
   lockedByOrg?: boolean;
   isPending?: boolean;
   debouncedSearchTerm?: string;
+  favorites: FavoritesFilter;
 }
 
 interface InfiniteTeamsTabProps {
@@ -116,15 +119,17 @@ const InfiniteTeamsTab: FC<InfiniteTeamsTabProps> = (props: InfiniteTeamsTabProp
   const { debouncedSearchTerm } = useSearchContext();
   const { t } = useLocale();
 
-  const query = trpc.viewer.eventTypes.getEventTypesFromGroup.useInfiniteQuery(
-    {
-      limit: LIMIT,
-      searchQuery: debouncedSearchTerm,
-      group: {
-        teamId: activeEventTypeGroup?.teamId,
-        parentId: activeEventTypeGroup?.parentId,
-      },
+  const groupInput = {
+    limit: LIMIT,
+    searchQuery: debouncedSearchTerm,
+    group: {
+      teamId: activeEventTypeGroup?.teamId,
+      parentId: activeEventTypeGroup?.parentId,
     },
+  };
+
+  const favoritesQuery = trpc.viewer.eventTypes.getEventTypesFromGroup.useInfiniteQuery(
+    { ...groupInput, favorites: "only" },
     {
       refetchOnWindowFocus: true,
       refetchOnMount: true,
@@ -132,6 +137,19 @@ const InfiniteTeamsTab: FC<InfiniteTeamsTabProps> = (props: InfiniteTeamsTabProp
       getNextPageParam: (lastPage: { nextCursor: number | null | undefined }) => lastPage.nextCursor,
     }
   );
+
+  const query = trpc.viewer.eventTypes.getEventTypesFromGroup.useInfiniteQuery(
+    { ...groupInput, favorites: "exclude" },
+    {
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      staleTime: 0,
+      getNextPageParam: (lastPage: { nextCursor: number | null | undefined }) => lastPage.nextCursor,
+    }
+  );
+
+  const hasFavorites = (favoritesQuery.data?.pages?.[0]?.eventTypes?.length ?? 0) > 0;
+  const hasRegular = (query.data?.pages?.[0]?.eventTypes?.length ?? 0) > 0;
 
   const buttonInView = useInViewObserver(() => {
     if (!query.isFetching && query.hasNextPage && query.status === "success") {
@@ -141,8 +159,34 @@ const InfiniteTeamsTab: FC<InfiniteTeamsTabProps> = (props: InfiniteTeamsTabProp
 
   return (
     <div>
-      {!!activeEventTypeGroup && (
+      {!!activeEventTypeGroup && hasFavorites && (
+        <div className="mb-6" data-testid="favorite-event-types">
+          <h2 className="mb-2 font-semibold text-emphasis text-sm">{t("favorites")}</h2>
+          <InfiniteEventTypeList
+            favorites="only"
+            pages={favoritesQuery.data?.pages}
+            group={activeEventTypeGroup}
+            bookerUrl={activeEventTypeGroup.bookerUrl}
+            readOnly={activeEventTypeGroup.metadata.readOnly}
+            debouncedSearchTerm={debouncedSearchTerm}
+          />
+          {favoritesQuery.hasNextPage && (
+            <div className="p-4 text-center text-default">
+              <Button
+                color="minimal"
+                loading={favoritesQuery.isFetchingNextPage}
+                onClick={(): void => {
+                  favoritesQuery.fetchNextPage();
+                }}>
+                {t("load_more_results")}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+      {!!activeEventTypeGroup && (hasRegular || !hasFavorites) && (
         <InfiniteEventTypeList
+          favorites="exclude"
           pages={query?.data?.pages}
           group={activeEventTypeGroup}
           bookerUrl={activeEventTypeGroup.bookerUrl}
@@ -285,6 +329,7 @@ export const InfiniteEventTypeList = ({
   lockedByOrg,
   isPending,
   debouncedSearchTerm,
+  favorites,
 }: InfiniteEventTypeListProps): JSX.Element => {
   const { t } = useLocale();
   const router = useRouter();
@@ -300,6 +345,13 @@ export const InfiniteEventTypeList = ({
   const [privateLinkCopyIndices, setPrivateLinkCopyIndices] = useState<Record<string, number>>({});
 
   const utils = trpc.useUtils();
+  const queryInput = {
+    limit: LIMIT,
+    searchQuery: debouncedSearchTerm,
+    group: { teamId: group?.teamId, parentId: group?.parentId },
+    favorites,
+  };
+  const isFavoritesSection = favorites === "only";
   const mutation = trpc.viewer.loggedInViewerRouter.eventTypeOrder.useMutation({
     onError: async (err) => {
       console.error(err.message);
@@ -311,37 +363,26 @@ export const InfiniteEventTypeList = ({
   const setHiddenMutation = trpc.viewer.eventTypesHeavy.update.useMutation({
     onMutate: async (data: { id: number; hidden?: boolean }) => {
       await utils.viewer.eventTypes.getEventTypesFromGroup.cancel();
-      const previousValue = utils.viewer.eventTypes.getEventTypesFromGroup.getInfiniteData({
-        limit: LIMIT,
-        searchQuery: debouncedSearchTerm,
-        group: { teamId: group?.teamId, parentId: group?.parentId },
-      });
+      const previousValue = utils.viewer.eventTypes.getEventTypesFromGroup.getInfiniteData(queryInput);
 
       if (previousValue) {
-        await utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(
-          {
-            limit: LIMIT,
-            searchQuery: debouncedSearchTerm,
-            group: { teamId: group?.teamId, parentId: group?.parentId },
-          },
-          (oldData) => {
-            if (!oldData) {
-              return {
-                pages: [],
-                pageParams: [],
-              };
-            }
+        await utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(queryInput, (oldData) => {
+          if (!oldData) {
             return {
-              ...oldData,
-              pages: oldData.pages.map((page) => ({
-                ...page,
-                eventTypes: page.eventTypes.map((eventType) =>
-                  eventType.id === data.id ? { ...eventType, hidden: !eventType.hidden } : eventType
-                ),
-              })),
+              pages: [],
+              pageParams: [],
             };
           }
-        );
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => ({
+              ...page,
+              eventTypes: page.eventTypes.map((eventType) =>
+                eventType.id === data.id ? { ...eventType, hidden: !eventType.hidden } : eventType
+              ),
+            })),
+          };
+        });
       }
 
       return { previousValue };
@@ -349,15 +390,20 @@ export const InfiniteEventTypeList = ({
     onError: async (err, _, context) => {
       if (context?.previousValue) {
         utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(
-          {
-            limit: LIMIT,
-            searchQuery: debouncedSearchTerm,
-            group: { teamId: group?.teamId, parentId: group?.parentId },
-          },
+          queryInput,
           () => context.previousValue
         );
       }
       console.error(err.message);
+    },
+  });
+
+  const setFavoriteMutation = trpc.viewer.eventTypes.setFavorite.useMutation({
+    onSuccess: async () => {
+      await utils.viewer.eventTypes.getEventTypesFromGroup.invalidate();
+    },
+    onError: (err) => {
+      showToast(err.message, "error");
     },
   });
 
@@ -384,31 +430,20 @@ export const InfiniteEventTypeList = ({
     newOrder[newPageNo].eventTypes[newIdx] = currentPositionEventType;
 
     await utils.viewer.eventTypes.getEventTypesFromGroup.cancel();
-    const previousValue = utils.viewer.eventTypes.getEventTypesFromGroup.getInfiniteData({
-      limit: LIMIT,
-      searchQuery: debouncedSearchTerm,
-      group: { teamId: group?.teamId, parentId: group?.parentId },
-    });
+    const previousValue = utils.viewer.eventTypes.getEventTypesFromGroup.getInfiniteData(queryInput);
 
     if (previousValue) {
-      utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(
-        {
-          limit: LIMIT,
-          searchQuery: debouncedSearchTerm,
-          group: { teamId: group?.teamId, parentId: group?.parentId },
-        },
-        (data) => {
-          if (!data) return { pages: [], pageParams: [] };
+      utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(queryInput, (data) => {
+        if (!data) return { pages: [], pageParams: [] };
 
-          return {
-            ...data,
-            pages: newOrder.map((page) => ({
-              ...page,
-              nextCursor: page.nextCursor ?? undefined,
-            })),
-          };
-        }
-      );
+        return {
+          ...data,
+          pages: newOrder.map((page) => ({
+            ...page,
+            nextCursor: page.nextCursor ?? undefined,
+          })),
+        };
+      });
     }
 
     mutation.mutate({
@@ -445,49 +480,31 @@ export const InfiniteEventTypeList = ({
     },
     onMutate: async ({ id }) => {
       await utils.viewer.eventTypes.getEventTypesFromGroup.cancel();
-      const previousValue = utils.viewer.eventTypes.getEventTypesFromGroup.getInfiniteData({
-        limit: LIMIT,
-        searchQuery: debouncedSearchTerm,
-        group: { teamId: group?.teamId, parentId: group?.parentId },
-      });
+      const previousValue = utils.viewer.eventTypes.getEventTypesFromGroup.getInfiniteData(queryInput);
 
       if (previousValue) {
-        await utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(
-          {
-            limit: LIMIT,
-            searchQuery: debouncedSearchTerm,
-            group: { teamId: group?.teamId, parentId: group?.parentId },
-          },
-          (data) => {
-            if (!data) {
-              return {
-                pages: [],
-                pageParams: [],
-              };
-            }
+        await utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(queryInput, (data) => {
+          if (!data) {
             return {
-              ...data,
-              pages: data.pages.map((page) => ({
-                ...page,
-                eventTypes: page.eventTypes.filter((type) => type.id !== id),
-              })),
+              pages: [],
+              pageParams: [],
             };
           }
-        );
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              eventTypes: page.eventTypes.filter((type) => type.id !== id),
+            })),
+          };
+        });
       }
 
       return { previousValue };
     },
     onError: (err, _, context) => {
       if (context?.previousValue) {
-        utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(
-          {
-            limit: LIMIT,
-            searchQuery: debouncedSearchTerm,
-            group: { teamId: group?.teamId, parentId: group?.parentId },
-          },
-          context.previousValue
-        );
+        utils.viewer.eventTypes.getEventTypesFromGroup.setInfiniteData(queryInput, context.previousValue);
       }
       if (err instanceof HttpError) {
         const message = `${err.statusCode}: ${err.message}`;
@@ -559,20 +576,49 @@ export const InfiniteEventTypeList = ({
               <li key={type.id}>
                 <div className="flex w-full items-center justify-between transition hover:bg-cal-muted">
                   <div className="group flex w-full max-w-full items-center justify-between overflow-hidden px-4 py-4 sm:px-6">
-                    {!(firstItem && firstItem.id === type.id) && (
+                    {!isFavoritesSection && !(firstItem && firstItem.id === type.id) && (
                       <ArrowButton
                         onClick={() => moveEventType(LIMIT * pageIdx + index, -1)}
                         arrowDirection="up"
                       />
                     )}
 
-                    {!(lastItem && lastItem.id === type.id) && (
+                    {!isFavoritesSection && !(lastItem && lastItem.id === type.id) && (
                       <ArrowButton
                         onClick={() => moveEventType(LIMIT * pageIdx + index, 1)}
                         arrowDirection="down"
                       />
                     )}
                     <MemoizedItem type={type} group={group} readOnly={readOnly} />
+                    <Tooltip
+                      content={isFavoritesSection ? t("remove_from_favorites") : t("add_to_favorites")}>
+                      <Button
+                        data-testid={`event-type-favorite-${type.id}`}
+                        color="minimal"
+                        variant="icon"
+                        className="shrink-0 ltr:mr-2 rtl:ml-2"
+                        aria-label={isFavoritesSection ? t("remove_from_favorites") : t("add_to_favorites")}
+                        disabled={
+                          setFavoriteMutation.isPending &&
+                          setFavoriteMutation.variables?.eventTypeId === type.id
+                        }
+                        CustomStartIcon={
+                          <Icon
+                            name="star"
+                            className={classNames(
+                              "h-4 w-4",
+                              isFavoritesSection && "fill-current text-yellow-500"
+                            )}
+                          />
+                        }
+                        onClick={() =>
+                          setFavoriteMutation.mutate({
+                            eventTypeId: type.id,
+                            isFavorite: !isFavoritesSection,
+                          })
+                        }
+                      />
+                    </Tooltip>
                     <div className="mt-4 hidden sm:mt-0 sm:flex">
                       <div className="flex justify-between space-x-2 rtl:space-x-reverse">
                         {!!type.teamId && !isManagedEventType && (
