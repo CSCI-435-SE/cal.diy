@@ -97,7 +97,7 @@ export function BookingMonthView({
                       data-testid={`month-booking-${booking.uid}`}
                       style={color ? { borderLeftColor: color } : undefined}
                       className={classNames(
-                        "flex w-full gap-1 truncate rounded border-l-2 border-l-brand-default px-1 py-0.5 text-left text-xs hover:bg-subtle",
+                        "flex w-full gap-1 truncate rounded-r border-l-2 border-l-brand-default px-1 py-0.5 text-left text-xs hover:bg-subtle",
                         booking.status === "PENDING" && "opacity-70",
                         selectedBookingUid === booking.uid && "bg-emphasis"
                       )}>
