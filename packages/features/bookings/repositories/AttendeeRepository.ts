@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@calcom/prisma";
+import type { BookingStatus } from "@calcom/prisma/enums";
 import type { IAttendeeRepository } from "./IAttendeeRepository";
 
 const safeSelect = {
@@ -106,6 +107,46 @@ export class AttendeeRepository implements IAttendeeRepository {
     return this.prismaClient.attendee.findMany({
       where: { bookingId },
       select: safeSelect,
+    });
+  }
+
+  async findByBookingUserIdIncludeBookingEventType({
+    userId,
+    bookingStatus,
+    bookingEndTimeBefore,
+  }: {
+    userId: number;
+    bookingStatus: BookingStatus;
+    bookingEndTimeBefore: Date;
+  }): Promise<
+    {
+      name: string;
+      email: string;
+      booking: {
+        endTime: Date;
+        eventType: { slug: string; team: { slug: string | null } | null } | null;
+      } | null;
+    }[]
+  > {
+    return this.prismaClient.attendee.findMany({
+      where: {
+        booking: {
+          userId,
+          status: bookingStatus,
+          endTime: { lt: bookingEndTimeBefore },
+        },
+      },
+      select: {
+        name: true,
+        email: true,
+        booking: {
+          select: {
+            endTime: true,
+            eventType: { select: { slug: true, team: { select: { slug: true } } } },
+          },
+        },
+      },
+      orderBy: { booking: { endTime: "desc" } },
     });
   }
 
