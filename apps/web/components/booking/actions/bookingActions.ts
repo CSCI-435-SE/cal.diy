@@ -2,6 +2,7 @@ import { isWithinMinimumRescheduleNotice } from "@calcom/features/bookings/lib/r
 import { BookingStatus, SchedulingType } from "@calcom/prisma/enums";
 import type { ActionType } from "@calcom/ui/components/table";
 
+import { buildBookAgainUrl } from "../../../modules/bookings/lib/buildBookAgainUrl";
 import type { BookingItemProps } from "../types";
 
 export interface BookingActionContext {
@@ -181,9 +182,29 @@ export function getReportAction(context: BookingActionContext): ActionType {
 }
 
 export function getAfterEventActions(context: BookingActionContext): ActionType[] {
-  const { booking, cardCharged, attendeeList, t } = context;
+  const { booking, isBookingInPast, cardCharged, attendeeList, t } = context;
+
+  // The first attendee is the person who made the booking; the People view offers the others
+  const primaryAttendee = attendeeList[0];
+  const bookAgainUrl = primaryAttendee
+    ? buildBookAgainUrl({
+        eventType: booking.eventType,
+        username: booking.user?.username,
+        attendee: primaryAttendee,
+      })
+    : null;
+  const bookAgainBase = {
+    id: "book_again",
+    label: t("book_again"),
+    icon: "repeat",
+    disabled: !isBookingInPast || !bookAgainUrl,
+  } as const;
+  const bookAgainAction: ActionType = bookAgainUrl
+    ? { ...bookAgainBase, href: bookAgainUrl }
+    : bookAgainBase;
 
   const actions: (ActionType | null)[] = [
+    bookAgainAction,
     ...getVideoOptionsActions(context),
     booking.status === BookingStatus.ACCEPTED && booking.paid && booking.payment[0]?.paymentOption === "HOLD"
       ? {

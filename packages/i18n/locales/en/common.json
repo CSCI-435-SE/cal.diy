@@ -1546,6 +1546,7 @@
   "request_reschedule_booking": "Request to reschedule your booking",
   "reason_for_reschedule": "Reason for reschedule",
   "book_a_new_time": "Book a new time",
+  "book_again": "Book again",
   "reschedule_request_sent": "Reschedule request sent",
   "reschedule_modal_description": "This will cancel the scheduled meeting, notify the scheduler and ask them to pick a new time.",
   "reason_for_reschedule_request": "Reason for reschedule request",
