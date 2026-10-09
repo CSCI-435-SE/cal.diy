@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 export const MINUTES_IN_HOUR = 60;
 
 export type HoursAndMinutes = {
@@ -41,4 +43,32 @@ export function parseDurationPart(raw: string): number {
   const parsed = Number(raw);
 
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+/**
+ * Renders a minute count as "X mins" under an hour, or "Xh"/"Ym"/"Xh Ym" once it reaches 60+
+ * minutes, reusing minutesToHoursAndMinutes so the hour/minute split lives in one place instead
+ * of five near-duplicate copies (issue #35). Moved here from the booker's Duration component,
+ * which was the only place this already existed.
+ */
+export function formatDuration(totalMinutes: number | undefined, t: TFunction): string {
+  if (!totalMinutes) return "";
+
+  const { hours, minutes } = minutesToHoursAndMinutes(totalMinutes);
+
+  const minuteStr =
+    minutes > 0
+      ? minutes === 1
+        ? t("minute_one_short", { count: 1 })
+        : t("multiple_duration_timeUnit_short", { count: minutes, unit: "minute" })
+      : "";
+
+  const hourStr =
+    hours > 0
+      ? hours === 1
+        ? t("hour_one_short", { count: 1 })
+        : t("multiple_duration_timeUnit_short", { count: hours, unit: "hour" })
+      : "";
+
+  return [hourStr, minuteStr].filter(Boolean).join(" ");
 }

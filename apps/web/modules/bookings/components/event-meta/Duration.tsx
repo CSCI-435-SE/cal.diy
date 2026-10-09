@@ -1,41 +1,13 @@
-import type { TFunction } from "i18next";
-import { useEffect, useRef } from "react";
-
 import { useIsPlatform } from "@calcom/atoms/hooks/useIsPlatform";
 import { useIsEmbed } from "@calcom/embed-core/embed-iframe";
-import { useShouldShowArrows } from "@calcom/web/modules/apps/components/AllApps";
 import { useBookerStoreContext } from "@calcom/features/bookings/Booker/BookerStoreProvider";
 import type { BookerEvent } from "@calcom/features/bookings/types";
+import { formatDuration } from "@calcom/features/eventtypes/lib/duration";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import classNames from "@calcom/ui/classNames";
+import { useShouldShowArrows } from "@calcom/web/modules/apps/components/AllApps";
 import { ChevronLeftIcon, ChevronRightIcon } from "@coss/ui/icons";
-
-/** Render X mins as X hours or X hours Y mins instead of in minutes once >= 60 minutes */
-export const getDurationFormatted = (mins: number | undefined, t: TFunction) => {
-  if (!mins) return null;
-
-  const hours = Math.floor(mins / 60);
-  mins %= 60;
-  // format minutes string
-  let minStr = "";
-  if (mins > 0) {
-    minStr =
-      mins === 1
-        ? t("minute_one_short", { count: 1 })
-        : t("multiple_duration_timeUnit_short", { count: mins, unit: "minute" });
-  }
-  // format hours string
-  let hourStr = "";
-  if (hours > 0) {
-    hourStr =
-      hours === 1
-        ? t("hour_one_short", { count: 1 })
-        : t("multiple_duration_timeUnit_short", { count: hours, unit: "hour" });
-  }
-
-  if (hourStr && minStr) return `${hourStr} ${minStr}`;
-  return hourStr || minStr;
-};
+import { useEffect, useRef } from "react";
 
 export const EventDuration = ({
   event,
@@ -89,8 +61,7 @@ export const EventDuration = ({
     return () => clearTimeout(timeout);
   }, [selectedDuration, isEmbed]);
 
-  if (!event?.metadata?.multipleDuration && !isDynamicEvent)
-    return <>{getDurationFormatted(event.length, t)}</>;
+  if (!event?.metadata?.multipleDuration && !isDynamicEvent) return <>{formatDuration(event.length, t)}</>;
 
   const durations = event?.metadata?.multipleDuration || [15, 30, 60, 90];
   const hideDurationSelector = event?.metadata?.hideDurationSelectorInBookingPage;
@@ -98,7 +69,7 @@ export const EventDuration = ({
   // When duration selector is hidden, show only the selected/default duration as text
   // URL params can still set the duration, but the user cannot change it via UI
   if (hideDurationSelector) {
-    return <>{getDurationFormatted(selectedDuration || event.length, t)}</>;
+    return <>{formatDuration(selectedDuration || event.length, t)}</>;
   }
 
   return selectedDuration ? (
@@ -128,7 +99,7 @@ export const EventDuration = ({
                 selectedDuration === duration ? "bg-emphasis" : "hover:text-emphasis",
                 "text-default cursor-pointer rounded-[4px] px-3 py-1.5 text-sm leading-tight transition"
               )}>
-              <div className="w-max">{getDurationFormatted(duration, t)}</div>
+              <div className="w-max">{formatDuration(duration, t)}</div>
             </li>
           ))}
       </ul>

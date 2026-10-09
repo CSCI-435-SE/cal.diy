@@ -2,6 +2,7 @@
 
 import { getPaymentAppData } from "@calcom/app-store/_utils/payments/getPaymentAppData";
 import { eventTypeMetaDataSchemaWithTypedApps } from "@calcom/app-store/zod-utils";
+import { formatDuration } from "@calcom/features/eventtypes/lib/duration";
 import type {
   AvailabilityOption,
   EventTypeApps,
@@ -21,12 +22,7 @@ type Props = {
   team: EventTypeSetupProps["team"];
   eventTypeApps?: EventTypeApps;
 };
-export const useTabsNavigations = ({ 
-  formMethods, 
-  eventType, 
-  team, 
-  eventTypeApps 
-}: Props) => {
+export const useTabsNavigations = ({ formMethods, eventType, team, eventTypeApps }: Props) => {
   const { t } = useLocale();
 
   const length = formMethods.watch("length");
@@ -172,15 +168,17 @@ function getNavigation({
   enabledAppsNumber,
   installedAppsNumber,
 }: getNavigationProps) {
-  const duration =
-    multipleDuration?.map((duration) => ` ${duration}`) || (Number.isFinite(length) ? length : 0);
+  const durationInfo =
+    multipleDuration && multipleDuration.length > 0
+      ? multipleDuration.map((duration) => formatDuration(duration, t)).join(", ")
+      : formatDuration(Number.isFinite(length) ? length : 0, t);
 
   const baseNavigation: VerticalTabItemProps[] = [
     {
       name: t("basics"),
       href: `/event-types/${id}?tabName=setup`,
       icon: "link",
-      info: `${duration} ${t("minute_timeUnit")}`,
+      info: durationInfo,
       "data-testid": `basics`,
     },
     {

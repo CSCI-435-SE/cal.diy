@@ -1,6 +1,28 @@
 import { MAX_EVENT_DURATION_MINUTES, MIN_EVENT_DURATION_MINUTES } from "@calcom/lib/constants";
+import type { TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
-import { hoursAndMinutesToMinutes, minutesToHoursAndMinutes, parseDurationPart } from "./duration";
+import {
+  formatDuration,
+  hoursAndMinutesToMinutes,
+  minutesToHoursAndMinutes,
+  parseDurationPart,
+} from "./duration";
+
+// Mirrors the real en translations for minute_one_short ("{{count}}m"), hour_one_short
+// ("{{count}}h"), and multiple_duration_timeUnit_short ("{{count}}$t({{unit}}_short)") without
+// pulling in the full i18next setup for this unit test.
+const t = ((key: string, options?: { count?: number; unit?: string }) => {
+  switch (key) {
+    case "minute_one_short":
+      return `${options?.count}m`;
+    case "hour_one_short":
+      return `${options?.count}h`;
+    case "multiple_duration_timeUnit_short":
+      return `${options?.count}${options?.unit === "hour" ? "h" : "m"}`;
+    default:
+      return key;
+  }
+}) as TFunction;
 
 describe("minutesToHoursAndMinutes", () => {
   it("leaves a sub-hour duration entirely in minutes", () => {
@@ -93,6 +115,36 @@ describe("round trip", () => {
     MAX_EVENT_DURATION_MINUTES,
   ])("preserves %p minutes through split and recombine", (minutes) => {
     expect(hoursAndMinutesToMinutes(minutesToHoursAndMinutes(minutes))).toBe(minutes);
+  });
+});
+
+describe("formatDuration", () => {
+  it.each([0, undefined])("returns an empty string for a falsy duration (%p)", (input) => {
+    expect(formatDuration(input, t)).toBe("");
+  });
+
+  it("formats a single minute with the singular short form", () => {
+    expect(formatDuration(1, t)).toBe("1m");
+  });
+
+  it("leaves a sub-hour duration in minutes", () => {
+    expect(formatDuration(30, t)).toBe("30m");
+  });
+
+  it("formats exactly one hour", () => {
+    expect(formatDuration(60, t)).toBe("1h");
+  });
+
+  it("formats multiple whole hours", () => {
+    expect(formatDuration(120, t)).toBe("2h");
+  });
+
+  it("formats hours and minutes together", () => {
+    expect(formatDuration(90, t)).toBe("1h 30m");
+  });
+
+  it("uses the singular short form for exactly one hour and one minute", () => {
+    expect(formatDuration(61, t)).toBe("1h 1m");
   });
 });
 

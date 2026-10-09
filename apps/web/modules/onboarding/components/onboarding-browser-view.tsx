@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDuration } from "@calcom/features/eventtypes/lib/duration";
 import { WEBAPP_URL } from "@calcom/lib/constants";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { Avatar } from "@calcom/ui/components/avatar";
@@ -161,7 +162,7 @@ export const OnboardingBrowserView = ({
                         <div className="flex h-4 items-center justify-center gap-1 rounded-md bg-emphasis px-1">
                           <Icon name={event.icon} className="h-3 w-3 text-emphasis" />
                           <span className="font-medium text-emphasis text-xs leading-none">
-                            {event.duration} {t("minute_timeUnit")}
+                            {formatDuration(event.duration, t)}
                           </span>
                         </div>
                       </div>
