@@ -125,6 +125,11 @@ export const bookingsRouter = router({
         input,
       });
     }),
+  getPeople: authedProcedure.query(async ({ ctx }) => {
+    const { getPeopleHandler } = await import("./getPeople.handler");
+
+    return getPeopleHandler({ ctx });
+  }),
   getBookingHistory: authedProcedure.input(ZGetBookingHistoryInputSchema).query(async ({ input, ctx }) => {
     const { getBookingHistoryHandler } = await import("./getBookingHistory.handler");
 

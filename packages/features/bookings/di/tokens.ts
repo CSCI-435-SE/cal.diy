@@ -19,4 +19,6 @@ export const BOOKING_DI_TOKENS = {
   BOOKING_ATTENDEES_SERVICE_MODULE: Symbol("BookingAttendeesServiceModule"),
   BOOKING_ATTENDEES_REMOVE_SERVICE: Symbol("BookingAttendeesRemoveService"),
   BOOKING_ATTENDEES_REMOVE_SERVICE_MODULE: Symbol("BookingAttendeesRemoveServiceModule"),
+  BOOKING_PEOPLE_SERVICE: Symbol("BookingPeopleService"),
+  BOOKING_PEOPLE_SERVICE_MODULE: Symbol("BookingPeopleServiceModule"),
 };
