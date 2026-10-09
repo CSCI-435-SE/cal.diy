@@ -4784,5 +4784,8 @@
   "favorites": "Favorites",
   "add_to_favorites": "Add to favorites",
   "remove_from_favorites": "Remove from favorites",
+  "unsaved_changes": "Unsaved changes",
+  "unsaved_changes_event_type_description": "You have unsaved changes to this event type. Do you want to save them before you leave?",
+  "dont_save_and_leave": "Don't save and leave",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }
