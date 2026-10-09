@@ -1,19 +1,43 @@
+import { localStorage } from "@calcom/lib/webstorage";
 import { createParser, useQueryState } from "nuqs";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { localStorage } from "@calcom/lib/webstorage";
-
 const STORAGE_KEY = "bookings-preferred-view";
+// Mirrors ViewToggleButton's breakpoint, below which the calendar views are unavailable.
+const MOBILE_MEDIA_QUERY = "(max-width: 768px)";
 
-type BookingView = "list" | "calendar";
+// "calendar" stays the weekly view so existing links and saved preferences keep working.
+export type BookingView = "list" | "calendar" | "month";
+
+export const isBookingView = (value: unknown): value is BookingView =>
+  value === "list" || value === "calendar" || value === "month";
 
 const viewParser = createParser({
-  parse: (value: string) => {
-    if (value === "calendar") return "calendar";
-    return "list";
-  },
+  parse: (value: string): BookingView => (isBookingView(value) ? value : "list"),
   serialize: (value: BookingView) => value,
 });
+
+/**
+ * Decides which view to switch to on first load, or null to keep the URL's view.
+ * Precedence: valid explicit URL value, then valid stored preference, then Month for desktop users
+ * who can use calendar views.
+ */
+export const resolveInitialBookingsView = ({
+  urlView,
+  storedView,
+  bookingsV3Enabled,
+  isMobile,
+}: {
+  urlView: string | null;
+  storedView: BookingView | null;
+  bookingsV3Enabled: boolean;
+  isMobile: boolean;
+}): BookingView | null => {
+  if (isBookingView(urlView)) return null;
+  if (storedView) return storedView;
+  if (bookingsV3Enabled && !isMobile) return "month";
+  return null;
+};
 
 // Create a store for localStorage value
 const createLocalStorageStore = () => {
@@ -26,16 +50,13 @@ const createLocalStorageStore = () => {
     };
   };
 
-  const getSnapshot = (): BookingView => {
+  const getSnapshot = (): BookingView | null => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "list" || stored === "calendar") {
-      return stored;
-    }
-    return "list";
+    return isBookingView(stored) ? stored : null;
   };
 
-  const getServerSnapshot = (): BookingView => {
-    return "list";
+  const getServerSnapshot = (): BookingView | null => {
+    return null;
   };
 
   const notify = () => {
@@ -57,6 +78,7 @@ export function useBookingsView({ bookingsV3Enabled }: UseBookingsViewOptions) {
 
   // Track if we've completed the initial sync to prevent race conditions
   const isInitializedRef = useRef(false);
+  const initialViewRef = useRef<BookingView | null>(null);
 
   // Read from localStorage using useSyncExternalStore
   const storedView = useSyncExternalStore(
@@ -68,27 +90,30 @@ export function useBookingsView({ bookingsV3Enabled }: UseBookingsViewOptions) {
   // Force view to be "list" if calendar view is disabled
   const view = bookingsV3Enabled ? _view : "list";
 
-  // Sync localStorage value to URL on initial mount
+  // Restore the preferred view before anything is persisted, so a saved choice is never overwritten.
+  // Storage is read directly because during hydration `storedView` still holds the server snapshot.
   useEffect(() => {
-    // Only sync if there's no URL parameter AND localStorage has a non-default value
-    const urlHasViewParam =
-      typeof window !== "undefined" && new URLSearchParams(window.location.search).has("view");
+    const initialView = resolveInitialBookingsView({
+      urlView: new URLSearchParams(window.location.search).get("view"),
+      storedView: localStorageStore.getSnapshot(),
+      bookingsV3Enabled,
+      isMobile: window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+    });
 
-    if (!urlHasViewParam && storedView !== "list" && _view !== storedView) {
-      setView(storedView);
+    if (initialView && initialView !== _view) {
+      initialViewRef.current = initialView;
+      setView(initialView);
     } else {
-      // No sync needed, mark as initialized
       isInitializedRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mark as initialized when _view matches storedView after initial sync
   useEffect(() => {
-    if (!isInitializedRef.current && _view === storedView) {
+    if (!isInitializedRef.current && _view === initialViewRef.current) {
       isInitializedRef.current = true;
     }
-  }, [_view, storedView]);
+  }, [_view]);
 
   // Sync to localStorage when view changes (only if initialized)
   useEffect(() => {
