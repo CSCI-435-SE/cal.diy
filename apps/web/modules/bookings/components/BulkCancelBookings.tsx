@@ -5,6 +5,7 @@ import { trpc } from "@calcom/trpc/react";
 import { Button } from "@calcom/ui/components/button";
 import { Dialog, DialogContent, DialogFooter } from "@calcom/ui/components/dialog";
 import { Label, TextArea } from "@calcom/ui/components/form";
+import { showToast } from "@calcom/ui/components/toast";
 import { useState } from "react";
 import { DataTableSelectionBar } from "../../data-table/components/DataTableSelectionBar";
 import { type BulkCancelResult, cancelBookingByUid } from "../lib/bulkCancel";
@@ -18,48 +19,49 @@ type BulkCancelBookingsProps = {
   onCancelled: (uids: string[]) => void;
 };
 
-export function BulkCancelBookings({
-  selectedBookings,
-  canSelectMore,
-  userEmail,
-  onSelectAll,
-  onClearSelection,
-  onCancelled,
-}: BulkCancelBookingsProps) {
+export function BulkCancelBookings(props: BulkCancelBookingsProps) {
+  const { selectedBookings, userEmail, onCancelled } = props;
   const { t } = useLocale();
   const utils = trpc.useUtils();
   const [isOpen, setIsOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [results, setResults] = useState<BulkCancelResult[]>([]);
+  // Titles are kept with each result because failed bookings may leave the selection after the refetch
+  const [results, setResults] = useState<(BulkCancelResult & { title: string })[]>([]);
 
   if (selectedBookings.length === 0 && !isOpen) return null;
 
-  const titleByUid = new Map(selectedBookings.map((booking) => [booking.uid, booking.title]));
-  const failures = results.filter((result): result is Extract<BulkCancelResult, { ok: false }> => !result.ok);
+  const failures = results.flatMap((result) => (result.ok ? [] : [result]));
+  const summary = t("bulk_cancel_summary", {
+    succeeded: results.length - failures.length,
+    failed: failures.length,
+  });
 
-  const submit = async (uids: string[]) => {
+  const submit = async () => {
     setIsRunning(true);
-    const batch: BulkCancelResult[] = [];
+    const batch: (BulkCancelResult & { title: string })[] = [];
     const cancellationReason = reason.trim();
     // Sequential, per booking, so each attendee gets their own email and one failure never stops the rest
-    for (const uid of uids) {
-      batch.push({ uid, ...(await cancelBookingByUid({ uid, cancellationReason, cancelledBy: userEmail })) });
+    for (const { uid, title } of selectedBookings) {
+      const outcome = await cancelBookingByUid({ uid, cancellationReason, cancelledBy: userEmail });
+      batch.push({ uid, title, ...outcome });
     }
-    setResults(batch);
-    onCancelled(batch.filter((result) => result.ok).map((result) => result.uid));
+    const succeeded = batch.filter((result) => result.ok).map((result) => result.uid);
+    onCancelled(succeeded);
     setIsRunning(false);
+    if (succeeded.length === batch.length) {
+      showToast(t("bulk_cancel_summary", { succeeded: succeeded.length, failed: 0 }), "success");
+      closeDialog();
+    } else {
+      setResults(batch);
+    }
     await utils.viewer.bookings.invalidate();
   };
 
-  const onOpenChange = (open: boolean) => {
-    // Closing mid-batch would hide progress while requests are still being sent
-    if (isRunning) return;
-    setIsOpen(open);
-    if (!open) {
-      setResults([]);
-      setReason("");
-    }
+  const closeDialog = () => {
+    setIsOpen(false);
+    setResults([]);
+    setReason("");
   };
 
   return (
@@ -69,50 +71,38 @@ export function BulkCancelBookings({
           <p className="shrink-0 px-2 text-brand-subtle text-sm">
             {t("number_selected", { count: selectedBookings.length })}
           </p>
-          {canSelectMore && (
-            <DataTableSelectionBar.Button color="secondary" icon="check" onClick={onSelectAll}>
+          {props.canSelectMore && (
+            <DataTableSelectionBar.Button color="secondary" icon="check" onClick={props.onSelectAll}>
               {t("bulk_cancel_select_page")}
             </DataTableSelectionBar.Button>
           )}
-          <DataTableSelectionBar.Button color="secondary" icon="x" onClick={onClearSelection}>
+          <DataTableSelectionBar.Button color="secondary" icon="x" onClick={props.onClearSelection}>
             {t("bulk_cancel_clear_selection")}
           </DataTableSelectionBar.Button>
           <DataTableSelectionBar.Button
             color="destructive"
             icon="ban"
             data-testid="bulk-cancel-open"
-            onClick={() => onOpenChange(true)}>
+            onClick={() => setIsOpen(true)}>
             {t("bulk_cancel_selected")}
           </DataTableSelectionBar.Button>
         </DataTableSelectionBar.Root>
       )}
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      {/* Closing mid-batch would hide progress while requests are still being sent */}
+      <Dialog open={isOpen} onOpenChange={(open) => !open && !isRunning && closeDialog()}>
         <DialogContent
           enableOverflow
-          title={t("bulk_cancel_title", { count: selectedBookings.length })}
+          title={results.length > 0 ? summary : t("bulk_cancel_title", { count: selectedBookings.length })}
           description={t("bulk_cancel_description")}>
-          {results.length > 0 && (
-            <div role="status" className="mb-4 text-sm">
-              <p className="font-medium text-emphasis">
-                {t("bulk_cancel_summary", {
-                  succeeded: results.length - failures.length,
-                  failed: failures.length,
-                })}
-              </p>
-              <ul className="mt-2 list-disc pl-5 text-error">
-                {failures.map((failure) => (
-                  <li key={failure.uid}>
-                    {titleByUid.get(failure.uid) ?? failure.uid}:{" "}
+          <ul className="mb-4 list-disc pl-5 text-default text-sm" role="status">
+            {results.length > 0
+              ? failures.map((failure) => (
+                  <li key={failure.uid} className="text-error">
+                    {failure.title}:{" "}
                     {failure.message || t("error_with_status_code_occured", { status: failure.status })}
                   </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <ul className="mb-4 list-disc pl-5 text-default text-sm">
-            {selectedBookings.map((booking) => (
-              <li key={booking.uid}>{booking.title}</li>
-            ))}
+                ))
+              : selectedBookings.map((booking) => <li key={booking.uid}>{booking.title}</li>)}
           </ul>
           <Label htmlFor="bulk-cancel-reason">{t("cancellation_reason")}</Label>
           <TextArea
@@ -124,17 +114,19 @@ export function BulkCancelBookings({
             onChange={(event) => setReason(event.target.value)}
           />
           <DialogFooter>
-            <Button color="secondary" disabled={isRunning} onClick={() => onOpenChange(false)}>
+            <Button color="secondary" disabled={isRunning} onClick={closeDialog}>
               {t("nevermind")}
             </Button>
-            <Button
-              color="destructive"
-              data-testid="bulk-cancel-confirm"
-              loading={isRunning}
-              disabled={!reason.trim() || isRunning || selectedBookings.length === 0}
-              onClick={() => submit(selectedBookings.map((booking) => booking.uid))}>
-              {failures.length > 0 ? t("bulk_cancel_retry_failed") : t("bulk_cancel_confirm")}
-            </Button>
+            {selectedBookings.length > 0 && (
+              <Button
+                color="destructive"
+                data-testid="bulk-cancel-confirm"
+                loading={isRunning}
+                disabled={!reason.trim() || isRunning}
+                onClick={submit}>
+                {failures.length > 0 ? t("bulk_cancel_retry_failed") : t("bulk_cancel_confirm")}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

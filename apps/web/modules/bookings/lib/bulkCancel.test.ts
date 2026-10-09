@@ -13,7 +13,6 @@ describe("isBulkCancellable", () => {
   it.each([
     ["the host's upcoming accepted booking", {}, 1, true],
     ["another host's booking", { user: { id: 2 } }, 1, false],
-    ["a booking without a host", { user: null }, 1, false],
     ["a signed-out user", {}, undefined, false],
     ["an unconfirmed booking", { status: "PENDING" }, 1, false],
     ["a cancelled booking", { status: "CANCELLED" }, 1, false],

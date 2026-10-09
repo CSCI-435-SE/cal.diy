@@ -59,8 +59,7 @@ export function useBulkCancelSelection({ bookings, enabled, userId, resetKey }: 
     selection,
     selectedBookings,
     canSelectMore,
-    selectAll: () =>
-      setSelectedUids(eligibleBookings.slice(0, BULK_CANCEL_LIMIT).map((booking) => booking.uid)),
+    selectAll: () => setSelectedUids(eligibleBookings.slice(0, BULK_CANCEL_LIMIT).map(({ uid }) => uid)),
     clearSelection: () => setSelectedUids([]),
     deselect: (uids: string[]) => setSelectedUids((prev) => prev.filter((uid) => !uids.includes(uid))),
   };
