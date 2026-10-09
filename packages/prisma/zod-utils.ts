@@ -151,6 +151,12 @@ const _eventTypeMetaDataSchemaWithoutApps = z.object({
   giphyThankYouPage: z.string().optional(),
   additionalNotesRequired: z.boolean().optional(),
   disableSuccessPage: z.boolean().optional(),
+  bookingReminderMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .optional(),
   disableStandardEmails: z
     .object({
       all: z

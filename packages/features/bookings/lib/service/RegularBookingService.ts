@@ -2552,7 +2552,7 @@ async function handler(
 
   try {
     if (isConfirmedByDefault && !isDryRun) {
-      await scheduleBookingReminderEmail(booking);
+      await scheduleBookingReminderEmail(booking, eventType.metadata?.bookingReminderMinutes);
     }
   } catch (error) {
     tracingLogger.error("Error while scheduling booking reminder email", safeStringify(error));
