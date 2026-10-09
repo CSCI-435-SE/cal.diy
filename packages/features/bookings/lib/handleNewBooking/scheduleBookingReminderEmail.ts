@@ -1,13 +1,15 @@
 import tasker from "@calcom/features/tasker";
-
-export const BOOKING_REMINDER_LEAD_TIME_MS = 24 * 60 * 60 * 1000;
+import { DEFAULT_BOOKING_REMINDER_MINUTES } from "../bookingReminderOptions";
 
 /**
  * Keyed on the booking uid so the existing cancel/reschedule cleanup
  * (`cancelNoShowTasksForBooking`, which deletes every task for that uid) removes it too.
  */
-export async function scheduleBookingReminderEmail(booking: { id: number; uid: string; startTime: Date }) {
-  const scheduledAt = new Date(booking.startTime.getTime() - BOOKING_REMINDER_LEAD_TIME_MS);
+export async function scheduleBookingReminderEmail(
+  booking: { id: number; uid: string; startTime: Date },
+  reminderMinutes = DEFAULT_BOOKING_REMINDER_MINUTES
+) {
+  const scheduledAt = new Date(booking.startTime.getTime() - reminderMinutes * 60 * 1000);
   if (scheduledAt <= new Date()) return;
 
   await tasker.create(
