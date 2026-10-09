@@ -382,6 +382,10 @@ const schemaDefaultConferencingApp = z.object({
   appLink: z.string().optional(),
 });
 
+export const defaultLandingPageOptions = ["event-types", "bookings", "availability"] as const;
+export const defaultLandingPageSchema = z.enum(defaultLandingPageOptions);
+export type DefaultLandingPage = z.infer<typeof defaultLandingPageSchema>;
+
 export const userMetadata = z
   .object({
     proPaidForByTeamId: z.number().optional(),
@@ -391,6 +395,7 @@ export const userMetadata = z
     sessionTimeout: z.number().optional(), // Minutes
     defaultConferencingApp: schemaDefaultConferencingApp.optional(),
     defaultBookerLayouts: bookerLayouts.optional(),
+    defaultLandingPage: defaultLandingPageSchema.optional(),
     emailChangeWaitingForVerification: z
       .string()
       .transform((data) => data.toLowerCase())
