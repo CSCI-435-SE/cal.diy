@@ -478,6 +478,60 @@ describe("Booking Actions", () => {
       expect(noShowAction?.label).toBe("unmark_as_no_show");
       expect(noShowAction?.icon).toBe("eye");
     });
+
+    describe("book_again", () => {
+      const baseBooking = createMockContext().booking;
+      const bookingWithUsername = {
+        ...baseBooking,
+        user: { ...baseBooking.user, username: "organizer" },
+      } as BookingActionContext["booking"];
+
+      it("should link a past booking to the same event type prefilled with the first attendee", () => {
+        const context = createMockContext({ booking: bookingWithUsername, isBookingInPast: true });
+        const bookAgainAction = getAfterEventActions(context).find((a) => a.id === "book_again");
+
+        expect(bookAgainAction?.label).toBe("book_again");
+        expect(bookAgainAction?.href).toBe("/organizer/test-event?name=John+Doe&email=john%40example.com");
+        expect(bookAgainAction?.disabled).toBe(false);
+      });
+
+      it("should be disabled for upcoming bookings", () => {
+        const context = createMockContext({ booking: bookingWithUsername, isBookingInPast: false });
+        const bookAgainAction = getAfterEventActions(context).find((a) => a.id === "book_again");
+
+        expect(bookAgainAction?.disabled).toBe(true);
+      });
+
+      it("should stay enabled for cancelled past bookings", () => {
+        const context = createMockContext({
+          booking: bookingWithUsername,
+          isBookingInPast: true,
+          isCancelled: true,
+        });
+        const bookAgainAction = getAfterEventActions(context).find((a) => a.id === "book_again");
+
+        expect(bookAgainAction?.disabled).toBe(false);
+      });
+
+      it("should be disabled when there is no attendee to prefill", () => {
+        const context = createMockContext({
+          booking: bookingWithUsername,
+          isBookingInPast: true,
+          attendeeList: [],
+        });
+        const bookAgainAction = getAfterEventActions(context).find((a) => a.id === "book_again");
+
+        expect(bookAgainAction?.href).toBeUndefined();
+        expect(bookAgainAction?.disabled).toBe(true);
+      });
+
+      it("should be disabled when the organizer has no username to link to", () => {
+        const context = createMockContext({ isBookingInPast: true });
+        const bookAgainAction = getAfterEventActions(context).find((a) => a.id === "book_again");
+
+        expect(bookAgainAction?.disabled).toBe(true);
+      });
+    });
   });
 
   describe("shouldShowPendingActions", () => {
