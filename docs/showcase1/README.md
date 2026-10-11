@@ -1,7 +1,7 @@
 ## Tool Info
 
-Tool name: `DBeaver`
-Tool version: Latest release (`26.2.2`)
+Tool name: `DBeaver`\
+Tool version: Latest release (`26.2.2`)\
 [Link to tool](https://dbeaver.io/download/)
 
 ## What problem does DBeaver solve?
