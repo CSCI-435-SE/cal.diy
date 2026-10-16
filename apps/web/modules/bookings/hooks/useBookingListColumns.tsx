@@ -2,11 +2,12 @@ import { ColumnFilterType } from "@calcom/features/data-table";
 import { isSeparatorRow } from "@calcom/features/data-table/lib/separator";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type useMeQuery from "@calcom/trpc/react/hooks/useMeQuery";
+import { Checkbox } from "@calcom/ui/components/form";
 import BookingListItem from "@calcom/web/components/booking/BookingListItem";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
-
 import type { BookingListingStatus, RowData } from "../types";
+import type { BookingRowSelection } from "./useBulkCancelSelection";
 
 export function useBookingListColumns({
   user,
@@ -14,12 +15,14 @@ export function useBookingListColumns({
   canReadOthersBookings,
   bookingsV3Enabled,
   handleBookingClick,
+  selection,
 }: {
   user: ReturnType<typeof useMeQuery>["data"];
   status: BookingListingStatus;
   canReadOthersBookings: boolean;
   bookingsV3Enabled: boolean;
   handleBookingClick: (bookingUid: string) => void;
+  selection?: BookingRowSelection;
 }) {
   const { t } = useLocale();
 
@@ -128,7 +131,7 @@ export function useBookingListColumns({
           }
 
           const { booking, recurringInfo, isToday } = row;
-          return (
+          const item = (
             <BookingListItem
               key={booking.id}
               isToday={isToday}
@@ -144,8 +147,28 @@ export function useBookingListColumns({
               {...booking}
             />
           );
+          if (!selection) return item;
+
+          const isSelected = selection.isSelected(booking.uid);
+          return (
+            <div className="flex w-full items-center">
+              {/* Selecting must never count as a row click, which would open the booking details */}
+              <div className="w-10 shrink-0 pl-4" onClick={(event) => event.stopPropagation()}>
+                {selection.isSelectable(booking.uid) && (
+                  <Checkbox
+                    checked={isSelected}
+                    disabled={!isSelected && !selection.canSelectMore}
+                    onCheckedChange={() => selection.onToggle(booking.uid)}
+                    aria-label={t("bulk_cancel_select_booking", { title: booking.title })}
+                    data-testid={`bulk-cancel-select-${booking.uid}`}
+                  />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">{item}</div>
+            </div>
+          );
         },
       }),
     ];
-  }, [user, status, t, bookingsV3Enabled, handleBookingClick]);
+  }, [user, status, t, bookingsV3Enabled, handleBookingClick, selection]);
 }
