@@ -135,6 +135,11 @@ export type EventAdvancedTabProps = EventAdvancedBaseProps & {
   verifiedEmails?: string[];
 };
 
+// Shown in the pickers until the owner picks a color. Not saved unless changed,
+// so an event type without booking page colors keeps the theme's defaults.
+const DEFAULT_BOOKING_PAGE_BACKGROUND_COLOR = "#ffffff";
+const DEFAULT_BOOKING_PAGE_TEXT_COLOR = "#101010";
+
 type CalendarSettingsProps = {
   eventType: EventAdvancedTabProps["eventType"];
   customClassNames?: EventAdvancedTabCustomClassNames;
@@ -554,6 +559,14 @@ export const EventAdvancedTab = ({
       lightEventTypeColor: DEFAULT_LIGHT_BRAND_COLOR,
       darkEventTypeColor: DEFAULT_DARK_BRAND_COLOR,
     }
+  );
+
+  const [bookingPageContrastError, setBookingPageContrastError] = useState(
+    () =>
+      !checkWCAGContrastColor(
+        eventTypeColorState.backgroundColor ?? DEFAULT_BOOKING_PAGE_BACKGROUND_COLOR,
+        eventTypeColorState.textColor ?? DEFAULT_BOOKING_PAGE_TEXT_COLOR
+      )
   );
 
   const userTimeZone = extractHostTimezone({
@@ -1456,6 +1469,56 @@ export const EventAdvancedTab = ({
                       severity="warning"
                       className={customClassNames?.eventTypeColors?.warningText}
                       message={t("event_type_color_dark_theme_contrast_error")}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-6 sm:mt-0">
+                <p className="mb-2 block font-medium text-default text-sm">
+                  {t("booking_page_background_color")}
+                </p>
+                <ColorPicker
+                  defaultValue={eventTypeColorState.backgroundColor ?? DEFAULT_BOOKING_PAGE_BACKGROUND_COLOR}
+                  onChange={(value) => {
+                    const newVal = {
+                      ...eventTypeColorState,
+                      backgroundColor: value,
+                    };
+                    formMethods.setValue("eventTypeColor", newVal, { shouldDirty: true });
+                    setEventTypeColorState(newVal);
+                    setBookingPageContrastError(
+                      !checkWCAGContrastColor(value, newVal.textColor ?? DEFAULT_BOOKING_PAGE_TEXT_COLOR)
+                    );
+                  }}
+                />
+              </div>
+
+              <div className="mt-6 sm:mt-0">
+                <p className="mb-2 block font-medium text-default text-sm">{t("booking_page_text_color")}</p>
+                <ColorPicker
+                  defaultValue={eventTypeColorState.textColor ?? DEFAULT_BOOKING_PAGE_TEXT_COLOR}
+                  onChange={(value) => {
+                    const newVal = {
+                      ...eventTypeColorState,
+                      textColor: value,
+                    };
+                    formMethods.setValue("eventTypeColor", newVal, { shouldDirty: true });
+                    setEventTypeColorState(newVal);
+                    setBookingPageContrastError(
+                      !checkWCAGContrastColor(
+                        newVal.backgroundColor ?? DEFAULT_BOOKING_PAGE_BACKGROUND_COLOR,
+                        value
+                      )
+                    );
+                  }}
+                />
+                {bookingPageContrastError ? (
+                  <div className="mt-4">
+                    <Alert
+                      severity="warning"
+                      className={customClassNames?.eventTypeColors?.warningText}
+                      message={t("booking_page_colors_contrast_error")}
                     />
                   </div>
                 ) : null}
