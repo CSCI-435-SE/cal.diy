@@ -266,6 +266,9 @@ export const eventTypeColor = z
   .object({
     lightEventTypeColor: z.string(),
     darkEventTypeColor: z.string(),
+    // Optional so rows saved before booking page colors existed still parse.
+    backgroundColor: z.string().optional(),
+    textColor: z.string().optional(),
   })
   .nullable();
 
