@@ -38,6 +38,7 @@ import StickyBox from "react-sticky-box";
 import { Toaster } from "sonner";
 import { shallow } from "zustand/shallow";
 import { useIsQuickAvailabilityCheckFeatureEnabled } from "../hooks/useIsQuickAvailabilityCheckFeatureEnabled";
+import { getBookingPageColorStyle } from "../lib/getBookingPageColorStyle";
 import type { WrappedBookerProps } from "../types";
 import { AvailableTimeSlots } from "./AvailableTimeSlots";
 import { BookEventForm } from "./BookEventForm";
@@ -343,7 +344,8 @@ const BookerComponent = ({
           layout === BookerLayouts.MONTH_VIEW && !isEmbed && "my-20 ",
           layout === BookerLayouts.MONTH_VIEW ? "overflow-visible" : "overflow-clip",
           `${customClassNames?.bookerWrapper}`
-        )}>
+        )}
+        style={getBookingPageColorStyle(event.data?.bookingPageColors)}>
         <div
           ref={animationScope}
           data-testid="booker-container"
