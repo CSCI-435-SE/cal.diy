@@ -1,0 +1,6 @@
+1. 
+Our team has not met yet to fully flesh out who is doing what. But I have already started to plan out what our method for implementing the 2FA enforcement is. I am going to implement this within this sprint if other team members do not wish to do so.
+2.
+I have learned more about the interaction between the front end and the back end. More specifically, I have learned how the API and the front end do NOT act like a traditional API backend and website front end. This is because the API backend gets addressed directly from the front end as a whole unit of the website, instead of a traditional API which would be a different URL for the backend and the frontend
+3.
+I cannot think of anything I would change right now that isn't a requirement. If I were doing this myself or leading a team directly, I would have a different system to story board points. I would also have a significantly shorted user story, as I am a more direct developer and like having statements such as "Implement an overview page that does x y z" instead of "as a user... with... that...".
