@@ -1,6 +1,7 @@
 "use client";
 
 import dayjs from "@calcom/dayjs";
+import { useTimePreferences } from "@calcom/features/bookings/lib/timePreferences";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { trpc } from "@calcom/trpc/react";
 import useMeQuery from "@calcom/trpc/react/hooks/useMeQuery";
@@ -9,6 +10,7 @@ import { Button } from "@calcom/ui/components/button";
 import { ButtonGroup } from "@calcom/ui/components/buttonGroup";
 import { ChevronLeftIcon, ChevronRightIcon } from "@coss/ui/icons";
 import { getCoreRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
+import { createParser, useQueryState } from "nuqs";
 import React, { useEffect, useMemo } from "react";
 import { useBookingCalendarData } from "~/bookings/hooks/useBookingCalendarData";
 import { useBookingFilters } from "~/bookings/hooks/useBookingFilters";
@@ -18,18 +20,33 @@ import { useCurrentWeekStart } from "~/bookings/hooks/useCurrentWeekStart";
 import { useFacetedUniqueValues } from "~/bookings/hooks/useFacetedUniqueValues";
 import { DataTableFilters } from "~/data-table/components/filters";
 import { buildFilterColumns, getFilterColumnVisibility } from "../columns/filterColumns";
+import { getMonthGrid, getMonthQueryRange } from "../lib/monthUtils";
 import { getWeekStart } from "../lib/weekUtils";
 import { BookingDetailsSheetStoreProvider } from "../store/bookingDetailsSheetStore";
 import type { BookingListingStatus, BookingsGetOutput, RowData } from "../types";
 import { BookingCalendarView } from "./BookingCalendarView";
 import { BookingDetailsSheet } from "./BookingDetailsSheet";
+import { BookingMonthView } from "./BookingMonthView";
 import { ViewToggleButton } from "./ViewToggleButton";
 import { WeekPicker } from "./WeekPicker";
 
 // For calendar view, fetch all statuses except cancelled
 const STATUSES: BookingListingStatus[] = ["upcoming", "unconfirmed", "recurring", "past"];
 
+const monthParser = createParser({
+  parse: (value: string) => {
+    const parsed = dayjs(value, "YYYY-MM", true);
+    return parsed.isValid() ? parsed.startOf("month") : dayjs().startOf("month");
+  },
+  serialize: (value: dayjs.Dayjs) => value.format("YYYY-MM"),
+});
+
+function useCurrentMonth() {
+  return useQueryState("month", monthParser.withDefault(dayjs().startOf("month")));
+}
+
 interface BookingCalendarContainerProps {
+  mode: "week" | "month";
   status: BookingListingStatus;
   permissions: {
     canReadOthersBookings: boolean;
@@ -53,6 +70,7 @@ interface BookingCalendarInnerProps extends BookingCalendarContainerProps {
 }
 
 function BookingCalendarInner({
+  mode,
   status,
   permissions,
   bookingsV3Enabled,
@@ -62,11 +80,14 @@ function BookingCalendarInner({
   errorMessage,
   hasNextPage,
   isFetched,
+  isPending,
   isFetchingNextPage,
 }: BookingCalendarInnerProps) {
-  const { t } = useLocale();
+  const { t, i18n } = useLocale();
   const user = useMeQuery().data;
   const { currentWeekStart, setCurrentWeekStart, userWeekStart } = useCurrentWeekStart();
+  const [currentMonth, setCurrentMonth] = useCurrentMonth();
+  const isMonth = mode === "month";
 
   const rowData = useBookingCalendarData({ data, status });
 
@@ -81,14 +102,17 @@ function BookingCalendarInner({
   useCalendarAutoSelector(bookings, hasNextPage, isFetched, isFetchingNextPage);
 
   const goToPreviousWeek = () => {
+    if (isMonth) return setCurrentMonth(currentMonth.subtract(1, "month"));
     setCurrentWeekStart(currentWeekStart.subtract(1, "week"));
   };
 
   const goToNextWeek = () => {
+    if (isMonth) return setCurrentMonth(currentMonth.add(1, "month"));
     setCurrentWeekStart(currentWeekStart.add(1, "week"));
   };
 
   const goToToday = () => {
+    if (isMonth) return setCurrentMonth(dayjs().startOf("month"));
     setCurrentWeekStart(getWeekStart(dayjs(), userWeekStart));
   };
 
@@ -117,15 +141,36 @@ function BookingCalendarInner({
     getFacetedUniqueValues,
   });
 
+  const calendarBody = isMonth ? (
+    <BookingMonthView
+      bookings={bookings}
+      currentMonth={currentMonth}
+      userWeekStart={userWeekStart}
+      isLoading={isPending || hasNextPage || isFetchingNextPage}
+    />
+  ) : (
+    <BookingCalendarView
+      bookings={bookings}
+      currentWeekStart={currentWeekStart}
+      onWeekStartChange={setCurrentWeekStart}
+    />
+  );
+
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <WeekPicker
-            currentWeekStart={currentWeekStart}
-            userWeekStart={userWeekStart}
-            onDateChange={setCurrentWeekStart}
-          />
+          {isMonth ? (
+            <h2 className="text-emphasis font-cal text-lg" aria-live="polite">
+              {currentMonth.toDate().toLocaleDateString(i18n.language, { month: "long", year: "numeric" })}
+            </h2>
+          ) : (
+            <WeekPicker
+              currentWeekStart={currentWeekStart}
+              userWeekStart={userWeekStart}
+              onDateChange={setCurrentWeekStart}
+            />
+          )}
           {allowedFilterIds.length > 0 && <DataTableFilters.FilterBar table={table} />}
         </div>
 
@@ -135,26 +180,18 @@ function BookingCalendarInner({
           </Button>
           <ButtonGroup combined>
             <Button color="secondary" onClick={goToPreviousWeek}>
-              <span className="sr-only">{t("view_previous_week")}</span>
+              <span className="sr-only">{t(isMonth ? "view_previous_month" : "view_previous_week")}</span>
               <ChevronLeftIcon className="h-4 w-4" />
             </Button>
             <Button color="secondary" onClick={goToNextWeek}>
-              <span className="sr-only">{t("view_next_week")}</span>
+              <span className="sr-only">{t(isMonth ? "view_next_month" : "view_next_week")}</span>
               <ChevronRightIcon className="h-4 w-4" />
             </Button>
           </ButtonGroup>
           <ViewToggleButton bookingsV3Enabled={bookingsV3Enabled} />
         </div>
       </div>
-      {hasError && ErrorView ? (
-        ErrorView
-      ) : (
-        <BookingCalendarView
-          bookings={bookings}
-          currentWeekStart={currentWeekStart}
-          onWeekStartChange={setCurrentWeekStart}
-        />
-      )}
+      {hasError && ErrorView ? ErrorView : calendarBody}
 
       <BookingDetailsSheet
         userTimeZone={user?.timeZone}
@@ -169,7 +206,19 @@ function BookingCalendarInner({
 export function BookingCalendarContainer(props: BookingCalendarContainerProps) {
   const { canReadOthersBookings } = props.permissions;
   const { userIds } = useBookingFilters();
-  const { currentWeekStart, setCurrentWeekStart, userWeekStart } = useCurrentWeekStart();
+  const { currentWeekStart, userWeekStart } = useCurrentWeekStart();
+  const [currentMonth] = useCurrentMonth();
+  const { timezone } = useTimePreferences();
+
+  const dateRange = useMemo(() => {
+    if (props.mode === "month") {
+      return getMonthQueryRange(getMonthGrid(currentMonth, userWeekStart), timezone);
+    }
+    return {
+      afterStartDate: currentWeekStart.startOf("day").toISOString(),
+      beforeEndDate: currentWeekStart.add(6, "day").endOf("day").toISOString(),
+    };
+  }, [props.mode, currentMonth, currentWeekStart, userWeekStart, timezone]);
 
   const allowedFilterIds = useCalendarAllowedFilters({
     canReadOthersBookings,
@@ -181,9 +230,7 @@ export function BookingCalendarContainer(props: BookingCalendarContainerProps) {
       filters: {
         statuses: STATUSES,
         userIds,
-        // Always fetch only the current week for calendar view
-        afterStartDate: currentWeekStart.startOf("day").toISOString(),
-        beforeEndDate: currentWeekStart.add(6, "day").endOf("day").toISOString(),
+        ...dateRange,
       },
     },
     {
