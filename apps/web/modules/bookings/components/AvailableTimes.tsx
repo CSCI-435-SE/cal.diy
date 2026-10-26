@@ -17,7 +17,7 @@ import { SkeletonText } from "@calcom/ui/components/skeleton";
 import { CalendarX2Icon } from "@coss/ui/icons";
 import * as HoverCard from "@radix-ui/react-hover-card";
 import { AnimatePresence, m } from "framer-motion";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import type { Slot } from "~/schedules/lib/types";
 import type { IUseBookingLoadingStates } from "../hooks/useBookings";
 import { OutOfOfficeInSlots } from "./OutOfOfficeInSlots";
@@ -268,9 +268,22 @@ export const AvailableTimes = ({
     return <OOOSlot {...slots[0]} />;
   }
 
-  // Display ooo in slots once but after or before slots
-  const oooBeforeSlots = slots[0] && slots[0].away;
-  const oooAfterSlots = slots[slots.length - 1] && slots[slots.length - 1].away;
+  // A partial-day entry leaves a run of away slots in the middle of the day. One panel stands in for each run,
+  // at the first away slot, so the panel sits between the slots before and after the window.
+  const items: ReactNode[] = [];
+  for (let index = 0; index < slots.length; index++) {
+    const slot = slots[index];
+    if (!slot.away) {
+      items.push(<SlotItem key={slot.time} slot={slot} {...props} />);
+      continue;
+    }
+    if (index > 0 && slots[index - 1].away) continue;
+    let runEnd = index;
+    while (runEnd + 1 < slots.length && slots[runEnd + 1].away) runEnd++;
+    items.push(
+      <OOOSlot key={`ooo-${slot.time}`} {...slot} className={runEnd === slots.length - 1 ? "pb-0" : ""} />
+    );
+  }
 
   return (
     <div className={classNames("text-default flex flex-col", className)}>
@@ -285,12 +298,7 @@ export const AvailableTimes = ({
             </p>
           </div>
         )}
-        {oooBeforeSlots && !oooAfterSlots && <OOOSlot {...slots[0]} />}
-        {slots.map((slot) => {
-          if (slot.away) return null;
-          return <SlotItem key={slot.time} slot={slot} {...props} />;
-        })}
-        {oooAfterSlots && !oooBeforeSlots && <OOOSlot {...slots[slots.length - 1]} className="pb-0" />}
+        {items}
       </div>
     </div>
   );

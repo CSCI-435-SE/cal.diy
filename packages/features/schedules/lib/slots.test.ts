@@ -1,8 +1,8 @@
 import process from "node:process";
 import dayjs from "@calcom/dayjs";
 import type { DateRange } from "@calcom/features/schedules/lib/date-ranges";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import getSlots from "./slots";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import getSlots, { type GetSlots } from "./slots";
 
 let dateRangesNextDay: DateRange[];
 
@@ -1183,5 +1183,154 @@ describe("Tests 40-minute duration slot generation", () => {
     // First range: 9:00-10:20 = 80 minutes = 2 slots (9:00, 9:40)
     // Second range: 14:00-15:20 = 80 minutes = 2 slots (14:00, 14:40)
     expect(slots).toHaveLength(4);
+  });
+});
+
+describe("partial-day out-of-office windows", () => {
+  const host = {
+    fromUser: { id: 1, displayName: "Host" },
+    toUser: null,
+    reason: "Doctor",
+    emoji: "🩺",
+    notes: null,
+    showNotePublicly: false,
+  };
+  const windowsOn = (...windows: { start: string; end: string; data?: typeof host }[]) => ({
+    ...(windows[0].data ?? host),
+    windows: windows.map(({ start, end, data = host }) => ({ start, end, ...data })),
+  });
+  // Thursday 2026-10-08, 09:00 to 17:00 UTC, for a host in UTC.
+  const workingDay = { start: dayjs.utc("2026-10-08T09:00:00Z"), end: dayjs.utc("2026-10-08T17:00:00Z") };
+  const slotsFor = (
+    datesOutOfOffice: GetSlots["datesOutOfOffice"],
+    frequency = 60,
+    dateRanges = [workingDay]
+  ) =>
+    getSlots({
+      inviteeDate: dayjs.utc("2026-10-08T00:00:00Z"),
+      frequency,
+      eventLength: 60,
+      minimumBookingNotice: 0,
+      dateRanges,
+      datesOutOfOffice,
+      datesOutOfOfficeTimeZone: "UTC",
+    });
+  const awayTimes = (slots: ReturnType<typeof getSlots>) =>
+    slots.filter((slot) => slot.away).map((slot) => slot.time.toISOString());
+
+  beforeEach(() => {
+    vi.setSystemTime(dayjs.utc("2026-10-01T00:00:00Z").toDate());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("marks only the slots that overlap a mid-day window and carries the entry's data", () => {
+    const slots = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-08T14:00:00.000Z", end: "2026-10-08T16:00:00.000Z" }),
+    });
+
+    expect(slots).toHaveLength(8);
+    expect(awayTimes(slots)).toEqual(["2026-10-08T14:00:00.000Z", "2026-10-08T15:00:00.000Z"]);
+    expect(slots[5]).toMatchObject({ away: true, fromUser: host.fromUser, reason: "Doctor", emoji: "🩺" });
+    expect(slots[4].away).toBeUndefined();
+    expect(slots[4].reason).toBeUndefined();
+  });
+
+  it("marks a slot that straddles the leave time and keeps the slot that ends at it", () => {
+    const slots = slotsFor(
+      { "2026-10-08": windowsOn({ start: "2026-10-08T14:00:00.000Z", end: "2026-10-08T16:00:00.000Z" }) },
+      30
+    );
+
+    // A one-hour slot at 13:30 runs into the window; the one at 13:00 ends exactly at the leave time.
+    expect(awayTimes(slots)).toEqual([
+      "2026-10-08T13:30:00.000Z",
+      "2026-10-08T14:00:00.000Z",
+      "2026-10-08T14:30:00.000Z",
+      "2026-10-08T15:00:00.000Z",
+      "2026-10-08T15:30:00.000Z",
+    ]);
+    expect(
+      slots.find((slot) => slot.time.toISOString() === "2026-10-08T13:00:00.000Z")?.away
+    ).toBeUndefined();
+    expect(
+      slots.find((slot) => slot.time.toISOString() === "2026-10-08T16:00:00.000Z")?.away
+    ).toBeUndefined();
+  });
+
+  it("marks the one slot a window shorter than the slot interval falls in", () => {
+    const slots = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-08T14:10:00.000Z", end: "2026-10-08T14:20:00.000Z" }),
+    });
+
+    expect(awayTimes(slots)).toEqual(["2026-10-08T14:00:00.000Z"]);
+  });
+
+  it("marks a window at the start of the day and one at the end of the day", () => {
+    const morning = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-08T09:00:00.000Z", end: "2026-10-08T11:00:00.000Z" }),
+    });
+    expect(awayTimes(morning)).toEqual(["2026-10-08T09:00:00.000Z", "2026-10-08T10:00:00.000Z"]);
+    expect(morning.filter((slot) => !slot.away)).toHaveLength(6);
+
+    const evening = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-08T15:00:00.000Z", end: "2026-10-08T17:00:00.000Z" }),
+    });
+    expect(awayTimes(evening)).toEqual(["2026-10-08T15:00:00.000Z", "2026-10-08T16:00:00.000Z"]);
+    expect(evening.filter((slot) => !slot.away)).toHaveLength(6);
+  });
+
+  it("marks every slot when a window covers the whole working day", () => {
+    const slots = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-08T09:00:00.000Z", end: "2026-10-08T17:00:00.000Z" }),
+    });
+
+    expect(slots).toHaveLength(8);
+    expect(slots.every((slot) => slot.away)).toBe(true);
+  });
+
+  it("gives each of two windows on one day its own entry's data", () => {
+    const dentist = { ...host, reason: "Dentist", emoji: "🦷" };
+    const slots = slotsFor({
+      "2026-10-08": windowsOn(
+        { start: "2026-10-08T14:00:00.000Z", end: "2026-10-08T15:00:00.000Z" },
+        { start: "2026-10-08T10:00:00.000Z", end: "2026-10-08T11:00:00.000Z", data: dentist }
+      ),
+    });
+
+    expect(awayTimes(slots)).toEqual(["2026-10-08T10:00:00.000Z", "2026-10-08T14:00:00.000Z"]);
+    expect(slots[1]).toMatchObject({ reason: "Dentist", emoji: "🦷" });
+    expect(slots[5]).toMatchObject({ reason: "Doctor", emoji: "🩺" });
+  });
+
+  it("leaves a date without windows away all day, as before", () => {
+    const slots = slotsFor({ "2026-10-08": host });
+
+    expect(slots).toHaveLength(8);
+    expect(slots.every((slot) => slot.away)).toBe(true);
+  });
+
+  it("marks the right slots for a window on the spring DST change day in America/New_York", () => {
+    vi.setSystemTime(dayjs.utc("2026-03-01T00:00:00Z").toDate());
+    const timeZone = "America/New_York";
+    const slots = getSlots({
+      inviteeDate: dayjs.tz("2026-03-08T00:00:00", timeZone),
+      frequency: 60,
+      eventLength: 60,
+      minimumBookingNotice: 0,
+      dateRanges: [
+        { start: dayjs.tz("2026-03-08T09:00:00", timeZone), end: dayjs.tz("2026-03-08T17:00:00", timeZone) },
+      ],
+      // 14:00-16:00 EDT, as getPartialDayOutOfOfficeWindows stores it.
+      datesOutOfOffice: {
+        "2026-03-08": windowsOn({ start: "2026-03-08T18:00:00.000Z", end: "2026-03-08T20:00:00.000Z" }),
+      },
+      datesOutOfOfficeTimeZone: timeZone,
+    });
+
+    expect(slots[0].time.toISOString()).toBe("2026-03-08T13:00:00.000Z");
+    expect(awayTimes(slots)).toEqual(["2026-03-08T18:00:00.000Z", "2026-03-08T19:00:00.000Z"]);
   });
 });

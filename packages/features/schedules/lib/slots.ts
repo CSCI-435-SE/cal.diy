@@ -9,6 +9,36 @@ import type { DateRange } from "@calcom/features/schedules/lib/date-ranges";
 import { getTimeZone } from "@calcom/lib/dayjs";
 import { withReporting } from "@calcom/lib/sentryWrapper";
 
+type OutOfOfficeWindowMs = { startMs: number; endMs: number; data: IOutOfOfficeData[string] };
+
+// A whole-day entry marks every slot on its date. A partial-day entry marks only the slots that overlap one of
+// its windows, so a slot that straddles the leave or return time is away too: a booking there is rejected.
+function findOutOfOfficeForSlot(
+  dayData: IOutOfOfficeData[string] | undefined,
+  windowsOfDay: OutOfOfficeWindowMs[] | undefined,
+  slotStartMs: number,
+  slotEndMs: number
+): IOutOfOfficeData[string] | undefined {
+  if (!dayData) return undefined;
+  if (!windowsOfDay) return dayData;
+  return windowsOfDay.find((window) => slotStartMs < window.endMs && slotEndMs > window.startMs)?.data;
+}
+
+function parseOutOfOfficeWindows(datesOutOfOffice: IOutOfOfficeData | undefined) {
+  const windowsByDate = new Map<string, OutOfOfficeWindowMs[]>();
+  if (!datesOutOfOffice) return windowsByDate;
+  for (const [date, dayData] of Object.entries(datesOutOfOffice)) {
+    if (!dayData.windows) continue;
+    windowsByDate.set(
+      date,
+      dayData.windows
+        .map((window) => ({ startMs: Date.parse(window.start), endMs: Date.parse(window.end), data: window }))
+        .sort((a, b) => a.startMs - b.startMs)
+    );
+  }
+  return windowsByDate;
+}
+
 export type GetSlots = {
   inviteeDate: Dayjs;
   frequency: number;
@@ -97,6 +127,7 @@ function buildSlotsWithDateRanges({
   const orderedDateRanges = dateRanges.sort((a, b) => a.start.valueOf() - b.start.valueOf());
 
   // there can only ever be one slot at a given start time, and based on duration also only a single length.
+  const outOfOfficeWindowsByDate = parseOutOfOfficeWindows(datesOutOfOffice);
   const slots = new Map<
     string,
     {
@@ -189,7 +220,12 @@ function buildSlotsWithDateRanges({
         const slotDateYYYYMMDD = datesOutOfOfficeTimeZone
           ? slotStartTime.tz(datesOutOfOfficeTimeZone).format("YYYY-MM-DD")
           : slotStartTime.utc().format("YYYY-MM-DD");
-        dateOutOfOfficeExists = datesOutOfOffice?.[slotDateYYYYMMDD];
+        dateOutOfOfficeExists = findOutOfOfficeForSlot(
+          datesOutOfOffice[slotDateYYYYMMDD],
+          outOfOfficeWindowsByDate.get(slotDateYYYYMMDD),
+          slotStartTime.valueOf(),
+          slotStartTime.valueOf() + eventLength * 60 * 1000
+        );
       }
 
       let slotData: {

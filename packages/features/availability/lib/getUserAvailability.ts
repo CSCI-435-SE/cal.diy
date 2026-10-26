@@ -11,10 +11,14 @@ import type { EventTypeRepository } from "@calcom/features/eventtypes/repositori
 import type { PrismaHolidayRepository } from "@calcom/features/holidays/repositories/PrismaHolidayRepository";
 import type { PrismaOOORepository } from "@calcom/features/ooo/repositories/PrismaOOORepository";
 import type { IRedisService } from "@calcom/features/redis/IRedisService";
-import type { DateOverride, WorkingHours } from "@calcom/features/schedules/lib/date-ranges";
+import type {
+  DateOverride,
+  PartialDayOutOfOfficeWindow,
+  WorkingHours,
+} from "@calcom/features/schedules/lib/date-ranges";
 import {
   buildDateRanges,
-  getPartialDayOutOfOfficeRanges,
+  getPartialDayOutOfOfficeWindows,
   isWholeDayOutOfOffice,
   subtract,
 } from "@calcom/features/schedules/lib/date-ranges";
@@ -211,14 +215,44 @@ export interface IToUser {
   displayName: string | null;
 }
 
+export interface IOutOfOfficeEntryData {
+  fromUser: IFromUser | null;
+  toUser?: IToUser | null;
+  reason?: string | null;
+  emoji?: string | null;
+  notes?: string | null;
+  showNotePublicly?: boolean;
+}
+
+// A partial-day entry marks only the slots that overlap its window. Instants are ISO strings so the data
+// survives serialization the way the rest of the map does.
+export interface IOutOfOfficeWindow extends IOutOfOfficeEntryData {
+  start: string;
+  end: string;
+}
+
 export interface IOutOfOfficeData {
-  [key: string]: {
-    fromUser: IFromUser | null;
-    toUser?: IToUser | null;
-    reason?: string | null;
-    emoji?: string | null;
-    notes?: string | null;
-    showNotePublicly?: boolean;
+  // A date without `windows` is away all day. A date with `windows` carries the first window's data at the
+  // top level, so readers that only know whole days keep working.
+  [key: string]: IOutOfOfficeEntryData & { windows?: IOutOfOfficeWindow[] };
+}
+
+type OutOfOfficeDay = NonNullable<GetUserAvailabilityInitialData["outOfOfficeDays"]>[number];
+
+function toOutOfOfficeEntryData({
+  toUser,
+  user,
+  reason,
+  notes,
+  showNotePublicly,
+}: OutOfOfficeDay): IOutOfOfficeEntryData {
+  return {
+    fromUser: { id: user.id, displayName: user.name },
+    toUser: toUser ? { id: toUser.id, displayName: toUser.name, username: toUser.username } : null,
+    reason: reason?.reason || null,
+    emoji: reason?.emoji || null,
+    notes: showNotePublicly ? notes : null,
+    showNotePublicly,
   };
 }
 
@@ -476,10 +510,21 @@ export class UserAvailabilityService {
         dateTo: dateTo.toISOString(),
       }));
 
-    // Whole-day entries fill the per-day "away" map the booker renders. Entries with a time of day block
-    // only their window: they are subtracted together with the busy times below and never reach the map.
-    const datesOutOfOffice: IOutOfOfficeData = this.calculateOutOfOfficeRanges(outOfOfficeDays, availability);
-    const partialDayOutOfOfficeRanges = getPartialDayOutOfOfficeRanges(outOfOfficeDays, finalTimezone);
+    // Whole-day entries fill the per-day "away" map the booker renders. Entries with a time of day join the
+    // map as windows under their dates, so the slots inside them are generated and then marked away.
+    const partialDayOutOfOfficeWindows = getPartialDayOutOfOfficeWindows(
+      outOfOfficeDays ?? [],
+      finalTimezone
+    );
+    const datesOutOfOffice: IOutOfOfficeData = this.calculateOutOfOfficeRanges(
+      outOfOfficeDays,
+      availability,
+      partialDayOutOfOfficeWindows
+    );
+    const partialDayOutOfOfficeRanges = partialDayOutOfOfficeWindows.map(({ start, end }) => ({
+      start,
+      end,
+    }));
 
     const holidayBlockedDates = await this.calculateHolidayBlockedDates(
       user.id,
@@ -489,7 +534,8 @@ export class UserAvailabilityService {
     );
 
     for (const [date, holidayData] of Object.entries(holidayBlockedDates)) {
-      if (!datesOutOfOffice[date]) {
+      // A holiday blocks the whole day, so it replaces partial-day windows but not a whole-day entry.
+      if (!datesOutOfOffice[date] || datesOutOfOffice[date].windows) {
         datesOutOfOffice[date] = holidayData;
       }
     }
@@ -648,16 +694,18 @@ export class UserAvailabilityService {
       })}`
     );
 
-    const formattedBusyTimes = [
-      ...detailedBusyTimes.map((busy) => ({
-        start: dayjs(busy.start),
-        end: dayjs(busy.end),
-      })),
-      ...partialDayOutOfOfficeRanges,
-    ];
+    const formattedBusyTimes = detailedBusyTimes.map((busy) => ({
+      start: dayjs(busy.start),
+      end: dayjs(busy.end),
+    }));
 
+    // A partial-day window stays in dateRanges, so its slots are generated and marked away like a whole day's,
+    // and leaves oooExcludedDateRanges, which is what a booking is checked against (ensureAvailableUsers).
     const dateRangesInWhichUserIsAvailable = subtract(dateRanges, formattedBusyTimes);
-    const dateRangesInWhichUserIsAvailableWithoutOOO = subtract(oooExcludedDateRanges, formattedBusyTimes);
+    const dateRangesInWhichUserIsAvailableWithoutOOO = subtract(oooExcludedDateRanges, [
+      ...formattedBusyTimes,
+      ...partialDayOutOfOfficeRanges,
+    ]);
 
     const result = {
       busy: detailedBusyTimes,
@@ -737,63 +785,63 @@ export class UserAvailabilityService {
 
   calculateOutOfOfficeRanges(
     outOfOfficeDays: GetUserAvailabilityInitialData["outOfOfficeDays"],
-    availability: GetUserAvailabilityParamsDTO["availability"]
+    availability: GetUserAvailabilityParamsDTO["availability"],
+    partialDayWindows: PartialDayOutOfOfficeWindow<OutOfOfficeDay>[] = []
   ): IOutOfOfficeData {
     if (!outOfOfficeDays || outOfOfficeDays.length === 0) {
       return {};
     }
 
-    return outOfOfficeDays.reduce(
-      (acc: IOutOfOfficeData, { start, end, toUser, user, reason, notes, showNotePublicly }) => {
-        if (!isWholeDayOutOfOffice({ start, end })) {
-          return acc;
-        }
-        // here we should use startDate or today if start is before today
-        // consider timezone in start and end date range
-        const startDateRange = dayjs(start).utc().isBefore(dayjs().startOf("day").utc())
-          ? dayjs().utc().startOf("day")
-          : dayjs(start).utc().startOf("day");
-
-        // get number of day in the week and see if it's on the availability
-        const flattenDays = Array.from(
-          new Set(availability.flatMap((a) => ("days" in a ? a.days : [])))
-        ).sort((a, b) => a - b);
-
-        const endDateRange = dayjs(end).utc().endOf("day");
-
-        for (let date = startDateRange; date.isBefore(endDateRange); date = date.add(1, "day")) {
-          const dayNumberOnWeek = date.day();
-
-          if (!flattenDays?.includes(dayNumberOnWeek)) {
-            continue; // Skip to the next iteration if day not found in flattenDays
-          }
-          // null notes if not to be shown publicly
-          if (!showNotePublicly) {
-            notes = null;
-          }
-
-          let toUserData = null;
-          if (toUser) {
-            toUserData = { id: toUser.id, displayName: toUser.name, username: toUser.username };
-          }
-
-          acc[date.format("YYYY-MM-DD")] = {
-            // @TODO:  would be good having start and end availability time here, but for now should be good
-            // you can obtain that from user availability defined outside of here
-            fromUser: { id: user.id, displayName: user.name },
-            // optional chaining destructuring toUser
-            toUser: toUserData,
-            reason: reason?.reason || null,
-            emoji: reason?.emoji || null,
-            notes,
-            showNotePublicly,
-          };
-        }
-
+    const wholeDays = outOfOfficeDays.reduce((acc: IOutOfOfficeData, entry) => {
+      const { start, end } = entry;
+      if (!isWholeDayOutOfOffice({ start, end })) {
         return acc;
-      },
-      {}
-    );
+      }
+      // here we should use startDate or today if start is before today
+      // consider timezone in start and end date range
+      const startDateRange = dayjs(start).utc().isBefore(dayjs().startOf("day").utc())
+        ? dayjs().utc().startOf("day")
+        : dayjs(start).utc().startOf("day");
+
+      // get number of day in the week and see if it's on the availability
+      const flattenDays = Array.from(new Set(availability.flatMap((a) => ("days" in a ? a.days : [])))).sort(
+        (a, b) => a - b
+      );
+
+      const endDateRange = dayjs(end).utc().endOf("day");
+
+      for (let date = startDateRange; date.isBefore(endDateRange); date = date.add(1, "day")) {
+        const dayNumberOnWeek = date.day();
+
+        if (!flattenDays?.includes(dayNumberOnWeek)) {
+          continue; // Skip to the next iteration if day not found in flattenDays
+        }
+
+        acc[date.format("YYYY-MM-DD")] = toOutOfOfficeEntryData(entry);
+      }
+
+      return acc;
+    }, {});
+
+    return partialDayWindows.reduce((acc: IOutOfOfficeData, window) => {
+      const entryData = toOutOfOfficeEntryData(window.entry);
+      const record: IOutOfOfficeWindow = {
+        start: window.start.toISOString(),
+        end: window.end.toISOString(),
+        ...entryData,
+      };
+      for (const date of window.dates) {
+        const existing = acc[date];
+        // A whole-day entry already covers this date; its slots are all away.
+        if (existing && !existing.windows) continue;
+        if (existing?.windows) {
+          existing.windows.push(record);
+          continue;
+        }
+        acc[date] = { ...entryData, windows: [record] };
+      }
+      return acc;
+    }, wholeDays);
   }
 
   async _getUsersAvailability({ users, query, initialData }: GetUsersAvailabilityProps) {
