@@ -6,5 +6,9 @@ export function transformEventTypeColorsInternalToApi(
   return {
     darkThemeHex: transformedColors.darkEventTypeColor,
     lightThemeHex: transformedColors.lightEventTypeColor,
+    ...(transformedColors.backgroundColor
+      ? { bookingPageBackgroundHex: transformedColors.backgroundColor }
+      : {}),
+    ...(transformedColors.textColor ? { bookingPageTextHex: transformedColors.textColor } : {}),
   };
 }

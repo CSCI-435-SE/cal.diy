@@ -969,6 +969,136 @@ describe("transformEventColorsApiToInternal", () => {
 
     expect(result).toEqual(expectedOutput);
   });
+
+  it("should transform both booking page colors", () => {
+    const input: EventTypeColor_2024_06_14 = {
+      darkThemeHex: "#292929",
+      lightThemeHex: "#fafafa",
+      bookingPageBackgroundHex: "#1e293b",
+      bookingPageTextHex: "#f8fafc",
+    };
+
+    const result = transformEventColorsApiToInternal(input);
+
+    expect(result).toStrictEqual({
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+      backgroundColor: "#1e293b",
+      textColor: "#f8fafc",
+    });
+  });
+
+  it("should transform one booking page color without adding the other key", () => {
+    const input: EventTypeColor_2024_06_14 = {
+      darkThemeHex: "#292929",
+      lightThemeHex: "#fafafa",
+      bookingPageTextHex: "#fff",
+    };
+
+    const result = transformEventColorsApiToInternal(input);
+
+    expect(result).toStrictEqual({
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+      textColor: "#fff",
+    });
+  });
+
+  it("should add no booking page keys when neither color is sent", () => {
+    const input: EventTypeColor_2024_06_14 = {
+      darkThemeHex: "#292929",
+      lightThemeHex: "#fafafa",
+    };
+
+    const result = transformEventColorsApiToInternal(input);
+
+    expect(result).toStrictEqual({
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+    });
+  });
+
+  it("should return undefined when no color is sent, so an update leaves the column alone", () => {
+    const stored = {
+      darkEventTypeColor: "#000000",
+      lightEventTypeColor: "#ffffff",
+      backgroundColor: "#1e293b",
+    };
+
+    expect(transformEventColorsApiToInternal(undefined, stored)).toBeUndefined();
+  });
+
+  describe("on update, with stored colors", () => {
+    const stored = {
+      darkEventTypeColor: "#000000",
+      lightEventTypeColor: "#ffffff",
+      backgroundColor: "#1e293b",
+      textColor: "#f8fafc",
+    };
+
+    it("should keep the stored booking page colors when the input leaves them out", () => {
+      const input: EventTypeColor_2024_06_14 = {
+        darkThemeHex: "#292929",
+        lightThemeHex: "#fafafa",
+      };
+
+      const result = transformEventColorsApiToInternal(input, stored);
+
+      expect(result).toStrictEqual({
+        darkEventTypeColor: "#292929",
+        lightEventTypeColor: "#fafafa",
+        backgroundColor: "#1e293b",
+        textColor: "#f8fafc",
+      });
+    });
+
+    it("should replace a stored booking page color that the input sends", () => {
+      const input: EventTypeColor_2024_06_14 = {
+        darkThemeHex: "#292929",
+        lightThemeHex: "#fafafa",
+        bookingPageBackgroundHex: "#abcdef",
+      };
+
+      const result = transformEventColorsApiToInternal(input, stored);
+
+      expect(result).toStrictEqual({
+        darkEventTypeColor: "#292929",
+        lightEventTypeColor: "#fafafa",
+        backgroundColor: "#abcdef",
+        textColor: "#f8fafc",
+      });
+    });
+
+    it("should clear a stored booking page color that the input sends as null", () => {
+      const input: EventTypeColor_2024_06_14 = {
+        darkThemeHex: "#292929",
+        lightThemeHex: "#fafafa",
+        bookingPageBackgroundHex: null,
+        bookingPageTextHex: null,
+      };
+
+      const result = transformEventColorsApiToInternal(input, stored);
+
+      expect(result).toStrictEqual({
+        darkEventTypeColor: "#292929",
+        lightEventTypeColor: "#fafafa",
+      });
+    });
+
+    it("should add no booking page keys when the stored value is null", () => {
+      const input: EventTypeColor_2024_06_14 = {
+        darkThemeHex: "#292929",
+        lightThemeHex: "#fafafa",
+      };
+
+      const result = transformEventColorsApiToInternal(input, null);
+
+      expect(result).toStrictEqual({
+        darkEventTypeColor: "#292929",
+        lightEventTypeColor: "#fafafa",
+      });
+    });
+  });
 });
 
 describe("transformSeatsApiToInternal", () => {

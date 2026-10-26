@@ -46,10 +46,10 @@ export class EventTypesRepository_2024_06_14 {
     });
   }
 
-  async getEventTypeWithMetaData(eventTypeId: number) {
+  async getEventTypeWithMetaDataAndColor(eventTypeId: number) {
     return this.dbRead.prisma.eventType.findUnique({
       where: { id: eventTypeId },
-      select: { metadata: true },
+      select: { metadata: true, eventTypeColor: true },
     });
   }
 
