@@ -197,6 +197,13 @@ export class TaskRepository {
     }
   }
 
+  async cancelPendingWithReference(referenceUid: string, type: TaskTypes): Promise<boolean> {
+    const { count } = await this.deps.prismaClient.task.deleteMany({
+      where: { referenceUid, type, succeededAt: null },
+    });
+    return count > 0;
+  }
+
   async cleanup() {
     // TODO: Uncomment this later
     // return this.deps.prismaClient.task.deleteMany({
