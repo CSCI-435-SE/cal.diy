@@ -25,6 +25,7 @@ export type AppFlags = {
   "hwm-seating": boolean;
   "signup-watchlist-review": boolean;
   "sink-shortener": boolean;
+  "require-two-factor-auth": boolean;
 };
 
 export type TeamFeatures = Record<keyof AppFlags, boolean>;
@@ -38,3 +39,5 @@ export type TeamFeatures = Record<keyof AppFlags, boolean>;
 export type FeatureState = "enabled" | "disabled" | "inherit";
 
 export type FeatureId = keyof AppFlags;
+
+export const REQUIRE_TWO_FACTOR_AUTH_FLAG: FeatureId = "require-two-factor-auth";

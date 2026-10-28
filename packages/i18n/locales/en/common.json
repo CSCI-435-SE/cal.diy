@@ -4798,5 +4798,13 @@
   "dont_save_and_leave": "Don't save and leave",
   "ooo_all_day": "All day",
   "ooo_end_time_must_be_after_start_time": "End time must be after start time",
+  "admin_security_description": "Manage security policies for your Cal.diy instance.",
+  "require_2fa_for_all_users": "Require two-factor authentication for all users",
+  "require_2fa_for_all_users_description": "Users who sign in with a password must set up two-factor authentication at their next login. Users who sign in with Google or another provider aren't affected.",
+  "require_2fa_disable_confirm_title": "Stop requiring two-factor authentication?",
+  "require_2fa_disable_confirm_description": "Users will no longer be required to set up two-factor authentication. Users who already have it turned on will keep it.",
+  "require_2fa_disable_confirm_button": "Stop requiring",
+  "require_2fa_setting_updated": "Two-factor authentication requirement updated",
+  "require_2fa_setting_update_failed": "Couldn't update the two-factor authentication requirement. Please try again.",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }
