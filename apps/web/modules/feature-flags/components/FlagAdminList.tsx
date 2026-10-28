@@ -1,15 +1,13 @@
-import { useState } from "react";
-
-import { trpc } from "@calcom/trpc/react";
+import { REQUIRE_TWO_FACTOR_AUTH_FLAG } from "@calcom/features/flags/config";
 import type { RouterOutputs } from "@calcom/trpc/react";
+import { trpc } from "@calcom/trpc/react";
 import { Badge } from "@calcom/ui/components/badge";
 import { Button } from "@calcom/ui/components/button";
 import { PanelCard } from "@calcom/ui/components/card";
 import { Switch } from "@calcom/ui/components/form";
-import { ListItem, ListItemText, ListItemTitle } from "@calcom/ui/components/list";
-import { List } from "@calcom/ui/components/list";
+import { List, ListItem, ListItemText, ListItemTitle } from "@calcom/ui/components/list";
 import { showToast } from "@calcom/ui/components/toast";
-
+import { useState } from "react";
 import { AssignFeatureSheet } from "./AssignFeatureSheet";
 
 export const FlagAdminList = () => {
@@ -17,17 +15,19 @@ export const FlagAdminList = () => {
   const [selectedFlag, setSelectedFlag] = useState<Flag | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const groupedFlags = data.reduce(
-    (acc, flag) => {
-      const type = flag.type || "OTHER";
-      if (!acc[type]) {
-        acc[type] = [];
-      }
-      acc[type].push(flag);
-      return acc;
-    },
-    {} as Record<string, typeof data>
-  );
+  const groupedFlags = data
+    .filter((flag) => flag.slug !== REQUIRE_TWO_FACTOR_AUTH_FLAG)
+    .reduce(
+      (acc, flag) => {
+        const type = flag.type || "OTHER";
+        if (!acc[type]) {
+          acc[type] = [];
+        }
+        acc[type].push(flag);
+        return acc;
+      },
+      {} as Record<string, typeof data>
+    );
 
   const sortedTypes = Object.keys(groupedFlags).sort();
 
