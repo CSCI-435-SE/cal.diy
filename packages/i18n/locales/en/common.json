@@ -321,6 +321,8 @@
   "2fa_confirm_current_password": "Confirm your current password to get started.",
   "2fa_scan_image_or_use_code": "Scan the image below with the authenticator app on your phone or manually enter the text code instead.",
   "text": "Text",
+  "visual": "Visual",
+  "availability_input_mode": "Availability input mode",
   "your_phone_number": "Your Phone Number",
   "multiline_text": "Multiline text",
   "number": "Number",
