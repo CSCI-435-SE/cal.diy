@@ -6,6 +6,7 @@ import { useTabsNavigations } from "@calcom/atoms/event-types/hooks/useTabsNavig
 import type { ChildrenEventType } from "@calcom/features/eventtypes/components/ChildrenEventTypeSelect";
 import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
 import { WEBSITE_URL } from "@calcom/lib/constants";
+import { getErrorFromUnknown } from "@calcom/lib/errors";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { useTypedQuery } from "@calcom/lib/hooks/useTypedQuery";
 import { HttpError } from "@calcom/lib/http-error";
@@ -20,6 +21,7 @@ import dynamic from "next/dynamic";
 import { useRouter as useAppRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { EventType as EventTypeComponent } from "./EventType";
 
 type EventPermissions = {
@@ -36,6 +38,10 @@ const ManagedEventTypeDialog = dynamic(
 );
 
 const AssignmentWarningDialog = dynamic(() => import("./dialogs/AssignmentWarningDialog"));
+
+const UnsavedChangesDialog = dynamic(() =>
+  import("./dialogs/UnsavedChangesDialog").then((mod) => mod.UnsavedChangesDialog)
+);
 
 const EventSetupTab = dynamic(() => import("./tabs/setup/EventSetupTabWebWrapper").then((mod) => mod), {
   loading: () => null,
@@ -117,6 +123,7 @@ const EventTypeWeb = ({
   const leaveWithoutAssigningHosts = useRef(false);
   const [isOpenAssignmentWarnDialog, setIsOpenAssignmentWarnDialog] = useState<boolean>(false);
   const [pendingRoute, setPendingRoute] = useState("");
+  const resolveDialogSaveRef = useRef<((saved: boolean) => void) | null>(null);
   const { eventType, locationOptions, team, teamMembers, destinationCalendar } = rest;
   const [slugExistsChildrenDialogOpen, setSlugExistsChildrenDialogOpen] = useState<ChildrenEventType[]>([]);
   const { data: eventTypeApps, isPending: isPendingApps } = trpc.viewer.apps.integrations.useQuery({
@@ -170,8 +177,40 @@ const EventTypeWeb = ({
     },
   });
 
-  const { form, handleSubmit } = useEventTypeForm({ eventType, onSubmit: updateMutation.mutate });
+  const { form, handleSubmit } = useEventTypeForm({
+    eventType,
+    onSubmit: (input) => {
+      // Set only while the unsaved-changes dialog's Save is submitting; taking it here ties
+      // the dialog to this one request, so a later Save from the header never navigates.
+      const resolveDialogSave = resolveDialogSaveRef.current;
+      resolveDialogSaveRef.current = null;
+      updateMutation.mutate(input, {
+        onSuccess: () => resolveDialogSave?.(true),
+        onError: () => resolveDialogSave?.(false),
+      });
+    },
+  });
   const slug = form.watch("slug") ?? eventType.slug;
+
+  const saveFromDialog = () =>
+    new Promise<boolean>((resolve) => {
+      resolveDialogSaveRef.current = resolve;
+      form
+        .handleSubmit(handleSubmit, () => showToast(t("error_updating_settings"), "error"))()
+        .catch((error) => showToast(getErrorFromUnknown(error).message, "error"))
+        .finally(() => {
+          // Still unclaimed means no request was sent: the form was invalid or nothing changed.
+          if (resolveDialogSaveRef.current !== resolve) return;
+          resolveDialogSaveRef.current = null;
+          resolve(false);
+        });
+    });
+
+  const unsavedChangesGuard = useUnsavedChangesGuard({
+    hasUnsavedChanges: form.formState.isDirty,
+    navigate: (href) => appRouter.push(href),
+    save: saveFromDialog,
+  });
 
   const orgBranding = null as { id: number; [key: string]: unknown } | null;
 
@@ -365,6 +404,12 @@ const EventTypeWeb = ({
         pendingRoute={pendingRoute}
         leaveWithoutAssigningHosts={leaveWithoutAssigningHosts}
         id={eventType.id}
+      />
+      <UnsavedChangesDialog
+        open={unsavedChangesGuard.blockedHref !== null}
+        onStay={unsavedChangesGuard.stay}
+        onDiscardAndLeave={unsavedChangesGuard.discardAndLeave}
+        onSaveAndLeave={unsavedChangesGuard.saveAndLeave}
       />
     </EventTypeComponent>
   );

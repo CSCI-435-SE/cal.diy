@@ -1,6 +1,5 @@
-import { v4 as uuidv4 } from "uuid";
-
 import { selectOOOEntries } from "@calcom/app-store/zapier/api/subscriptions/listOOOEntries";
+import type { Dayjs } from "@calcom/dayjs";
 import dayjs from "@calcom/dayjs";
 import { sendBookingRedirectNotification } from "@calcom/emails/workflow-email-service";
 import type { GetSubscriberOptions } from "@calcom/features/webhooks/lib/getWebhooks";
@@ -11,11 +10,10 @@ import { getTranslation } from "@calcom/i18n/server";
 import prisma from "@calcom/prisma";
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import type { TrpcSessionUser } from "@calcom/trpc/server/types";
-
 import { TRPCError } from "@trpc/server";
-
+import { v4 as uuidv4 } from "uuid";
 import { isAdminForUser } from "./outOfOffice.utils";
-import { type TOutOfOfficeInputSchema } from "./outOfOfficeCreateOrUpdate.schema";
+import type { TOutOfOfficeInputSchema } from "./outOfOfficeCreateOrUpdate.schema";
 
 type TBookingRedirect = {
   ctx: {
@@ -24,17 +22,29 @@ type TBookingRedirect = {
   input: TOutOfOfficeInputSchema;
 };
 
+const atTimeOfDay = (day: Dayjs, time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return day.hour(hours).minute(minutes);
+};
+
 export const outOfOfficeCreateOrUpdate = async ({ ctx, input }: TBookingRedirect) => {
   const { startDate, endDate } = input.dateRange;
   if (!startDate || !endDate) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "start_date_and_end_date_required" });
   }
 
-  const startTimeUtc = dayjs.utc(startDate).add(input.startDateOffset, "minute").startOf("day");
-  const endTimeUtc = dayjs.utc(endDate).add(input.endDateOffset, "minute").endOf("day");
+  // Adding the client's offset turns the instant into the host's wall-clock time, which is then kept in the
+  // UTC columns. A time of day is applied to that wall-clock date. An end of 23:59 means the end of the day,
+  // as it does for date overrides, so a 00:00-23:59 entry is stored like a whole-day entry.
+  const startDayUtc = dayjs.utc(startDate).add(input.startDateOffset, "minute").startOf("day");
+  const endDayUtc = dayjs.utc(endDate).add(input.endDateOffset, "minute").startOf("day");
+  const startTimeUtc = input.startTime ? atTimeOfDay(startDayUtc, input.startTime) : startDayUtc;
+  const endTimeUtc =
+    input.endTime && input.endTime !== "23:59"
+      ? atTimeOfDay(endDayUtc, input.endTime)
+      : endDayUtc.endOf("day");
 
-  // If start date is after end date throw error
-  if (startTimeUtc.isAfter(endTimeUtc)) {
+  if (!startTimeUtc.isBefore(endTimeUtc)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "start_date_must_be_before_end_date" });
   }
 

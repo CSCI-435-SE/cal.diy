@@ -3,9 +3,11 @@
 import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 import SectionBottomActions from "@calcom/features/settings/SectionBottomActions";
 import { formatLocalizedDateTime } from "@calcom/lib/dayjs";
+import { getDefaultLandingPage } from "@calcom/lib/defaultLandingPage";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { localeOptions } from "@calcom/lib/i18n";
 import { nameOfDay } from "@calcom/lib/weekday";
+import type { DefaultLandingPage } from "@calcom/prisma/zod-utils";
 import type { RouterOutputs } from "@calcom/trpc/react";
 import { trpc } from "@calcom/trpc/react";
 import classNames from "@calcom/ui/classNames";
@@ -33,6 +35,10 @@ export type FormValues = {
   };
   weekStart: {
     value: string;
+    label: string;
+  };
+  defaultLandingPage: {
+    value: DefaultLandingPage;
     label: string;
   };
   travelSchedules: {
@@ -99,6 +105,13 @@ const GeneralView = ({ user, travelSchedules }: GeneralViewProps) => {
     { value: "Saturday", label: nameOfDay(localeProp, 6) },
   ];
 
+  const defaultLandingPageOptions: FormValues["defaultLandingPage"][] = [
+    { value: "event-types", label: t("event_types_page_title") },
+    { value: "bookings", label: t("bookings") },
+    { value: "availability", label: t("availability") },
+  ];
+  const savedDefaultLandingPage = getDefaultLandingPage(user.metadata);
+
   const formMethods = useForm<FormValues>({
     defaultValues: {
       locale: {
@@ -113,6 +126,11 @@ const GeneralView = ({ user, travelSchedules }: GeneralViewProps) => {
       weekStart: {
         value: user.weekStart,
         label: weekStartOptions.find((option) => option.value === user.weekStart)?.label || "",
+      },
+      defaultLandingPage: {
+        value: savedDefaultLandingPage,
+        label:
+          defaultLandingPageOptions.find((option) => option.value === savedDefaultLandingPage)?.label || "",
       },
       travelSchedules:
         travelSchedules.map((schedule) => {
@@ -154,13 +172,14 @@ const GeneralView = ({ user, travelSchedules }: GeneralViewProps) => {
       <div>
         <Form
           form={formMethods}
-          handleSubmit={async (values) => {
+          handleSubmit={async ({ defaultLandingPage, ...values }) => {
             setIsUpdateBtnLoading(true);
             mutation.mutate({
               ...values,
               locale: values.locale.value,
               timeFormat: values.timeFormat.value,
               weekStart: values.weekStart.value,
+              metadata: { defaultLandingPage: defaultLandingPage.value },
             });
           }}>
           <div className="border-subtle border-x border-y-0 px-4 py-8 sm:px-6">
@@ -309,6 +328,30 @@ const GeneralView = ({ user, travelSchedules }: GeneralViewProps) => {
                 </>
               )}
             />
+            <Controller
+              name="defaultLandingPage"
+              control={formMethods.control}
+              render={({ field: { value } }) => (
+                <>
+                  <Label className="text-emphasis mt-6">
+                    <>{t("default_landing_page")}</>
+                  </Label>
+                  <Select
+                    value={value}
+                    options={defaultLandingPageOptions}
+                    onChange={(event) => {
+                      if (event)
+                        formMethods.setValue("defaultLandingPage", { ...event }, { shouldDirty: true });
+                    }}
+                    data-testid="default-landing-page-select"
+                  />
+                </>
+              )}
+            />
+            <div className="text-gray text-subtle mt-2 flex items-start text-xs">
+              <Icon name="info" className="mr-2 mt-0.25" />
+              {t("default_landing_page_hint")}
+            </div>
           </div>
 
           <SectionBottomActions align="end">

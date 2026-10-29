@@ -1,6 +1,3 @@
-import { default as cloneDeep } from "lodash/cloneDeep";
-import type { z } from "zod";
-
 import dayjs from "@calcom/dayjs";
 import type BaseEmail from "@calcom/emails/templates/_base-email";
 import type { EventNameObjectType } from "@calcom/features/eventtypes/lib/eventNaming";
@@ -12,7 +9,8 @@ import { withReporting } from "@calcom/lib/sentryWrapper";
 import { prisma } from "@calcom/prisma";
 import type { EventTypeMetaDataSchema } from "@calcom/prisma/zod-utils";
 import type { CalendarEvent, Person } from "@calcom/types/Calendar";
-
+import { default as cloneDeep } from "lodash/cloneDeep";
+import type { z } from "zod";
 import AwaitingPaymentSMS from "../sms/attendee/awaiting-payment-sms";
 import CancelledSeatSMS from "../sms/attendee/cancelled-seat-sms";
 import EventCancelledSMS from "../sms/attendee/event-cancelled-sms";
@@ -25,6 +23,7 @@ import EventSuccessfullyScheduledSMS from "../sms/attendee/event-scheduled-sms";
 import { EmailType } from "./email-types";
 import AttendeeAddGuestsEmail from "./templates/attendee-add-guests-email";
 import AttendeeAwaitingPaymentEmail from "./templates/attendee-awaiting-payment-email";
+import AttendeeBookingReminderEmail from "./templates/attendee-booking-reminder-email";
 import AttendeeCancelledEmail from "./templates/attendee-cancelled-email";
 import AttendeeCancelledSeatEmail from "./templates/attendee-cancelled-seat-email";
 import AttendeeDeclinedEmail from "./templates/attendee-declined-email";
@@ -36,6 +35,7 @@ import AttendeeUpdatedEmail from "./templates/attendee-updated-email";
 import AttendeeWasRequestedToRescheduleEmail from "./templates/attendee-was-requested-to-reschedule-email";
 import OrganizerAddGuestsEmail from "./templates/organizer-add-guests-email";
 import OrganizerAttendeeCancelledSeatEmail from "./templates/organizer-attendee-cancelled-seat-email";
+import OrganizerBookingReminderEmail from "./templates/organizer-booking-reminder-email";
 import OrganizerCancelledEmail from "./templates/organizer-cancelled-email";
 import OrganizerLocationChangeEmail from "./templates/organizer-location-change-email";
 import OrganizerReassignedEmail from "./templates/organizer-reassigned-email";
@@ -577,6 +577,43 @@ export const sendOrganizerRequestReminderEmail = async (
       );
     }
   }
+};
+
+export const sendBookingReminderEmails = async (
+  calEvent: CalendarEvent,
+  eventTypeMetadata?: EventTypeMetadata
+) => {
+  const formattedCalEvent = formatCalEvent(calEvent);
+  const emailsToSend: Promise<unknown>[] = [];
+
+  if (!eventTypeDisableHostEmail(eventTypeMetadata)) {
+    emailsToSend.push(sendEmail(() => new OrganizerBookingReminderEmail({ calEvent: formattedCalEvent })));
+
+    for (const teamMember of formattedCalEvent.team?.members ?? []) {
+      emailsToSend.push(
+        sendEmail(() => new OrganizerBookingReminderEmail({ calEvent: formattedCalEvent, teamMember }))
+      );
+    }
+  }
+
+  if (!shouldSkipAttendeeEmailWithSettings(eventTypeMetadata)) {
+    for (const attendee of formattedCalEvent.attendees) {
+      emailsToSend.push(
+        sendEmail(
+          () =>
+            new AttendeeBookingReminderEmail(
+              {
+                ...formattedCalEvent,
+                ...(formattedCalEvent.hideCalendarNotes && { additionalNotes: undefined }),
+              },
+              attendee
+            )
+        )
+      );
+    }
+  }
+
+  await Promise.all(emailsToSend);
 };
 
 export const sendAwaitingPaymentEmailAndSMS = async (

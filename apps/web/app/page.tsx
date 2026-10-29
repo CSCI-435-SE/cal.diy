@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { checkOnboardingRedirect } from "@calcom/features/auth/lib/onboardingUtils";
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
+import { getUserRepository } from "@calcom/features/di/containers/UserRepository";
+import { getDefaultLandingPagePath } from "@calcom/lib/defaultLandingPage";
 
 import { buildLegacyRequest } from "@lib/buildLegacyCtx";
 
@@ -13,7 +15,7 @@ const RedirectPage = async () => {
     redirect("/auth/login");
   }
 
-  // Check if user needs onboarding and redirect before going to event-types
+  // Check if user needs onboarding and redirect before going to their landing page
   const organizationId = session.user.profile?.organizationId ?? null;
   const onboardingPath = await checkOnboardingRedirect(session.user.id, {
     checkEmailVerification: true,
@@ -23,7 +25,8 @@ const RedirectPage = async () => {
     redirect(onboardingPath);
   }
 
-  redirect("/event-types");
+  const user = await getUserRepository().findMetadataById({ id: session.user.id });
+  redirect(getDefaultLandingPagePath(user?.metadata));
 };
 
 export default RedirectPage;

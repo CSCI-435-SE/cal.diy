@@ -1,7 +1,6 @@
-import { useSearchParams, usePathname } from "next/navigation";
-import { useMemo } from "react";
-
 import { useLocale } from "@calcom/lib/hooks/useLocale";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 
 export function useBookingStatusTab() {
   const { t } = useLocale();
@@ -44,12 +43,17 @@ export function useBookingStatusTab() {
       },
     ];
 
-    return baseTabConfigs.map((tabConfig) => ({
+    const bookingTabs = baseTabConfigs.map((tabConfig) => ({
       value: tabConfig.value,
       label: t(tabConfig.label),
       dataTestId: tabConfig.dataTestId,
       href: queryString ? `${tabConfig.path}?${queryString}` : tabConfig.path,
     }));
+
+    // Booking list filters don't apply to People, so its link never carries the query string
+    const peopleTab = { value: "people", label: t("people"), dataTestId: "people", href: "/bookings/people" };
+
+    return [...bookingTabs, peopleTab];
   }, [searchParams, t]);
 
   const currentTab = useMemo(() => {

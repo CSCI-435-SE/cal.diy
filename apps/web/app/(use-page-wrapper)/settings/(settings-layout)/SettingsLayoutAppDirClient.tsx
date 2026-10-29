@@ -198,6 +198,11 @@ const getTabs = (
           trackingMetadata: { section: "admin", page: "features" },
         },
         {
+          name: "security",
+          href: "/settings/admin/security",
+          trackingMetadata: { section: "admin", page: "security" },
+        },
+        {
           name: "license",
           href: "/auth/setup?step=1",
           trackingMetadata: { section: "admin", page: "license" },

@@ -388,6 +388,13 @@ export class UserRepository {
     };
   }
 
+  async findMetadataById({ id }: { id: number }) {
+    return this.prismaClient.user.findUnique({
+      where: { id },
+      select: { metadata: true },
+    });
+  }
+
   async findSecondaryEmailByUserIdAndEmail({ userId, email }: { userId: number; email: string }) {
     return this.prismaClient.secondaryEmail.findUnique({
       where: {

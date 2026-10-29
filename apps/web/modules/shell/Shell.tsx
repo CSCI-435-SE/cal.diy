@@ -141,9 +141,11 @@ export function ShellMain(props: LayoutProps) {
               variant="icon"
               size="sm"
               color="minimal"
-              onClick={() =>
-                typeof props.backPath === "string" ? router.push(props.backPath as string) : router.back()
-              }
+              // A real link, so pages that guard link clicks (e.g. the event type editor's
+              // unsaved-changes dialog) also catch the back arrow.
+              {...(typeof props.backPath === "string"
+                ? { href: props.backPath }
+                : { onClick: () => router.back() })}
               StartIcon="arrow-left"
               aria-label="Go Back"
               className="rounded-md ltr:mr-2 rtl:ml-2"

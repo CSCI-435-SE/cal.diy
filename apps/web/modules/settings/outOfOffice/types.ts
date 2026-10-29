@@ -2,6 +2,9 @@ export type BookingRedirectForm = {
   dateRange: { startDate: Date; endDate: Date };
   startDateOffset: number;
   endDateOffset: number;
+  allDay: boolean;
+  startTime: string;
+  endTime: string;
   toTeamUserId: number | null;
   reasonId: number;
   notes?: string;
