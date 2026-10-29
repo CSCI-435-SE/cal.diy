@@ -4806,5 +4806,8 @@
   "require_2fa_disable_confirm_button": "Stop requiring",
   "require_2fa_setting_updated": "Two-factor authentication requirement updated",
   "require_2fa_setting_update_failed": "Couldn't update the two-factor authentication requirement. Please try again.",
+  "require_2fa_setup_notice": "Your administrator requires two-factor authentication. Set it up to continue.",
+  "require_2fa_onboarding_title": "Secure your account",
+  "require_2fa_onboarding_subtitle": "Your administrator requires two-factor authentication. Set it up to finish creating your account.",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }

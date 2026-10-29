@@ -8,6 +8,7 @@ import { cloneElement } from "react";
 import { Toaster } from "sonner";
 
 import { useFormbricks } from "@calcom/web/modules/formbricks/hooks/useFormbricks";
+import { RequiredTwoFactorSetupModal } from "@calcom/web/modules/auth/components/RequiredTwoFactorSetupModal";
 import { useRedirectToLoginIfUnauthenticated } from "@calcom/web/modules/auth/hooks/useRedirectToLoginIfUnauthenticated";
 import { useRedirectToOnboardingIfNeeded } from "@calcom/web/modules/auth/hooks/useRedirectToOnboardingIfNeeded";
 
@@ -40,6 +41,7 @@ const Layout = (props: LayoutProps) => {
 
       <TimezoneChangeDialog />
       <DynamicModals />
+      <RequiredTwoFactorSetupModal />
 
       <div className="flex min-h-screen flex-col">
         {banners && <BannerContainer banners={banners} />}

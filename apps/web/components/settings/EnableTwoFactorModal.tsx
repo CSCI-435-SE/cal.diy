@@ -17,17 +17,22 @@ import TwoFactorAuthAPI from "./TwoFactorAuthAPI";
 
 interface EnableTwoFactorModalProps {
   open: boolean;
-  onOpenChange: () => void;
+  onOpenChange?: () => void;
 
   /**
    * Called when the user closes the modal without disabling two-factor auth
    */
-  onCancel: () => void;
+  onCancel?: () => void;
 
   /**
    * Called when the user enables two-factor auth
    */
   onEnable: () => void;
+
+  /**
+   * Used when an admin requires 2FA site-wide: the modal can't be dismissed until setup is finished
+   */
+  isRequired?: boolean;
 }
 
 enum SetupStep {
@@ -53,7 +58,13 @@ interface EnableTwoFactorValues {
   totpCode: string;
 }
 
-const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: EnableTwoFactorModalProps) => {
+const EnableTwoFactorModal = ({
+  onEnable,
+  onCancel,
+  open,
+  onOpenChange,
+  isRequired = false,
+}: EnableTwoFactorModalProps) => {
   const { t } = useLocale();
   const form = useForm<EnableTwoFactorValues>();
 
@@ -167,13 +178,19 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
   const formatBackupCode = (code: string) => `${code.slice(0, 5)}-${code.slice(5, 10)}`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    // Without onOpenChange, the controlled dialog ignores Escape and outside clicks
+    <Dialog open={open} onOpenChange={isRequired ? undefined : onOpenChange}>
       <DialogContent
         title={step === SetupStep.DisplayBackupCodes ? t("backup_codes") : t("enable_2fa")}
         description={setupDescriptions[step]}
         type="creation">
         <WithStep step={SetupStep.ConfirmPassword} current={step}>
           <form onSubmit={handleSetup}>
+            {isRequired && (
+              <p data-testid="2fa-required-notice" className="text-default mb-4 text-sm">
+                {t("require_2fa_setup_notice")}
+              </p>
+            )}
             <div className="mb-4">
               <PasswordField
                 label={t("password")}
@@ -222,11 +239,11 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
             </div>
           </WithStep>
           <DialogFooter className="mt-8" showDivider>
-            {step !== SetupStep.DisplayBackupCodes ? (
+            {!isRequired && step !== SetupStep.DisplayBackupCodes ? (
               <Button
                 color="secondary"
                 onClick={() => {
-                  onCancel();
+                  onCancel?.();
                   resetState();
                 }}>
                 {t("cancel")}
@@ -271,7 +288,7 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
                     resetState();
                     onEnable();
                   }}>
-                  {t("close")}
+                  {isRequired ? t("continue") : t("close")}
                 </Button>
                 <Button
                   color="secondary"

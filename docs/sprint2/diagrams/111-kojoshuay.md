@@ -1,4 +1,4 @@
-# Issue #<N> -- <issue title>
+# Issue #111 -- Add an admin setting to require 2FA for all users
 
 ## Class Diagram
 

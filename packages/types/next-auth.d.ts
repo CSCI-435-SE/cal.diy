@@ -43,6 +43,8 @@ declare module "next-auth" {
     role?: PrismaUser["role"] | "INACTIVE_ADMIN";
     /** Set when role is INACTIVE_ADMIN: why admin security requirements are not met */
     inactiveAdminReason?: "both" | "password" | "2fa";
+    /** Set when the admin requires 2FA site-wide and this password user hasn't set it up yet */
+    requiresTwoFactorSetup?: boolean;
     locale?: string | null;
     profile?: UserProfile;
     samlTenant?: string;
@@ -60,6 +62,7 @@ declare module "next-auth/jwt" {
     profileId?: number | null;
     role?: UserPermissionRole | "INACTIVE_ADMIN" | null;
     inactiveAdminReason?: "both" | "password" | "2fa";
+    requiresTwoFactorSetup?: boolean;
     impersonatedBy?: {
       id: number;
       uuid: string;
