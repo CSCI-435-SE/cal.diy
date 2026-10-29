@@ -121,8 +121,9 @@ function WeeklyAvailabilityGridComponent({
                       "border-subtle border-t border-l",
                       isHourStart ? "border-t-subtle" : "border-t-muted [border-top-style:dashed]",
                       isSelected ? "bg-brand-default" : "bg-default",
-                      // Lets a finger drag select instead of scrolling; labels and header still scroll
-                      isEditable && "cursor-pointer touch-none"
+                      // Swipes scroll and a long press starts a drag (see useWeeklyGridDrag); the iOS
+                      // callout would otherwise pop up over the grid during that long press
+                      isEditable && "cursor-pointer touch-pan-y [-webkit-touch-callout:none]"
                     )}
                   />
                 );
