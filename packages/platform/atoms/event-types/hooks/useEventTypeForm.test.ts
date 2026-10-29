@@ -1,8 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { useController } from "react-hook-form";
+import { describe, it, expect, vi } from "vitest";
 
 import type { ChildrenEventType } from "@calcom/features/eventtypes/lib/childrenEventType";
 import { stripChildrenForPayload } from "@calcom/features/eventtypes/lib/childrenEventType";
-import { MembershipRole } from "@calcom/prisma/enums";
+import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
+import { MembershipRole, RescheduleReasonRequirement } from "@calcom/prisma/enums";
+
+import { useEventTypeForm } from "./useEventTypeForm";
+
+vi.mock("@calcom/lib/hooks/useLocale", () => ({
+  useLocale: () => ({ t: (key: string) => key }),
+}));
 
 describe("useEventTypeForm - children payload stripping", () => {
   it("should strip avatar, profile, username, and membership from children payload", () => {
@@ -147,5 +156,66 @@ describe("useEventTypeForm - children payload stripping", () => {
     const children: ChildrenEventType[] = [];
     const stripped = stripChildrenForPayload(children);
     expect(stripped).toEqual([]);
+  });
+});
+
+const eventTypeWithRescheduleReason = (
+  requiresRescheduleReason: RescheduleReasonRequirement | null | undefined
+) =>
+  ({
+    id: 1,
+    title: "Test Event",
+    slug: "test-event",
+    metadata: {},
+    hashedLink: [],
+    hosts: [],
+    children: [],
+    team: null,
+    requiresCancellationReason: null,
+    requiresRescheduleReason,
+  }) as unknown as EventTypeSetupProps["eventType"];
+
+describe("useEventTypeForm - reschedule reason requirement", () => {
+  it.each([
+    [RescheduleReasonRequirement.MANDATORY_HOST_ONLY, RescheduleReasonRequirement.MANDATORY_HOST_ONLY],
+    [null, null],
+    [undefined, null],
+  ])("loads a stored value of %s into the form as %s", (stored, expected) => {
+    const { result } = renderHook(() =>
+      useEventTypeForm({ eventType: eventTypeWithRescheduleReason(stored), onSubmit: vi.fn() })
+    );
+
+    expect(result.current.form.getValues("requiresRescheduleReason")).toBe(expected);
+  });
+
+  it("keeps the form unchanged when the dropdown mounts after the form and an edit is reverted", () => {
+    const { result: editor } = renderHook(() =>
+      useEventTypeForm({
+        eventType: eventTypeWithRescheduleReason(RescheduleReasonRequirement.OPTIONAL_BOTH),
+        onSubmit: vi.fn(),
+      })
+    );
+
+    // The editor renders one tab at a time, so the Advanced tab's dropdown always registers after the
+    // form exists. If the field were missing from the form's defaults, registering it would mark the
+    // whole form as changed, enabling Save and the unsaved-changes dialog without any edit.
+    const { result: dropdown } = renderHook(() =>
+      useController({
+        name: "requiresRescheduleReason",
+        control: editor.current.form.control,
+        defaultValue: RescheduleReasonRequirement.OPTIONAL_BOTH,
+      })
+    );
+    expect(editor.current.form.formState.isDirty).toBe(false);
+
+    act(() => {
+      dropdown.current.field.onChange(RescheduleReasonRequirement.MANDATORY_BOTH);
+    });
+    expect(editor.current.form.formState.isDirty).toBe(true);
+
+    act(() => {
+      dropdown.current.field.onChange(RescheduleReasonRequirement.OPTIONAL_BOTH);
+    });
+    expect(editor.current.form.formState.isDirty).toBe(false);
   });
 });
