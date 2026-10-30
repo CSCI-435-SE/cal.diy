@@ -131,6 +131,28 @@ export default function CancelBooking(props: Props) {
   const [error, setError] = useState<string | null>(booking ? null : t("booking_already_cancelled"));
   const [internalNote, setInternalNote] = useState<{ id: number; name: string } | null>(null);
   const [acknowledgeCancellationNoShowFee, setAcknowledgeCancellationNoShowFee] = useState(false);
+  const [isCancellationPending, setIsCancellationPending] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+
+  const undoCancellation = async () => {
+    setUndoing(true);
+    const response = await fetch("/api/csrf?sameSite=none", { cache: "no-store" });
+    const { csrfToken } = await response.json();
+    const res = await fetch("/api/cancel/undo", {
+      body: JSON.stringify({ uid: booking?.uid, seatReferenceUid, csrfToken }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    setUndoing(false);
+    if (res.ok) {
+      showToast(t("booking_cancellation_undone"), "success");
+      props.setIsCancellationMode(false);
+      return;
+    }
+    const data = await res.json();
+    showToast(data.message || t("booking_cancellation_undo_failed"), "error");
+    refreshData();
+  };
 
   const getAppMetadata = (appId: string): Record<string, unknown> | null => {
     if (!eventTypeMetadata?.apps || !appId) return null;
@@ -200,7 +222,22 @@ export default function CancelBooking(props: Props) {
           </div>
         </div>
       )}
-      {!error && (
+      {!error && isCancellationPending && (
+        <div
+          data-testid="cancellation_pending"
+          className={classNames(isRenderedAsCancelDialog ? "-mt-2 mb-8" : "mt-5 sm:mt-6")}>
+          <p className="text-default mb-4 text-sm">{t("booking_cancellation_scheduled")}</p>
+          <div className={classNames("flex w-full space-x-4", isRenderedAsCancelDialog && "justify-end")}>
+            <Button className="ml-auto" color="secondary" onClick={() => props.setIsCancellationMode(false)}>
+              {t("close")}
+            </Button>
+            <Button data-testid="undo_cancel" onClick={undoCancellation} loading={undoing}>
+              {t("undo_cancellation")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {!error && !isCancellationPending && (
         <div className={classNames(isRenderedAsCancelDialog ? "-mt-2 mb-8" : "mt-5 sm:mt-6")}>
           {props.isHost && props.internalNotePresets.length > 0 && (
             <>
@@ -310,10 +347,8 @@ export default function CancelBooking(props: Props) {
                       ...bookingCancelledEventProps,
                       booking: bookingWithCancellationReason,
                     });
-                    refreshData();
-                    if (props.onCanceled) {
-                      props.onCanceled();
-                    }
+                    setLoading(false);
+                    setIsCancellationPending(true);
                   } else {
                     const data = await res.json();
                     setLoading(false);

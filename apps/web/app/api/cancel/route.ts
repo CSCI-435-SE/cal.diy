@@ -1,17 +1,17 @@
-import { defaultResponderForAppDir } from "app/api/defaultResponderForAppDir";
-import { cookies, headers } from "next/headers";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
-import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
+import tasker from "@calcom/features/tasker";
 import { checkRateLimitAndThrowError } from "@calcom/lib/checkRateLimitAndThrowError";
 import getIP from "@calcom/lib/getIP";
 import { piiHasher } from "@calcom/lib/server/PiiHasher";
 import { bookingCancelWithCsrfSchema } from "@calcom/prisma/zod-utils";
 import { validateCsrfToken } from "@calcom/web/lib/validateCsrfToken";
-
 import { buildLegacyRequest } from "@lib/buildLegacyCtx";
+import { defaultResponderForAppDir } from "app/api/defaultResponderForAppDir";
+import { cookies, headers } from "next/headers";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+
+const SOFT_CANCEL_DELAY_MS = 5 * 60 * 1000;
 
 async function handler(req: NextRequest) {
   let appDirRequestBody;
@@ -46,25 +46,20 @@ async function handler(req: NextRequest) {
     identifier,
   });
 
-  // Strip integer id to ensure lookup is always by uid
-  const { id: _id, ...safeBookingData } = bookingData;
+  // Strip integer id to ensure lookup is always by uid; csrfToken is single-use and shouldn't be persisted
+  const { id: _id, csrfToken: _csrfToken, ...safeBookingData } = bookingData;
+  const referenceUid = safeBookingData.seatReferenceUid ?? bookingData.uid;
 
-  const result = await handleCancelBooking({
-    bookingData: safeBookingData,
-    userId: session?.user?.id || -1,
-  });
+  // Soft cancel: the cancellation runs from the task queue after a delay so the user can undo it via /api/cancel/undo.
+  // Clearing any existing task first lets a repeat request restart the window instead of hitting the unique reference.
+  await tasker.cancelWithReference(referenceUid, "cancelBooking");
+  await tasker.create(
+    "cancelBooking",
+    { bookingData: safeBookingData, userId: session?.user?.id || -1 },
+    { scheduledAt: new Date(Date.now() + SOFT_CANCEL_DELAY_MS), referenceUid }
+  );
 
-  // const bookingCancelService = getBookingCancelService();
-  // const result = await bookingCancelService.cancelBooking({
-  //   bookingData: bookingData,
-  //   bookingMeta: {
-  //     userId: session?.user?.id || -1,
-  //   },
-  // });
-
-  const statusCode = result.success ? 200 : 400;
-
-  return NextResponse.json(result, { status: statusCode });
+  return NextResponse.json({ success: true, scheduled: true }, { status: 200 });
 }
 
 export const DELETE = defaultResponderForAppDir(handler);
