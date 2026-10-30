@@ -1,0 +1,100 @@
+sequenceDiagram
+    autonumber
+    actor Attendee
+    participant Booker as Booker.tsx and useSchedule
+    participant SlotsSvc as AvailableSlotsService (slots/util.ts)
+    participant OOORepo as PrismaOOORepository
+    participant UASvc as UserAvailabilityService
+    participant DR as date-ranges.ts
+    participant Agg as getAggregatedAvailability.ts
+    participant Slots as slots.ts
+    participant ATS as AvailableTimeSlots
+    participant AT as AvailableTimes
+    participant OOO as OOOSlot and OutOfOfficeInSlots
+    actor Router as Next.js router
+
+    Note over Attendee,Router: Setup: the host (pro, Europe/London) has an OutOfOfficeEntry from 2:00pm to 4:00pm on Tue Oct 27, not all day, with toUserId set to the forward user
+
+    Attendee->>Booker: open /pro/30min and pick Oct 27
+    Booker->>SlotsSvc: trpc viewer.slots.getSchedule (getScheduleHandler, getAvailableSlots)
+    Note over Booker,SlotsSvc: Existing code
+
+    SlotsSvc->>OOORepo: getOOODates, findManyOOO(startTimeDate, endTimeDate, allUserIds)
+    OOORepo-->>SlotsSvc: OutOfOfficeEntry rows with user, toUser, reason
+    SlotsSvc->>UASvc: calculateHostsAndAvailabilities, getUsersAvailability(users, query, initialData.outOfOfficeDays)
+    Note over SlotsSvc,UASvc: Existing code
+
+    loop for each host
+        UASvc->>DR: getPartialDayOutOfOfficeWindows(outOfOfficeDays, finalTimezone)
+        Note over UASvc,DR: New. Skips whole-day entries, parses wall clock with wallClockToTimeZone, lists every host-zone date the window touches
+        DR-->>UASvc: PartialDayOutOfOfficeWindow list {dates, start, end, entry}
+
+        UASvc->>UASvc: calculateOutOfOfficeRanges(outOfOfficeDays, availability, partialDayWindows)
+        Note over UASvc: Modified. Whole days first, then datesOutOfOffice["2026-10-27"] = {entry data, windows: [{start, end, ...}]}. A whole-day record wins over a window.
+
+        UASvc->>UASvc: calculateHolidayBlockedDates, merge
+        Note over UASvc: Modified. A holiday replaces a windowed record but not a whole-day record
+
+        UASvc->>DR: buildDateRanges(availability, timeZone, dateFrom, dateTo, travelSchedules, outOfOffice)
+        Note over UASvc,DR: Modified. Dates with windows are not removed from oooExcludedDateRanges as whole days
+        DR-->>UASvc: dateRanges, oooExcludedDateRanges
+
+        UASvc->>DR: subtract(dateRanges, busy) and subtract(oooExcludedDateRanges, busy plus windows)
+        Note over UASvc,DR: Modified. The window stays in dateRanges and leaves oooExcludedDateRanges (the booking guard reads those)
+        DR-->>UASvc: available ranges
+    end
+    UASvc-->>SlotsSvc: GetUserAvailabilityResult per host {dateRanges, oooExcludedDateRanges, datesOutOfOffice}
+
+    SlotsSvc->>Agg: getAggregatedAvailability(allUsersAvailability, schedulingType)
+    Note over SlotsSvc,Agg: Existing. One host uses dateRanges, so 9:00am to 5:00pm stays whole
+    Agg-->>SlotsSvc: aggregated DateRange list
+
+    SlotsSvc->>Slots: getSlots(dateRanges, eventLength, frequency, datesOutOfOffice, datesOutOfOfficeTimeZone)
+    Slots->>Slots: parseOutOfOfficeWindows(datesOutOfOffice)
+    Note over Slots: New. Windows per date parsed to sorted startMs, endMs once per call
+    loop for each slot start in buildSlotsWithDateRanges
+        Slots->>Slots: findOutOfOfficeForSlot(dayData, windowsOfDay, slotStartMs, slotEndMs)
+        Note over Slots: New
+        alt date has no record
+            Slots->>Slots: slot {time}
+        else record without windows (whole day)
+            Slots->>Slots: slot {time, away: true, fromUser, toUser, reason, emoji, notes}
+        else slotStart before windowEnd and slotEnd after windowStart
+            Slots->>Slots: slot {time, away: true, data of the matching window}
+        else no overlap with any window
+            Slots->>Slots: slot {time}
+        end
+    end
+    Slots-->>SlotsSvc: slots (2:00pm to 3:30pm marked away)
+    SlotsSvc-->>Booker: slots grouped by date, with away, fromUser, toUser, reason, emoji, notes
+    Note over SlotsSvc,Booker: Existing mapping
+
+    Booker->>ATS: render with scheduleData.slots
+    ATS->>ATS: isOOODay = every slot away
+    Note over ATS: Modified. Was "first slot away". False here, so the time-format toggle stays
+    ATS->>AT: render slots of Oct 27
+
+    alt every slot of the day is away
+        AT->>OOO: one OOOSlot for the whole day
+        Note over AT,OOO: Existing path, also taken by a window that covers the working day
+    else some slots are away
+        loop for each slot
+            alt slot not away
+                AT->>AT: SlotItem (9:00am ... 1:30pm, 4:00pm, 4:30pm)
+            else first slot of a run of away slots
+                AT->>OOO: OOOSlot with that slot's fromUser, toUser, reason, emoji, notes
+                Note over AT,OOO: Modified. One panel per run, placed between the slots before and after the window
+            else later slot in the same run
+                AT->>AT: skip
+            end
+        end
+    end
+    OOO-->>Attendee: away panel: emoji, "Pro Example is OOO", public note
+
+    opt toUser is set on the entry
+        OOO-->>Attendee: "Book with Free Example" button
+        Attendee->>OOO: click the button
+        OOO->>Router: router.push("/free?month=2026-10&date=2026-10-27")
+        Note over OOO,Router: Existing code. The redirect only needed toUser on the away slot
+        Router-->>Attendee: forward user's booking page on the same date
+    end
