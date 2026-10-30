@@ -7123,3 +7123,745 @@ To find out where it's failing, could you start the dev server yourself (`yarn d
 3. Anything the server terminal prints when the booking page loads.
 
 If the URL returns the time but the button still doesn't appear, the bug is in the page and I'll go back to that code. If it errors or hangs, the server log will tell us why. Alternatively, you can allow me to run the dev server outside the sandbox and I'll check it myself.
+
+---
+
+_**User (2026-10-30 01:58:04Z)**_
+
+<ide_opened_file>The user opened the file /home/lexzach/Documents/Git/cal.diy/ai-logs/sprint2/zachbowden/2026-10-30_claude-code_issue-13-waitlist.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+
+I have since rebased, so please check that if needed. Please make a UML class/sequence diagram for PlantUML. The class boxes should be blue and the design decision comment boxes should be amber. The design decision comments should be as followed:
+
+We decided not to allow a non-fully booked day to have the join waitlist button shown for the whole day
+
+We decided to allow the user to join a waitlist for individual times. We were considering that or only allowing the user to join a waitlist for *any* time for the whole day,
+
+---
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:17Z)**_
+
+Since you've rebased, I'll check the current state of the code, and look at how the diagrams on your previous branch were laid out so these match.
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+
+`git status --short | head; git log --oneline -6; git show --stat 8b8737e5ce | head -20`
+
+```text
+c2fae81ae6 Add waitlist
+153addd01d Merge pull request #81 from CSCI-435-SE/fix/reschedule-reason-frontend
+60c559e175 Merge pull request #110 from CSCI-435-SE/feat/issue-104-partial-day-ooo-away
+cbf71a64d2 Merge pull request #120 from CSCI-435-SE/112-require-users-to-set-up-2fa-when-the-admin-setting-is-on
+ab66b795f9 Merge pull request #119 from CSCI-435-SE/docs/sprint2-ai-logs-julissaehp
+ebd9c57cdc fxed close required 2FA modal when setup finishes in another tab
+commit 8b8737e5ce306b436732bf2cb4c62d529f6a1631
+Author: lexzach <github@zachbowden.com>
+Date:   Wed Oct 28 19:38:47 2026 -0400
+
+    Add diagrams
+
+ docs/sprint2/diagrams/57-zachbowden-class.png    | Bin 0 -> 184905 bytes
+ docs/sprint2/diagrams/57-zachbowden-sequence.png | Bin 0 -> 39094 bytes
+ docs/sprint2/diagrams/57-zachbowden.md           |  23 +++++++++++++++++++++++
+ 3 files changed, 23 insertions(+)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+
+`git show 8b8737e5ce:docs/sprint2/diagrams/57-zachbowden.md; ls docs/sprint2/diagrams/ 2>/dev/null; git show --stat HEAD | head -40`
+
+```text
+## Class Diagram
+
+![Class diagram](57-zachbowden-class.png)
+
+## Sequence Diagram
+
+![Sequence diagram](57-zachbowden-sequence.png)
+
+## Q&A
+
+**Class diagram:**
+
+Cancel and undo cancel are the most important, they are the buttons that actually make the request to the server to flag a meeting as needing to be cancelled, or removing the queue for cancellation.
+
+The most significant relationship is the cancel booking task, which actually instructs the database to cancel the booking.
+
+**Sequence diagram:**
+
+Confirm cancel starts the event. A successful event would be the cancellation process starting.
+
+The cron task is the most important, it is actually the one responsible for cancelling the booking. Without it the booking would not be cancelled.
+
+AI produced both diagrams, I checked the diagrams and changed styling.
+111-kojoshuay-class.png
+111-kojoshuay.md
+111-kojoshuay-sequence.png
+57-zachbowden-class.png
+57-zachbowden.md
+57-zachbowden-sequence.png
+commit c2fae81ae692283e81e66367af41eed6e97bc9e3
+Author: lexzach <github@zachbowden.com>
+Date:   Thu Oct 29 21:26:26 2026 -0400
+
+    Add waitlist
+
+ .../2026-10-30_claude-code_issue-13-waitlist.md    | 7125 ++++++++++++++++++++
+ apps/web/app/api/waitlist/booked-times/route.ts    |   26 +
+ apps/web/app/api/waitlist/claim/route.ts           |   28 +
+ apps/web/app/api/waitlist/leave/route.ts           |   30 +
+ apps/web/app/api/waitlist/route.ts                 |   34 +
+ .../bookings/components/AvailableTimeSlots.tsx     |   26 +-
+ .../modules/bookings/components/AvailableTimes.tsx |   43 +-
+ .../web/modules/bookings/components/DatePicker.tsx |   13 +-
+ .../bookings/components/JoinWaitlistButton.tsx     |   96 +
+ .../bookings/hooks/useWaitlistBookedTimes.ts       |   38 +
+ .../src/templates/WaitlistSpotOpenedEmail.tsx      |   35 +
+ packages/emails/src/templates/index.ts             |    1 +
+ .../emails/templates/waitlist-spot-opened-email.ts |   46 +
+ .../features/bookings/lib/handleCancelBooking.ts   |   20 +
+ .../features/calendars/components/DatePicker.tsx   |   25 +-
+ packages/features/tasker/tasker.ts                 |    2 +
+ packages/features/tasker/tasks/index.ts            |    2 +
+ packages/features/tasker/tasks/waitlist.ts         |   21 +
+ .../waitlist/repositories/WaitlistRepository.ts    |  168 +
+ .../waitlist/services/WaitlistService.test.ts      |  271 +
+ .../features/waitlist/services/WaitlistService.ts  |  226 +
+ .../waitlist/services/getWaitlistService.ts        |   21 +
+ packages/i18n/locales/en/common.json               |   14 +
+ .../migration.sql                                  |   31 +
+ .../migration.sql                                  |    2 +
+ packages/prisma/schema.prisma                      |   32 +
+ 26 files changed, 8344 insertions(+), 32 deletions(-)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:24Z)**_
+
+The waitlist is committed as `c2fae81ae6`. I'll pull the class and method signatures from the committed code so the diagrams match it.
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:27Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+
+`grep -nE "^\s+(async |private async |private )?[a-zA-Z]+\(|^export (const|function|class|async)" packages/features/waitlist/services/WaitlistService.ts packages/features/waitlist/repositories/WaitlistRepository.ts packages/features/waitlist/services/getWaitlistService.ts packages/features/tasker/tasks/waitlist.ts apps/web/modules/bookings/hooks/useWaitlistBookedTimes.ts apps/web/modules/bookings/components/JoinWaitlistButton.tsx | cut -c1-170; grep -n "mergeByTime\|waitlist_join_day\|JoinWaitlistButton" apps/web/modules/bookings/components/AvailableTimes.tsx; grep -n "waitlistOnly\|waitlistDates" packages/features/calendars/components/DatePicker.tsx apps/web/modules/bookings/components/DatePicker.tsx; grep -n "tasker.create" -A2 packages/features/bookings/lib/handleCancelBooking.ts`
+
+```text
+packages/features/waitlist/services/getWaitlistService.ts:9:export function getWaitlistService() {
+packages/features/tasker/tasks/waitlist.ts:4:export const offerWaitlistSpotPayloadSchema = z.object({
+packages/features/tasker/tasks/waitlist.ts:11:export const expireWaitlistOfferPayloadSchema = z.object({ entryId: z.number() });
+packages/features/tasker/tasks/waitlist.ts:13:export async function offerWaitlistSpot(payload: string): Promise<void> {
+packages/features/tasker/tasks/waitlist.ts:18:export async function expireWaitlistOffer(payload: string): Promise<void> {
+apps/web/modules/bookings/hooks/useWaitlistBookedTimes.ts:8:export const useWaitlistBookedTimes = (): Record<string, string[]> => {
+apps/web/modules/bookings/components/JoinWaitlistButton.tsx:13:export const JoinWaitlistButton = ({
+apps/web/modules/bookings/components/JoinWaitlistButton.tsx:37:    setIsPending(true);
+apps/web/modules/bookings/components/JoinWaitlistButton.tsx:45:      showToast(t("waitlist_joined"), "success");
+apps/web/modules/bookings/components/JoinWaitlistButton.tsx:46:      setOpen(false);
+apps/web/modules/bookings/components/JoinWaitlistButton.tsx:48:      showToast(t("waitlist_join_failed"), "error");
+apps/web/modules/bookings/components/JoinWaitlistButton.tsx:50:      setIsPending(false);
+packages/features/waitlist/repositories/WaitlistRepository.ts:39:export class WaitlistRepository {
+packages/features/waitlist/repositories/WaitlistRepository.ts:40:  constructor(private prismaClient: PrismaClient) {}
+packages/features/waitlist/repositories/WaitlistRepository.ts:42:  async findWaitingByEmailAndDay(data: {
+packages/features/waitlist/repositories/WaitlistRepository.ts:54:  async create(data: {
+packages/features/waitlist/repositories/WaitlistRepository.ts:66:  async findByUid(uid: string): Promise<WaitlistEntryDto | null> {
+packages/features/waitlist/repositories/WaitlistRepository.ts:70:  async findById(id: number): Promise<WaitlistEntryDto | null> {
+packages/features/waitlist/repositories/WaitlistRepository.ts:74:  async findOldestWaitingForTime(data: { eventTypeId: number; time: Date }) {
+packages/features/waitlist/repositories/WaitlistRepository.ts:90:  async transition(
+packages/features/waitlist/repositories/WaitlistRepository.ts:104:  async findEventTypeForWaitlist(eventTypeId: number) {
+packages/features/waitlist/repositories/WaitlistRepository.ts:119:  async createSlotHold(data: {
+packages/features/waitlist/repositories/WaitlistRepository.ts:139:  async deleteSlotHolds(uid: string) {
+packages/features/waitlist/repositories/WaitlistRepository.ts:143:  async findActiveBookingStartTimes(data: { eventTypeId: number; from: Date; to: Date }) {
+packages/features/waitlist/repositories/WaitlistRepository.ts:157:  async findActiveBookingAttendeeEmailsAt(data: { eventTypeId: number; startTime: Date }) {
+packages/features/waitlist/services/WaitlistService.ts:8:export const WAITLIST_CLAIM_WINDOW_MS = 6 * 60 * 60 * 1000;
+packages/features/waitlist/services/WaitlistService.ts:29:export class WaitlistService {
+packages/features/waitlist/services/WaitlistService.ts:30:  constructor(private deps: IWaitlistServiceDeps) {}
+packages/features/waitlist/services/WaitlistService.ts:32:  private now() {
+packages/features/waitlist/services/WaitlistService.ts:37:  async join(input: {
+packages/features/waitlist/services/WaitlistService.ts:80:  async getBookedTimes(input: { eventTypeId: number; from: Date; to: Date }): Promise<Date[]> {
+packages/features/waitlist/services/WaitlistService.ts:92:  async offerSpot(slot: FreedSlot): Promise<number | null> {
+packages/features/waitlist/services/WaitlistService.ts:141:  async expireOffer(entryId: number) {
+packages/features/waitlist/services/WaitlistService.ts:169:  async leave(uid: string): Promise<boolean> {
+packages/features/waitlist/services/WaitlistService.ts:186:  async getClaimUrl(uid: string): Promise<string | null> {
+packages/features/waitlist/services/WaitlistService.ts:217:  private async offerToNext(entry: WaitlistEntryDto) {
+23:import { JoinWaitlistButton } from "./JoinWaitlistButton";
+281:  const merged = mergeByTime(slots, date ? bookedTimes : []);
+288:        <JoinWaitlistButton
+321:              <JoinWaitlistButton date={date} label={t("waitlist_join_day")} className="mb-0 mt-4" />
+332:const mergeByTime = (slots: Slot[], bookedTimes: string[]): (Slot | string)[] => {
+apps/web/modules/bookings/components/DatePicker.tsx:160:      waitlistDates={Object.keys(bookedTimesByDay)}
+packages/features/calendars/components/DatePicker.tsx:39:  waitlistDates?: string[];
+packages/features/calendars/components/DatePicker.tsx:251:    if (!day) return { day: null, disabled: true, waitlistOnly: false };
+packages/features/calendars/components/DatePicker.tsx:269:    const waitlistOnly = !hasAvailableSlots && !!props.waitlistDates?.includes(dateKey);
+packages/features/calendars/components/DatePicker.tsx:273:        ? !hasAvailableSlots && !waitlistOnly
+packages/features/calendars/components/DatePicker.tsx:274:        : !(included || waitlistOnly) || excluded;
+packages/features/calendars/components/DatePicker.tsx:279:      waitlistOnly,
+packages/features/calendars/components/DatePicker.tsx:301:      (day) => !day.disabled && !day.waitlistOnly
+437:          tasker.create("offerWaitlistSpot", {
+438-            eventTypeId: waitlistEventTypeId,
+439-            hostUserId,
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:30Z)**_
+
+`AvailableTimes` changed after my last edit (there's a new `merged` variable), so I'll read the current version.
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:30Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+
+`sed -n 262,345p apps/web/modules/bookings/components/AvailableTimes.tsx`
+
+```text
+export const AvailableTimes = ({
+  slots,
+  showTimeFormatToggle = true,
+  className,
+  date,
+  bookedTimes = [],
+  ...props
+}: AvailableTimesProps) => {
+  const { t } = useLocale();
+  const { timeFormat, timezone } = useBookerTime();
+
+  const oooAllDay = slots.every((slot) => slot.away);
+  if (oooAllDay) {
+    return <OOOSlot {...slots[0]} />;
+  }
+
+  // A partial-day entry leaves a run of away slots in the middle of the day. One panel stands in for each run,
+  // at the first away slot, so the panel sits between the slots before and after the window.
+  const merged = mergeByTime(slots, date ? bookedTimes : []);
+  const isAway = (item: Slot | string | undefined) => typeof item === "object" && !!item.away;
+  const items: ReactNode[] = [];
+  for (let index = 0; index < merged.length; index++) {
+    const slot = merged[index];
+    if (typeof slot === "string") {
+      items.push(
+        <JoinWaitlistButton
+          key={slot}
+          date={date ?? ""}
+          slotStart={slot}
+          label={t("waitlist_join_time", { time: dayjs.utc(slot).tz(timezone).format(timeFormat) })}
+        />
+      );
+      continue;
+    }
+    if (!slot.away) {
+      items.push(<SlotItem key={slot.time} slot={slot} {...props} />);
+      continue;
+    }
+    if (isAway(merged[index - 1])) continue;
+    let runEnd = index;
+    while (isAway(merged[runEnd + 1])) runEnd++;
+    items.push(
+      <OOOSlot key={`ooo-${slot.time}`} {...slot} className={runEnd === merged.length - 1 ? "pb-0" : ""} />
+    );
+  }
+
+  return (
+    <div className={classNames("text-default flex flex-col", className)}>
+      <div className="h-full pb-4">
+        {!slots.length && (
+          <div
+            data-testId="no-slots-available"
+            className="bg-subtle border-subtle flex h-full flex-col items-center rounded-md border p-6 dark:bg-transparent">
+            <CalendarX2Icon className="text-muted mb-2 h-4 w-4" />
+            <p className={classNames("text-muted", showTimeFormatToggle ? "-mt-1 text-lg" : "text-sm")}>
+              {t("all_booked_today")}
+            </p>
+            {date && bookedTimes.length > 0 && (
+              <JoinWaitlistButton date={date} label={t("waitlist_join_day")} className="mb-0 mt-4" />
+            )}
+          </div>
+        )}
+        {items}
+      </div>
+    </div>
+  );
+};
+
+/** Interleaves booked times (as ISO strings) with open slots in time order, skipping times that are still open. */
+const mergeByTime = (slots: Slot[], bookedTimes: string[]): (Slot | string)[] => {
+  if (!bookedTimes.length) return slots;
+  const openTimes = new Set(slots.map((slot) => dayjs(slot.time).valueOf()));
+  const booked = bookedTimes.filter((time) => !openTimes.has(dayjs(time).valueOf()));
+  const timeOf = (item: Slot | string) => dayjs(typeof item === "string" ? item : item.time).valueOf();
+  return [...slots, ...booked].sort((a, b) => timeOf(a) - timeOf(b));
+};
+
+interface IOOOSlotProps {
+  fromUser?: IOutOfOfficeData["anyDate"]["fromUser"];
+  toUser?: IOutOfOfficeData["anyDate"]["toUser"];
+  reason?: string;
+  emoji?: string;
+  notes?: string | null;
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:41Z)**_
+
+I have what I need. I'll check whether PlantUML is installed so I can render PNGs like your previous diagrams.
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:43Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+
+`command -v plantuml java; ls ~/.local/share/plantuml* /usr/share/plantuml 2>/dev/null | head`
+
+```text
+(Bash completed with no output)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:58:45Z)**_
+
+PlantUML isn't installed, so I'll write the `.puml` sources next to your existing diagrams for you to render. Class diagram first.
+
+_**Agent (claude-opus-5-5 2026-10-30 01:59:03Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```puml
+@startuml 13-zachbowden-class
+title Issue 13 - Booking Waitlist (Class Diagram)
+
+hide empty members
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam class {
+  BackgroundColor #DDEBF7
+  BorderColor #2E75B6
+  ArrowColor #1F4E79
+  HeaderBackgroundColor #BDD7EE
+}
+skinparam note {
+  BackgroundColor #FFE699
+  BorderColor #BF9000
+}
+
+package "Booker UI (apps/web)" {
+  class DatePicker <<component>> {
+    +waitlistDates: string[]
+    --
+    marks fully booked days selectable
+    (waitlistOnly) but never auto-selects them
+  }
+  class AvailableTimeSlots <<component>> {
+    +bookedTimesByDay: Record<string, string[]>
+  }
+  class AvailableTimes <<component>> {
+    +slots: Slot[]
+    +date: string
+    +bookedTimes: string[]
+    --
+    -mergeByTime(slots, bookedTimes): (Slot | string)[]
+  }
+  class JoinWaitlistButton <<component>> {
+    +date: string
+    +slotStart?: string
+    +label: string
+    --
+    -submit(): POST /api/waitlist
+  }
+  class useWaitlistBookedTimes <<hook>> {
+    +useWaitlistBookedTimes(): Record<string, string[]>
+  }
+}
+
+package "API routes (apps/web/app/api/waitlist)" {
+  class JoinWaitlistRoute <<route>> {
+    +POST(eventTypeId, name, email, timeZone, date, slotStart?)
+  }
+  class BookedTimesRoute <<route>> {
+    +GET(eventTypeId, from, to): { times: string[] }
+  }
+  class ClaimRoute <<route>> {
+    +GET(uid): redirect + sets uid cookie
+  }
+  class LeaveRoute <<route>> {
+    +GET(uid): confirmation page
+    +POST(uid): leave
+  }
+}
+
+package "Waitlist feature (packages/features)" {
+  class WaitlistService <<service>> {
+    +WAITLIST_CLAIM_WINDOW_MS = 6h
+    --
+    +join(input): WaitlistEntryDto
+    +getBookedTimes(eventTypeId, from, to): Date[]
+    +offerSpot(slot): number | null
+    +expireOffer(entryId): void
+    +leave(uid): boolean
+    +getClaimUrl(uid): string | null
+    -offerToNext(entry): void
+  }
+  interface IWaitlistServiceDeps {
+    +waitlistRepo: WaitlistRepository
+    +webappUrl: string
+    +scheduleOfferExpiry(entryId, at)
+    +sendOfferEmail(data)
+  }
+  class WaitlistRepository <<repository>> {
+    +create(data): WaitlistEntryDto
+    +findByUid(uid) / findById(id)
+    +findWaitingByEmailAndDay(...)
+    +findOldestWaitingForTime(eventTypeId, time)
+    +transition(id, from, to, offer?): boolean
+    +createSlotHold(...) / deleteSlotHolds(uid)
+    +findActiveBookingStartTimes(eventTypeId, from, to)
+    +findActiveBookingAttendeeEmailsAt(eventTypeId, startTime)
+  }
+  class getWaitlistService <<factory>> {
+    +getWaitlistService(): WaitlistService
+  }
+}
+
+package "Tasker (packages/features/tasker)" {
+  class offerWaitlistSpot <<task>> {
+    +payload: eventTypeId, hostUserId, start, end
+  }
+  class expireWaitlistOffer <<task>> {
+    +payload: entryId
+  }
+  class handleCancelBooking <<existing>> {
+    queues offerWaitlistSpot
+    for each cancelled booking
+  }
+}
+
+class WaitlistSpotOpenedEmail <<email>> {
+  +claimUrl: string
+  +leaveUrl: string
+  +sendEmail()
+}
+
+package "Database (Prisma)" {
+  class WaitlistEntry <<entity>> {
+    +id: Int
+    +uid: String (claim/leave token)
+    +eventTypeId: Int
+    +name, email, timeZone: String
+    +dayStart, dayEnd: DateTime
+    +slotStart: DateTime? (null = whole day)
+    +status: WaitlistStatus
+    +hostUserId, offerStart, offerEnd, offerExpiresAt
+  }
+  enum WaitlistStatus {
+    WAITING
+    OFFERED
+    CLAIMED
+    EXPIRED
+    LEFT
+  }
+  class SelectedSlots <<existing entity>> {
+    6-hour hold, uid = WaitlistEntry.uid
+  }
+  class Booking <<existing entity>>
+}
+
+DatePicker ..> useWaitlistBookedTimes : uses
+AvailableTimeSlots ..> useWaitlistBookedTimes : uses
+AvailableTimeSlots *-- AvailableTimes : renders per day
+AvailableTimes *-- JoinWaitlistButton : day button /\nTime - Join waitlist
+useWaitlistBookedTimes ..> BookedTimesRoute : fetch
+JoinWaitlistButton ..> JoinWaitlistRoute : fetch
+
+JoinWaitlistRoute --> getWaitlistService
+BookedTimesRoute --> getWaitlistService
+ClaimRoute --> getWaitlistService
+LeaveRoute --> getWaitlistService
+getWaitlistService ..> WaitlistService : creates
+WaitlistService --> IWaitlistServiceDeps
+IWaitlistServiceDeps o-- WaitlistRepository
+
+handleCancelBooking ..> offerWaitlistSpot : tasker.create
+offerWaitlistSpot --> WaitlistService : offerSpot()
+expireWaitlistOffer --> WaitlistService : expireOffer()
+WaitlistService ..> expireWaitlistOffer : schedules at +6h
+WaitlistService ..> WaitlistSpotOpenedEmail : sends
+
+WaitlistRepository --> WaitlistEntry
+WaitlistRepository --> SelectedSlots
+WaitlistRepository --> Booking
+WaitlistEntry --> WaitlistStatus
+
+note right of AvailableTimes
+  <b>Design decision</b>
+  We decided not to allow a non-fully booked day
+  to have the join waitlist button shown for the
+  whole day.
+end note
+
+note left of WaitlistEntry
+  <b>Design decision</b>
+  We decided to allow the user to join a waitlist
+  for individual times. We were considering that or
+  only allowing the user to join a waitlist for
+  <i>any</i> time for the whole day.
+end note
+
+@enduml
+
+```
+
+```text
+File created successfully at: /home/lexzach/Documents/Git/cal.diy/docs/sprint2/diagrams/13-zachbowden-class.puml (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:59:06Z)**_
+
+Now the sequence diagram, covering joining, the cancellation, the offer, and then claim, leave, or expiry.
+
+_**Agent (claude-opus-5-5 2026-10-30 01:59:20Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```puml
+@startuml 13-zachbowden-sequence
+title Issue 13 - Booking Waitlist (Sequence Diagram)
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam participant {
+  BackgroundColor #DDEBF7
+  BorderColor #2E75B6
+}
+skinparam actor {
+  BackgroundColor #DDEBF7
+  BorderColor #2E75B6
+}
+skinparam database {
+  BackgroundColor #DDEBF7
+  BorderColor #2E75B6
+}
+skinparam sequence {
+  ArrowColor #1F4E79
+  LifeLineBorderColor #2E75B6
+  GroupBorderColor #2E75B6
+}
+skinparam note {
+  BackgroundColor #FFE699
+  BorderColor #BF9000
+}
+
+actor Booker
+actor Host
+participant "Booking page\n(DatePicker / AvailableTimes)" as UI
+participant "JoinWaitlistButton" as Btn
+participant "API routes\n/api/waitlist/*" as API
+participant "handleCancelBooking" as Cancel
+participant "Tasker\n(cron)" as Tasker
+participant "WaitlistService" as Svc
+database "Database\n(WaitlistEntry, SelectedSlots, Booking)" as DB
+participant "Email" as Mail
+
+== Viewing a booked time ==
+Booker -> UI : open booking page
+UI -> API : GET /booked-times (eventTypeId, month range)
+API -> Svc : getBookedTimes()
+Svc -> DB : bookings for event type, more than 6h away
+DB --> Svc : start times
+Svc --> UI : { times }
+UI -> UI : mergeByTime(open slots, booked times)
+
+alt day still has open slots
+  UI --> Booker : open slots + "6:00am - Join waitlist"
+else whole day is booked
+  UI --> Booker : "All booked." + "Join waitlist for this day"\n+ "Time - Join waitlist" entries
+end
+note right of UI
+  <b>Design decision</b>
+  We decided not to allow a non-fully booked day
+  to have the join waitlist button shown for the
+  whole day.
+end note
+
+== Joining ==
+Booker -> Btn : click "6:00am - Join waitlist", enter name + email
+Btn -> API : POST /api/waitlist (date, slotStart)
+API -> Svc : join()
+Svc -> Svc : reject if less than 6h away
+Svc -> DB : create WaitlistEntry (WAITING, slotStart)
+API --> Btn : 200
+Btn --> Booker : "You're on the waitlist"
+note right of Btn
+  <b>Design decision</b>
+  We decided to allow the user to join a waitlist
+  for individual times. We were considering that or
+  only allowing the user to join a waitlist for
+  <i>any</i> time for the whole day.
+end note
+
+== A spot opens ==
+Host -> Cancel : cancel booking
+Cancel -> DB : booking status = CANCELLED
+Cancel -> Tasker : create offerWaitlistSpot(start, end)
+Tasker -> Svc : offerSpot(slot)
+Svc -> Svc : skip if slot starts in less than 6h
+Svc -> DB : oldest WAITING entry for this time or whole day
+Svc -> DB : entry -> OFFERED, hold slot in SelectedSlots for 6h
+Svc -> Tasker : schedule expireWaitlistOffer at +6h
+Svc -> Mail : WaitlistSpotOpenedEmail (claim + leave links)
+Mail --> Booker : "A spot opened up"
+
+== Booker responds ==
+alt claims within 6 hours
+  Booker -> API : GET /claim?uid
+  API -> Svc : getClaimUrl(uid)
+  API --> Booker : set uid cookie, redirect to booking page\nwith the held slot preselected
+  Booker -> UI : book the held slot
+else leaves the waitlist
+  Booker -> API : GET /leave?uid (confirmation page)
+  Booker -> API : POST /leave?uid
+  API -> Svc : leave(uid)
+  Svc -> DB : entry -> LEFT, release hold
+  Svc -> Svc : offerSpot() to next person
+end
+
+== 6 hours later ==
+Tasker -> Svc : expireOffer(entryId)
+Svc -> DB : release hold, is the slot booked?
+alt booked by the waitlister
+  Svc -> DB : entry -> CLAIMED
+else booked by someone else
+  Svc -> DB : entry -> WAITING (keeps place)
+else still free
+  Svc -> DB : entry -> EXPIRED
+  Svc -> Svc : offerSpot() to next person
+end
+
+@enduml
+
+```
+
+```text
+File created successfully at: /home/lexzach/Documents/Git/cal.diy/docs/sprint2/diagrams/13-zachbowden-sequence.puml (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 01:59:28Z)**_
+
+I've written both PlantUML diagrams, based on the code as committed in `c2fae81ae6` after your rebase. I couldn't render or syntax-check them, because PlantUML and Java aren't installed here, so please paste them into a renderer (or your IDE's PlantUML preview) and tell me if anything breaks.
+
+- [13-zachbowden-class.puml](docs/sprint2/diagrams/13-zachbowden-class.puml) covers the booking page components, the four `/api/waitlist` routes, `WaitlistService` and its repository, the two background tasks, the offer email, and the database tables.
+- [13-zachbowden-sequence.puml](docs/sprint2/diagrams/13-zachbowden-sequence.puml) follows one waitlist from viewing a booked time and joining, through a cancellation that triggers the offer, to the booker claiming or leaving, and what happens when the 6 hours run out.
+
+**Styling:** class boxes and sequence participants are blue (`#DDEBF7` with a `#2E75B6` border). Both design-decision notes are amber (`#FFE699` with a `#BF9000` border) and appear in both diagrams:
+- The note about not showing the whole-day button on days that aren't fully booked is attached to `AvailableTimes`, where that rule lives. In the sequence diagram it sits under the step that decides between the two cases.
+- The note about joining for individual times is attached to `WaitlistEntry`, whose `slotStart` field holds the specific time. In the sequence diagram it sits on the "Join" step.
+
+I used your wording for both notes, but ended the second one with a period instead of the trailing comma.
+
+Your earlier diagrams also had a `13-zachbowden.md` page with the rendered PNGs and the Q&A. I can write that page once you've rendered these.
+
+---
+
+_**User (2026-10-30 02:01:49Z)**_
+
+please verify these
+
+---
+
+_**User (2026-10-30 02:01:49Z)**_
+
+[Image: source: /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/92c0a5c6-facb-4f63-97d6-fc3de3cb86d8/images/2.png, original 2075x2124, displayed at 1954x2000. Multiply coordinates by 1.06 to map to original image.]
+
+[Image: source: /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/92c0a5c6-facb-4f63-97d6-fc3de3cb86d8/images/3.png]
+
+---
+
+_**Agent (claude-opus-5-5 2026-10-30 02:02:20Z)**_
+
+I checked both diagrams against the committed code. They match the code apart from one rendering bug and a few small inaccuracies, which I'll fix now.
+
+**Class diagram:**
+1. **Rendering bug:** in `WaitlistEntry`, `uid` and `slotStart` render in the methods section. That's because their notes contain parentheses, which PlantUML reads as a method. They need the `{field}` marker.
+2. `WaitlistRepository` is missing `findEventTypeForWaitlist()`, which the service uses for the event title and the claim URL.
+3. `WaitlistEntry` is missing `createdAt`, which is what decides who gets offered a spot first.
+4. `WAITLIST_CLAIM_WINDOW_MS` is a module constant rather than an instance field, so it should be marked static. `bookedTimesByDay` is a local value from the hook rather than a public prop, so it should be private.
+
+**Sequence diagram:**
+5. The `{ times }` response jumps from WaitlistService straight to the page. It should go back through the API route.
+6. `offerSpot` also skips a slot that has already been booked again. That check isn't shown.
+7. `join()` returns the existing entry if the person is already waiting for that day or time. The diagram only shows a new entry being created.
+
+Everything else matches the code: the routes all use `getWaitlistService`, and the order of steps for offer, leave and expiry is right.
+
+_**Agent (claude-opus-5-5 2026-10-30 02:02:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+
+```bash
+cd /home/lexzach/Documents/Git/cal.diy/docs/sprint2/diagrams && python3 - <<'EOF'
+def edit(p, pairs):
+    s=open(p).read()
+    for a,b in pairs:
+        assert a in s, a
+        s=s.replace(a,b,1)
+    open(p,"w").write(s)
+edit("13-zachbowden-class.puml",[
+("    +bookedTimesByDay: Record<string, string[]>","    {field} -bookedTimesByDay: Record<string, string[]> // from hook"),
+("    +WAITLIST_CLAIM_WINDOW_MS = 6h","    {static} +WAITLIST_CLAIM_WINDOW_MS = 6h"),
+("    +findOldestWaitingForTime(eventTypeId, time)","    +findOldestWaitingForTime(eventTypeId, time)\n    +findEventTypeForWaitlist(eventTypeId)"),
+("    +uid: String (claim/leave token)","    {field} +uid: String // claim/leave token"),
+("    +slotStart: DateTime? (null = whole day)","    {field} +slotStart: DateTime? // null = whole day"),
+("    +hostUserId, offerStart, offerEnd, offerExpiresAt\n","    +hostUserId, offerStart, offerEnd, offerExpiresAt\n    {field} +createdAt: DateTime // first come, first served\n"),
+])
+edit("13-zachbowden-sequence.puml",[
+("""DB --> Svc : start times
+Svc --> UI : { times }""","""DB --> Svc : start times
+Svc --> API : start times
+API --> UI : { times }"""),
+("""Svc -> DB : create WaitlistEntry (WAITING, slotStart)""","""Svc -> DB : create WaitlistEntry (WAITING, slotStart)\\nor return existing entry for same email + day/time"""),
+("""Svc -> Svc : skip if slot starts in less than 6h""","""Svc -> Svc : skip if slot starts in less than 6h
+Svc -> DB : skip if slot was already rebooked"""),
+])
+EOF
+grep -n "{field}\|{static}\|findEventTypeForWaitlist" 13-zachbowden-class.puml; grep -n "Svc --> API\|rebooked\|existing entry" 13-zachbowden-sequence.puml
+```
+
+```text
+27:    {field} -bookedTimesByDay: Record<string, string[]> // from hook
+66:    {static} +WAITLIST_CLAIM_WINDOW_MS = 6h
+87:    +findEventTypeForWaitlist(eventTypeId)
+120:    {field} +uid: String // claim/leave token
+124:    {field} +slotStart: DateTime? // null = whole day
+127:    {field} +createdAt: DateTime // first come, first served
+45:Svc --> API : start times
+66:Svc -> DB : create WaitlistEntry (WAITING, slotStart)\nor return existing entry for same email + day/time
+83:Svc -> DB : skip if slot was already rebooked
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-30 02:02:34Z)**_
+
+I've fixed all seven issues in the two `.puml` files; both are in `docs/sprint2/diagrams/`. The blue boxes, amber notes and both design-decision notes are unchanged. I couldn't render the files here, so please re-render to confirm the fixes display as expected.
+
+**Class diagram ([13-zachbowden-class.puml](13-zachbowden-class.puml)):**
+- **Field bug fixed:** `uid` and `slotStart` on `WaitlistEntry` now have the `{field}` marker, so they show with the other fields instead of under methods.
+- **Added:** `findEventTypeForWaitlist()` on `WaitlistRepository`, and `createdAt` on `WaitlistEntry`.
+- **Corrected:** `WAITLIST_CLAIM_WINDOW_MS` is marked static, and `bookedTimesByDay` is marked private.
+
+**Sequence diagram ([13-zachbowden-sequence.puml](13-zachbowden-sequence.puml)):**
+- **Response path:** the booked times now return through the API route instead of jumping straight from the service to the page.
+- **Added steps:** `offerSpot` now shows the check that skips a slot that's already been booked again, and `join()` notes that it returns the existing entry when the person is already waiting.
+
+Two small simplifications remain:
+- The diagram shows the service sending the email and scheduling the expiry directly. In the code it does both through `IWaitlistServiceDeps`, and `getWaitlistService` supplies the real email and tasker.
+- `DatePicker` combines the web wrapper, which calls the hook, with the shared component, which receives `waitlistDates`.
