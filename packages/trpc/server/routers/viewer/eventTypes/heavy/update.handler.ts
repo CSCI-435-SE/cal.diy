@@ -9,7 +9,9 @@ import { ScheduleRepository } from "@calcom/features/schedules/repositories/Sche
 import tasker from "@calcom/features/tasker";
 import { getTranslation } from "@calcom/i18n/server";
 import { validateIntervalLimitOrder } from "@calcom/lib/intervalLimits/validateIntervalLimitOrder";
+import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
 import logger from "@calcom/lib/logger";
+import { mergeRecurringEventUpdate } from "@calcom/lib/recurringWeekdays";
 import { validateBookerLayouts } from "@calcom/lib/validateBookerLayouts";
 import type { PrismaClient } from "@calcom/prisma";
 import { Prisma } from "@calcom/prisma/client";
@@ -242,13 +244,19 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
   }
 
   if (recurringEvent) {
+    const ruleToSave = mergeRecurringEventUpdate(
+      recurringEvent,
+      parseRecurringEvent(eventType.recurringEvent)
+    );
     data.recurringEvent = {
       dstart: recurringEvent.dtstart as unknown as Prisma.InputJsonObject,
       interval: recurringEvent.interval,
       count: recurringEvent.count,
       freq: recurringEvent.freq,
       until: recurringEvent.until as unknown as Prisma.InputJsonObject,
-      tzid: recurringEvent.tzid,
+      tzid: ruleToSave.tzid,
+      byweekday: ruleToSave.byweekday,
+      wkst: ruleToSave.wkst,
     };
   } else if (recurringEvent === null) {
     data.recurringEvent = Prisma.DbNull;
