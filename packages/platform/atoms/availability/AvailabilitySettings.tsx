@@ -23,11 +23,13 @@ import type {
 } from "@calcom/features/eventtypes/components/BulkEditDefaultForEventsModal";
 import { BulkEditDefaultForEventsModal } from "@calcom/features/eventtypes/components/BulkEditDefaultForEventsModal";
 import DateOverrideInputDialog from "@calcom/features/schedules/components/DateOverrideInputDialog";
+import { AvailabilityViewToggle } from "@calcom/features/schedules/components/AvailabilityViewToggle";
 import DateOverrideList from "@calcom/features/schedules/components/DateOverrideList";
 import {
   ScheduleComponent as PlatformSchedule,
 } from "@calcom/features/schedules/components/ScheduleComponent";
 import { WeeklyAvailabilityGrid } from "@calcom/features/schedules/components/WeeklyAvailabilityGrid";
+import type { AvailabilityView } from "@calcom/features/schedules/hooks/useAvailabilityView";
 import type { WeeklyGridSelectionChange } from "@calcom/features/schedules/hooks/useWeeklyGridDrag";
 import { AVAILABILITY_SLOT_INTERVAL_MINUTES } from "@calcom/features/schedules/lib/constants";
 import { applyDragToTimeRanges, scheduleToSlotGrid } from "@calcom/features/schedules/lib/weekly-grid";
@@ -120,7 +122,9 @@ type AvailabilitySettingsProps = {
   customClassNames?: CustomClassNames;
   disableEditableHeading?: boolean;
   enableOverrides?: boolean;
-  availabilityView?: "list" | "grid";
+  availabilityView?: AvailabilityView;
+  /** Shows the Text / Visual toggle; the caller owns `availabilityView` and updates it here */
+  onAvailabilityViewChange?: (view: AvailabilityView) => void;
   onFormStateChange?: (formState: AvailabilityFormValues) => void;
   bulkUpdateModalProps?: {
     isOpen: boolean;
@@ -350,6 +354,7 @@ export const AvailabilitySettings = forwardRef<AvailabilitySettingsFormRef, Avai
       disableEditableHeading = false,
       enableOverrides = false,
       availabilityView = "list",
+      onAvailabilityViewChange,
       onFormStateChange,
       bulkUpdateModalProps,
       allowSetToDefault = true,
@@ -706,6 +711,11 @@ export const AvailabilitySettings = forwardRef<AvailabilitySettingsFormRef, Avai
             }}
             className={cn(customClassNames?.formClassName, "flex flex-col sm:mx-0 xl:flex-row xl:space-x-6")}>
             <div className="flex-1">
+              {onAvailabilityViewChange && (
+                <div className="mb-4 flex justify-end">
+                  <AvailabilityViewToggle value={availabilityView} onValueChange={onAvailabilityViewChange} />
+                </div>
+              )}
               <div
                 className={cn(
                   "border-subtle mb-6 rounded-md border",
