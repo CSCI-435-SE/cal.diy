@@ -245,16 +245,42 @@ function wallClockToTimeZone(stored: Date, timeZone: string): Dayjs {
   return dayjs.tz(dayjs.utc(stored).format("YYYY-MM-DDTHH:mm:ss.SSS"), timeZone);
 }
 
+export type PartialDayOutOfOfficeWindow<T> = {
+  // Every host-zone calendar date the window touches, because the away map is keyed by date (slots.ts).
+  dates: string[];
+  start: Dayjs;
+  end: Dayjs;
+  entry: T;
+};
+
+export function getPartialDayOutOfOfficeWindows<T extends { start: Date; end: Date }>(
+  entries: T[],
+  timeZone: string
+): PartialDayOutOfOfficeWindow<T>[] {
+  return entries
+    .filter((entry) => !isWholeDayOutOfOffice(entry))
+    .map((entry) => {
+      const start = wallClockToTimeZone(entry.start, timeZone);
+      const end = wallClockToTimeZone(entry.end, timeZone);
+      // Step through the dates in UTC so a DST change in the host's zone cannot shift a day boundary.
+      const lastDate = end.format("YYYY-MM-DD");
+      const dates: string[] = [];
+      for (
+        let day = dayjs.utc(start.format("YYYY-MM-DD"));
+        day.format("YYYY-MM-DD") <= lastDate;
+        day = day.add(1, "day")
+      ) {
+        dates.push(day.format("YYYY-MM-DD"));
+      }
+      return { dates, start, end, entry };
+    });
+}
+
 export function getPartialDayOutOfOfficeRanges(
   entries: { start: Date; end: Date }[],
   timeZone: string
 ): DateRange[] {
-  return entries
-    .filter((entry) => !isWholeDayOutOfOffice(entry))
-    .map(({ start, end }) => ({
-      start: wallClockToTimeZone(start, timeZone),
-      end: wallClockToTimeZone(end, timeZone),
-    }));
+  return getPartialDayOutOfOfficeWindows(entries, timeZone).map(({ start, end }) => ({ start, end }));
 }
 
 export function buildDateRanges({
@@ -296,7 +322,10 @@ export function buildDateRanges({
 
   const groupedOOO = groupByDate(
     outOfOffice
-      ? Object.keys(outOfOffice).map((outOfOffice) => processOOO(dayjs.utc(outOfOffice), timeZone))
+      ? Object.entries(outOfOffice)
+          // A date with windows is away only inside them; the caller subtracts those from oooExcludedDateRanges.
+          .filter(([, dayData]) => !dayData.windows)
+          .map(([date]) => processOOO(dayjs.utc(date), timeZone))
       : []
   );
 

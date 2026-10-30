@@ -202,8 +202,8 @@ export const AvailableTimeSlots = ({
         ) : (
           slotsPerDay.length > 0 &&
           slotsPerDay.map((slots) => {
-            // Check if this day is OOO - since OOO is date-level, just check the first slot
-            const isOOODay = slots.slots.length > 0 && slots.slots[0]?.away;
+            // A partial-day entry can leave the first slot away while the rest of the day is bookable
+            const isOOODay = slots.slots.length > 0 && slots.slots.every((slot) => slot.away);
             return (
               <AvailableTimesHeader
                 customClassNames={{

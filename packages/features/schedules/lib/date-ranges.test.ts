@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildDateRanges,
   getPartialDayOutOfOfficeRanges,
+  getPartialDayOutOfOfficeWindows,
   intersect,
   isWholeDayOutOfOffice,
   processDateOverride,
@@ -1371,5 +1372,56 @@ describe("getPartialDayOutOfOfficeRanges", () => {
       ["2026-10-08T13:00:00.000Z", "2026-10-08T18:00:00.000Z"],
       ["2026-10-08T20:00:00.000Z", "2026-10-08T21:00:00.000Z"],
     ]);
+  });
+});
+
+describe("getPartialDayOutOfOfficeWindows", () => {
+  const timeZone = "America/New_York";
+
+  it("lists the one date a window inside a day touches, with its instants", () => {
+    const entry = { start: new Date("2026-10-08T14:00:00.000Z"), end: new Date("2026-10-08T16:00:00.000Z") };
+    const [window] = getPartialDayOutOfOfficeWindows([entry], timeZone);
+
+    expect(window.dates).toEqual(["2026-10-08"]);
+    expect(window.start.toISOString()).toBe("2026-10-08T18:00:00.000Z");
+    expect(window.end.toISOString()).toBe("2026-10-08T20:00:00.000Z");
+    expect(window.entry).toBe(entry);
+  });
+
+  it("lists both dates for a window that runs past midnight", () => {
+    const [window] = getPartialDayOutOfOfficeWindows(
+      [{ start: new Date("2026-10-07T16:00:00.000Z"), end: new Date("2026-10-08T10:00:00.000Z") }],
+      timeZone
+    );
+
+    expect(window.dates).toEqual(["2026-10-07", "2026-10-08"]);
+  });
+
+  it("drops whole-day entries", () => {
+    expect(
+      getPartialDayOutOfOfficeWindows(
+        [{ start: new Date("2026-10-07T00:00:00.000Z"), end: new Date("2026-10-07T23:59:59.999Z") }],
+        timeZone
+      )
+    ).toEqual([]);
+  });
+
+  it("keeps the date and the offset in force across the spring DST change (2026-03-08)", () => {
+    const [daytime, overnight] = getPartialDayOutOfOfficeWindows(
+      [
+        { start: new Date("2026-03-08T14:00:00.000Z"), end: new Date("2026-03-08T16:00:00.000Z") },
+        { start: new Date("2026-03-07T22:00:00.000Z"), end: new Date("2026-03-08T03:30:00.000Z") },
+      ],
+      timeZone
+    );
+
+    // 14:00-16:00 EDT (UTC-4): the clocks moved at 02:00 that morning.
+    expect(daytime.dates).toEqual(["2026-03-08"]);
+    expect(daytime.start.toISOString()).toBe("2026-03-08T18:00:00.000Z");
+    expect(daytime.end.toISOString()).toBe("2026-03-08T20:00:00.000Z");
+    // 22:00 EST (UTC-5) the night before to 03:30 EDT (UTC-4) after the change.
+    expect(overnight.dates).toEqual(["2026-03-07", "2026-03-08"]);
+    expect(overnight.start.toISOString()).toBe("2026-03-08T03:00:00.000Z");
+    expect(overnight.end.toISOString()).toBe("2026-03-08T07:30:00.000Z");
   });
 });
