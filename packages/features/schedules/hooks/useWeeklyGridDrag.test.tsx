@@ -260,4 +260,215 @@ describe("useWeeklyGridDrag", () => {
 
     expect(frames).toHaveLength(0);
   });
+
+  describe("touch", () => {
+    const LONG_PRESS_MS = 350;
+    const finger = { pointerId: 1, isPrimary: true, pointerType: "touch", button: 0 };
+    const secondFinger = { pointerId: 2, isPrimary: false, pointerType: "touch", button: 0 };
+    const rows = () => screen.getByTestId("rows");
+    const moveFingerTo = (clientY: number) => fireEvent.pointerMove(rows(), { ...finger, clientY });
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const touchMoveIsPrevented = () =>
+      !rows().dispatchEvent(new Event("touchmove", { bubbles: true, cancelable: true }));
+
+    it("waits the full long press before a touch starts dragging", () => {
+      renderHarness();
+
+      pressAt(1, 36, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS - 1));
+      expect(isSelected(1, 36)).toBe(false);
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(isSelected(1, 36)).toBe(true);
+
+      moveFingerTo(slotY(40));
+      expect(isSelected(1, 40)).toBe(true);
+    });
+
+    it("commits a long-press drag on release", () => {
+      const onSelectionChange = renderHarness();
+
+      pressAt(1, 36, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      moveFingerTo(slotY(39));
+      fireEvent.pointerUp(rows(), finger);
+
+      expect(onSelectionChange).toHaveBeenCalledWith({
+        day: 1,
+        startMinute: 540,
+        endMinute: 600,
+        mode: "select",
+      });
+    });
+
+    it("deselects when a long-press drag starts on a selected slot", () => {
+      const value = emptyWeek();
+      for (let slot = 36; slot < 52; slot++) value[1][slot] = true;
+      const onSelectionChange = renderHarness(value);
+
+      pressAt(1, 44, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      moveFingerTo(slotY(47));
+      fireEvent.pointerUp(rows(), finger);
+
+      expect(onSelectionChange).toHaveBeenCalledWith(expect.objectContaining({ day: 1, mode: "deselect" }));
+    });
+
+    it("cancels the hold when the finger moves past the tolerance", () => {
+      const onSelectionChange = renderHarness();
+
+      pressAt(1, 36, finger);
+      moveFingerTo(slotY(36) + 9);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      moveFingerTo(slotY(40));
+
+      expect(isSelected(1, 36)).toBe(false);
+      expect(isSelected(1, 40)).toBe(false);
+
+      fireEvent.pointerUp(rows(), finger);
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it("keeps the hold when the finger jitters within the tolerance", () => {
+      renderHarness();
+
+      pressAt(1, 36, finger);
+      moveFingerTo(slotY(36) + 8);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+
+      expect(isSelected(1, 36)).toBe(true);
+    });
+
+    it("toggles a single slot on a quick tap", () => {
+      const onSelectionChange = renderHarness();
+
+      pressAt(1, 36, finger);
+      fireEvent.pointerUp(rows(), finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+
+      expect(onSelectionChange).toHaveBeenCalledTimes(1);
+      expect(onSelectionChange).toHaveBeenCalledWith({
+        day: 1,
+        startMinute: 540,
+        endMinute: 555,
+        mode: "select",
+      });
+      expect(isSelected(1, 36)).toBe(false);
+    });
+
+    it("drops the hold when the browser takes over the touch to scroll", () => {
+      const onSelectionChange = renderHarness();
+
+      pressAt(1, 36, finger);
+      fireEvent.pointerCancel(rows(), finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+
+      expect(isSelected(1, 36)).toBe(false);
+      fireEvent.pointerUp(rows(), finger);
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it("ignores pointercancel from a different pointer", () => {
+      renderHarness();
+
+      pressAt(1, 36, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      fireEvent.pointerCancel(rows(), { ...finger, pointerId: 7 });
+      moveFingerTo(slotY(40));
+
+      expect(isSelected(1, 40)).toBe(true);
+    });
+
+    it("only blocks touch scrolling while a drag is active", () => {
+      renderHarness();
+
+      expect(touchMoveIsPrevented()).toBe(false);
+
+      pressAt(1, 36, finger);
+      expect(touchMoveIsPrevented()).toBe(false);
+
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      expect(touchMoveIsPrevented()).toBe(true);
+
+      fireEvent.pointerUp(rows(), finger);
+      expect(touchMoveIsPrevented()).toBe(false);
+    });
+
+    it("blocks the context menu during a hold but not for an idle mouse", () => {
+      renderHarness();
+
+      expect(fireEvent.contextMenu(cell(1, 36))).toBe(true);
+
+      pressAt(1, 36, finger);
+      expect(fireEvent.contextMenu(cell(1, 36))).toBe(false);
+    });
+
+    it("starts mouse and pen drags immediately without a hold", () => {
+      renderHarness();
+
+      pressAt(1, 36, { pointerType: "pen" });
+      expect(isSelected(1, 36)).toBe(true);
+      fireEvent.pointerUp(rows(), { ...pointer, pointerType: "pen" });
+
+      pressAt(0, 10);
+      expect(isSelected(0, 10)).toBe(true);
+    });
+
+    it("auto-scrolls during a long-press drag near the bottom edge", () => {
+      renderHarness();
+
+      pressAt(1, 50, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      moveFingerTo(SCROLL_BOX_HEIGHT - 5);
+
+      expect(frames).toHaveLength(1);
+      act(() => frames[0](0));
+      expect(scrollTop).toBeGreaterThan(0);
+    });
+
+    it("cancels an active drag without committing when a second finger touches down", () => {
+      const onSelectionChange = renderHarness();
+
+      pressAt(1, 36, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+      moveFingerTo(slotY(40));
+      expect(isSelected(1, 40)).toBe(true);
+
+      fireEvent.pointerDown(cell(1, 60), { ...secondFinger, clientY: slotY(60) });
+
+      expect(isSelected(1, 36)).toBe(false);
+      expect(isSelected(1, 40)).toBe(false);
+
+      moveFingerTo(slotY(45));
+      expect(isSelected(1, 45)).toBe(false);
+
+      fireEvent.pointerUp(rows(), secondFinger);
+      fireEvent.pointerUp(rows(), finger);
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it("never starts a drag when a second finger touches down during the hold", () => {
+      const onSelectionChange = renderHarness();
+
+      pressAt(1, 36, finger);
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS - 100));
+      fireEvent.pointerDown(cell(1, 60), { ...secondFinger, clientY: slotY(60) });
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS));
+
+      moveFingerTo(slotY(40));
+      expect(isSelected(1, 36)).toBe(false);
+      expect(isSelected(1, 40)).toBe(false);
+
+      fireEvent.pointerUp(rows(), finger);
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+  });
 });

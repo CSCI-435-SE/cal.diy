@@ -93,7 +93,7 @@ describe("WeeklyAvailabilityGrid", () => {
     const grid = screen.getByRole("grid");
     expect(grid.getAttribute("aria-readonly")).toBe("true");
     expect(grid.className).not.toContain("select-none");
-    expect(screen.getByTestId("weekly-grid-cell-1-36").className).not.toContain("touch-none");
+    expect(screen.getByTestId("weekly-grid-cell-1-36").className).not.toContain("touch-pan-y");
   });
 });
 
@@ -117,14 +117,15 @@ describe("WeeklyAvailabilityGrid drag editing", () => {
     vi.restoreAllMocks();
   });
 
-  it("prevents text selection and page scrolling on cells when editable", () => {
+  it("prevents text selection and limits cells to vertical scrolling when editable", () => {
     render(<WeeklyAvailabilityGrid value={emptyGrid()} timeFormat={12} onSelectionChange={vi.fn()} />);
 
     const grid = screen.getByRole("grid");
     expect(grid.getAttribute("aria-readonly")).toBe("false");
     expect(grid.className).toContain("select-none");
-    expect(cell(1, 36).className).toContain("touch-none");
-    expect(screen.getAllByRole("rowheader")[0].className).not.toContain("touch-none");
+    expect(cell(1, 36).className).toContain("touch-pan-y");
+    expect(cell(1, 36).className).toContain("[-webkit-touch-callout:none]");
+    expect(screen.getAllByRole("rowheader")[0].className).not.toContain("touch-pan-y");
   });
 
   it("highlights dragged cells live and reports the change on release", () => {
