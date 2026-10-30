@@ -17,17 +17,27 @@ import TwoFactorAuthAPI from "./TwoFactorAuthAPI";
 
 interface EnableTwoFactorModalProps {
   open: boolean;
-  onOpenChange: () => void;
+  onOpenChange?: () => void;
 
   /**
    * Called when the user closes the modal without disabling two-factor auth
    */
-  onCancel: () => void;
+  onCancel?: () => void;
 
   /**
    * Called when the user enables two-factor auth
    */
   onEnable: () => void;
+
+  /**
+   * Called once the code is verified and two-factor auth is active, before the user closes the backup codes
+   */
+  onBackupCodesShown?: () => void;
+
+  /**
+   * Used when an admin requires 2FA site-wide: the modal can't be dismissed until setup is finished
+   */
+  isRequired?: boolean;
 }
 
 enum SetupStep {
@@ -53,7 +63,14 @@ interface EnableTwoFactorValues {
   totpCode: string;
 }
 
-const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: EnableTwoFactorModalProps) => {
+const EnableTwoFactorModal = ({
+  onEnable,
+  onBackupCodesShown,
+  onCancel,
+  open,
+  onOpenChange,
+  isRequired = false,
+}: EnableTwoFactorModalProps) => {
   const { t } = useLocale();
   const form = useForm<EnableTwoFactorValues>();
 
@@ -76,6 +93,13 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
     setPassword("");
     setErrorMessage(null);
     setStep(SetupStep.ConfirmPassword);
+  };
+
+  // Setup was finished elsewhere (e.g. another tab) while this modal was open, so there is nothing left to do here
+  const handleAlreadyEnabled = () => {
+    resetState();
+    showToast(t("2fa_already_enabled"), "success");
+    onEnable();
   };
 
   async function handleSetup(e: React.FormEvent) {
@@ -108,7 +132,9 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
         return;
       }
 
-      if (body.error === ErrorCode.IncorrectPassword) {
+      if (body.error === ErrorCode.TwoFactorAlreadyEnabled) {
+        handleAlreadyEnabled();
+      } else if (body.error === ErrorCode.IncorrectPassword) {
         setErrorMessage(t("incorrect_password"));
       } else {
         setErrorMessage(t("something_went_wrong"));
@@ -137,10 +163,13 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
 
       if (response.status === 200) {
         setStep(SetupStep.DisplayBackupCodes);
+        onBackupCodesShown?.();
         return;
       }
 
-      if (body.error === ErrorCode.IncorrectTwoFactorCode) {
+      if (body.error === ErrorCode.TwoFactorAlreadyEnabled) {
+        handleAlreadyEnabled();
+      } else if (body.error === ErrorCode.IncorrectTwoFactorCode) {
         setErrorMessage(`${t("code_is_incorrect")} ${t("please_try_again")}`);
       } else {
         setErrorMessage(t("something_went_wrong"));
@@ -167,13 +196,19 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
   const formatBackupCode = (code: string) => `${code.slice(0, 5)}-${code.slice(5, 10)}`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    // Without onOpenChange, the controlled dialog ignores Escape and outside clicks
+    <Dialog open={open} onOpenChange={isRequired ? undefined : onOpenChange}>
       <DialogContent
         title={step === SetupStep.DisplayBackupCodes ? t("backup_codes") : t("enable_2fa")}
         description={setupDescriptions[step]}
         type="creation">
         <WithStep step={SetupStep.ConfirmPassword} current={step}>
           <form onSubmit={handleSetup}>
+            {isRequired && (
+              <p data-testid="2fa-required-notice" className="text-default mb-4 text-sm">
+                {t("require_2fa_setup_notice")}
+              </p>
+            )}
             <div className="mb-4">
               <PasswordField
                 label={t("password")}
@@ -222,11 +257,11 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
             </div>
           </WithStep>
           <DialogFooter className="mt-8" showDivider>
-            {step !== SetupStep.DisplayBackupCodes ? (
+            {!isRequired && step !== SetupStep.DisplayBackupCodes ? (
               <Button
                 color="secondary"
                 onClick={() => {
-                  onCancel();
+                  onCancel?.();
                   resetState();
                 }}>
                 {t("cancel")}
@@ -244,7 +279,7 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
             </WithStep>
             <WithStep step={SetupStep.DisplayQrCode} current={step}>
               <Button
-                type="submit"
+                type="button"
                 data-testid="goto-otp-screen"
                 className="me-2 ms-2"
                 onClick={() => setStep(SetupStep.EnterTotpCode)}>
@@ -271,7 +306,7 @@ const EnableTwoFactorModal = ({ onEnable, onCancel, open, onOpenChange }: Enable
                     resetState();
                     onEnable();
                   }}>
-                  {t("close")}
+                  {isRequired ? t("continue") : t("close")}
                 </Button>
                 <Button
                   color="secondary"

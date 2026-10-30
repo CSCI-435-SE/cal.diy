@@ -10,7 +10,7 @@ import { Button } from "@calcom/ui/components/button";
 import { OnboardingCard } from "../../components/OnboardingCard";
 import { OnboardingLayout } from "../../components/OnboardingLayout";
 import { OnboardingCalendarBrowserView } from "../../components/onboarding-calendar-browser-view";
-import { useSubmitPersonalOnboarding } from "../../hooks/useSubmitPersonalOnboarding";
+import { useFinishPersonalOnboarding } from "../../hooks/useFinishPersonalOnboarding";
 import { InstallableAppCard } from "../_components/InstallableAppCard";
 import { useAppInstallation } from "../_components/useAppInstallation";
 
@@ -22,7 +22,7 @@ export const PersonalCalendarView = ({ userEmail }: PersonalCalendarViewProps) =
   const router = useRouter();
   const { t } = useLocale();
   const { installingAppSlug, setInstallingAppSlug, createInstallHandlers } = useAppInstallation();
-  const { submitPersonalOnboarding, isSubmitting } = useSubmitPersonalOnboarding();
+  const { finishPersonalOnboarding, isSubmitting, totalSteps } = useFinishPersonalOnboarding();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showFadeGradient, setShowFadeGradient] = useState(false);
 
@@ -84,11 +84,11 @@ export const PersonalCalendarView = ({ userEmail }: PersonalCalendarViewProps) =
   }, [queryIntegrations.data?.items]);
 
   const handleContinue = () => {
-    submitPersonalOnboarding();
+    finishPersonalOnboarding();
   };
 
   const handleSkip = () => {
-    submitPersonalOnboarding();
+    finishPersonalOnboarding();
   };
 
   const handleBack = () => {
@@ -96,7 +96,7 @@ export const PersonalCalendarView = ({ userEmail }: PersonalCalendarViewProps) =
   };
 
   return (
-    <OnboardingLayout userEmail={userEmail} currentStep={2} totalSteps={2}>
+    <OnboardingLayout userEmail={userEmail} currentStep={2} totalSteps={totalSteps}>
       {/* Left column - Main content */}
       <OnboardingCard
         title={t("connect_your_calendar")}

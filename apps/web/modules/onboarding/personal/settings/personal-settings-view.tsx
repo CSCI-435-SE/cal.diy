@@ -11,6 +11,7 @@ import { showToast } from "@calcom/ui/components/toast";
 import { UsernameAvailabilityField } from "@components/ui/UsernameAvailability";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import { OnboardingCard } from "../../components/OnboardingCard";
 import { OnboardingLayout } from "../../components/OnboardingLayout";
 import { OnboardingBrowserView } from "../../components/onboarding-browser-view";
 import { OnboardingContinuationPrompt } from "../../components/onboarding-continuation-prompt";
+import { getPersonalOnboardingTotalSteps } from "../../hooks/useFinishPersonalOnboarding";
 import { useOnboardingStore } from "../../store/onboarding-store";
 
 type PersonalSettingsViewProps = {
@@ -34,6 +36,7 @@ export const PersonalSettingsView = ({
   const router = useRouter();
   const { t } = useLocale();
   const { data: user } = trpc.viewer.me.get.useQuery();
+  const { data: session } = useSession();
   const { personalDetails, setPersonalDetails } = useOnboardingStore();
 
   const avatarRef = useRef<HTMLInputElement>(null);
@@ -112,7 +115,10 @@ export const PersonalSettingsView = ({
 
   return (
     <>
-      <OnboardingLayout userEmail={userEmail} currentStep={1} totalSteps={2}>
+      <OnboardingLayout
+        userEmail={userEmail}
+        currentStep={1}
+        totalSteps={getPersonalOnboardingTotalSteps(session?.user.requiresTwoFactorSetup === true)}>
         {/* Left column - Main content */}
         <OnboardingCard
           title={t("add_your_details")}

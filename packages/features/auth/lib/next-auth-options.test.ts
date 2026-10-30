@@ -17,16 +17,24 @@ vi.mock("@calcom/prisma", () => ({
 }));
 
 const mockFindByEmailAndIncludeProfilesAndPassword = vi.fn();
+const mockUserRepoFindById = vi.fn();
 
 vi.mock("@calcom/features/users/repositories/UserRepository", () => {
   return {
     UserRepository: vi.fn().mockImplementation(function () {
       return {
         findByEmailAndIncludeProfilesAndPassword: mockFindByEmailAndIncludeProfilesAndPassword,
+        findById: mockUserRepoFindById,
       };
     }),
   };
 });
+
+const mockRequiresTwoFactorSetup = vi.fn().mockResolvedValue(false);
+
+vi.mock("./requiresTwoFactorSetup", () => ({
+  requiresTwoFactorSetup: (...args: unknown[]) => mockRequiresTwoFactorSetup(...args),
+}));
 
 vi.mock("./verifyPassword", () => ({
   verifyPassword: vi.fn(),
@@ -451,6 +459,51 @@ describe("CredentialsProvider authorize", () => {
       } finally {
         process.env.CALENDSO_ENCRYPTION_KEY = originalKey;
       }
+    });
+  });
+
+  describe("Two-factor setup requirement", () => {
+    const signIn = (email: string) =>
+      authorizeCredentials({ email, password: "password123", totpCode: "", backupCode: "" });
+
+    beforeEach(async () => {
+      const { isPasswordValid } = await import("@calcom/lib/auth/isPasswordValid");
+      vi.mocked(isPasswordValid).mockReturnValue(true);
+      vi.mocked(verifyPassword).mockResolvedValue(true);
+    });
+
+    it("asks the rule about the logged-in user and returns its answer", async () => {
+      mockRequiresTwoFactorSetup.mockResolvedValueOnce(true);
+      const mockUser = createMockUser();
+      mockFindByEmailAndIncludeProfilesAndPassword.mockResolvedValue(mockUser);
+
+      const result = await signIn(mockUser.email);
+
+      expect(mockRequiresTwoFactorSetup).toHaveBeenCalledWith(
+        expect.objectContaining({ identityProvider: IdentityProvider.CAL, twoFactorEnabled: false })
+      );
+      expect(result?.requiresTwoFactorSetup).toBe(true);
+    });
+
+    it("is false when the rule does not apply", async () => {
+      mockRequiresTwoFactorSetup.mockResolvedValueOnce(false);
+      const mockUser = createMockUser();
+      mockFindByEmailAndIncludeProfilesAndPassword.mockResolvedValue(mockUser);
+
+      const result = await signIn(mockUser.email);
+
+      expect(result?.requiresTwoFactorSetup).toBe(false);
+    });
+
+    it("is kept alongside the inactive admin reason", async () => {
+      mockRequiresTwoFactorSetup.mockResolvedValueOnce(true);
+      const mockUser = createMockUser({ role: UserPermissionRole.ADMIN });
+      mockFindByEmailAndIncludeProfilesAndPassword.mockResolvedValue(mockUser);
+
+      const result = await signIn(mockUser.email);
+
+      expect(result?.inactiveAdminReason).toBe("2fa");
+      expect(result?.requiresTwoFactorSetup).toBe(true);
     });
   });
 });
@@ -1285,5 +1338,101 @@ describe("Azure AD JWT callback", () => {
         })
       );
     });
+  });
+});
+
+describe("requiresTwoFactorSetup in the token and session callbacks", () => {
+  type Callbacks = NonNullable<ReturnType<typeof import("./next-auth-options").getOptions>["callbacks"]>;
+  type JwtParams = Parameters<NonNullable<Callbacks["jwt"]>>[0];
+  type SessionParams = Parameters<NonNullable<Callbacks["session"]>>[0];
+  let callbacks: Callbacks;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+
+    const prismaModule = await import("@calcom/prisma");
+    Object.assign(prismaModule.default.user, { findFirst: mockPrismaUserFindFirst });
+    Object.assign(prismaModule.default, { membership: { findUnique: vi.fn().mockResolvedValue(null) } });
+
+    const { ProfileRepository } = await import("@calcom/features/profile/repositories/ProfileRepository");
+    vi.mocked(ProfileRepository.findAllProfilesForUserIncludingMovedUser).mockResolvedValue([
+      { id: 1, upId: "usr_1" },
+    ] as Awaited<ReturnType<typeof ProfileRepository.findAllProfilesForUserIncludingMovedUser>>);
+    vi.mocked(ProfileRepository.findByUpIdWithAuth).mockResolvedValue({
+      id: 1,
+      username: "testuser",
+      organization: null,
+    } as Awaited<ReturnType<typeof ProfileRepository.findByUpIdWithAuth>>);
+
+    const { getOptions } = await import("./next-auth-options");
+    callbacks = getOptions({ getDubId: () => undefined, getTrackingData: () => ({}) }).callbacks as Callbacks;
+  });
+
+  const runJwt = (params: Partial<JwtParams>) => callbacks.jwt!(params as JwtParams);
+
+  it("copies the login decision onto the token at credentials sign-in", async () => {
+    const result = await runJwt({
+      token: { sub: "1", email: "user@example.com" },
+      user: { id: 1, email: "user@example.com", requiresTwoFactorSetup: true },
+      account: { type: "credentials", provider: "credentials", providerAccountId: "1" },
+    });
+
+    expect(result.requiresTwoFactorSetup).toBe(true);
+  });
+
+  it("recomputes on refresh and overrides a stale value saved in the token", async () => {
+    mockPrismaUserFindFirst.mockResolvedValue({
+      id: 1,
+      email: "user@example.com",
+      username: "testuser",
+      name: "Test",
+      role: "USER",
+      locale: "en",
+      avatarUrl: null,
+      movedToProfileId: null,
+      twoFactorEnabled: true,
+      identityProvider: IdentityProvider.CAL,
+      teams: [],
+    });
+    mockRequiresTwoFactorSetup.mockResolvedValueOnce(false);
+
+    const result = await runJwt({
+      token: { sub: "1", email: "user@example.com", upId: "usr_1", requiresTwoFactorSetup: true },
+    });
+
+    expect(mockRequiresTwoFactorSetup).toHaveBeenCalledWith({
+      twoFactorEnabled: true,
+      identityProvider: IdentityProvider.CAL,
+    });
+    expect(result.requiresTwoFactorSetup).toBe(false);
+    expect(result).not.toHaveProperty("twoFactorEnabled");
+    expect(result).not.toHaveProperty("identityProvider");
+  });
+
+  it("ignores the flag in the client-supplied update payload", async () => {
+    mockUserRepoFindById.mockResolvedValue({
+      id: 1,
+      twoFactorEnabled: false,
+      identityProvider: IdentityProvider.CAL,
+    });
+    mockRequiresTwoFactorSetup.mockResolvedValueOnce(true);
+
+    const result = await runJwt({
+      token: { id: 1, sub: "1", email: "user@example.com", requiresTwoFactorSetup: true },
+      trigger: "update",
+      session: { requiresTwoFactorSetup: false },
+    });
+
+    expect(mockUserRepoFindById).toHaveBeenCalledWith({ id: 1 });
+    expect(result.requiresTwoFactorSetup).toBe(true);
+  });
+
+  it("exposes the flag on session.user", async () => {
+    const session = await callbacks.session!({
+      session: { user: {} },
+      token: { id: 1, requiresTwoFactorSetup: true },
+    } as SessionParams);
+
+    expect(session.user.requiresTwoFactorSetup).toBe(true);
   });
 });

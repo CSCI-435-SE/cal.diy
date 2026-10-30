@@ -53,6 +53,7 @@ import { getOrgUsernameFromEmail } from "../signup/utils/getOrgUsernameFromEmail
 import { dub } from "./dub";
 import { ErrorCode } from "./ErrorCode";
 import CalComAdapter from "./next-auth-custom-adapter";
+import { requiresTwoFactorSetup } from "./requiresTwoFactorSetup";
 import { verifyPassword } from "./verifyPassword";
 
 type UserWithProfiles = NonNullable<
@@ -265,7 +266,10 @@ export async function authorizeCredentials(
   };
 
   const role = validateRole(user.role);
-  const baseUser = AdapterUserPresenter.fromCalUser(user, role, hasActiveTeams);
+  const baseUser = {
+    ...AdapterUserPresenter.fromCalUser(user, role, hasActiveTeams),
+    requiresTwoFactorSetup: await requiresTwoFactorSetup(user),
+  };
 
   if (role === "INACTIVE_ADMIN") {
     const passwordValid = isPasswordValid(credentials.password, false, true);
@@ -430,6 +434,8 @@ export const getOptions = ({
       log.debug("callbacks:jwt", safeStringify({ token, user, account, trigger, session }));
       // The data available in 'session' depends on what data was supplied in update method call of session
       if (trigger === "update") {
+        const userId = Number(token.id);
+        const currentUser = userId ? await new UserRepository(prisma).findById({ id: userId }) : null;
         return {
           ...token,
           profileId: session?.profileId ?? token.profileId ?? null,
@@ -438,6 +444,10 @@ export const getOptions = ({
           name: session?.name ?? token.name,
           username: session?.username ?? token.username,
           email: session?.email ?? token.email,
+          // Read from the database, never from the update payload, which the client controls
+          requiresTwoFactorSetup: currentUser
+            ? await requiresTwoFactorSetup(currentUser)
+            : token.requiresTwoFactorSetup,
         } as JWT;
       }
       const autoMergeIdentities = async () => {
@@ -452,6 +462,8 @@ export const getOptions = ({
             role: true,
             locale: true,
             movedToProfileId: true,
+            twoFactorEnabled: true,
+            identityProvider: true,
             teams: {
               include: {
                 team: {
@@ -471,7 +483,12 @@ export const getOptions = ({
 
         // Check if the existingUser has any active teams
         const belongsToActiveTeam = checkIfUserBelongsToActiveTeam(existingUser);
-        const { teams: _teams, ...existingUserWithoutTeamsField } = existingUser;
+        const {
+          teams: _teams,
+          twoFactorEnabled,
+          identityProvider,
+          ...existingUserWithoutTeamsField
+        } = existingUser;
         const allProfiles = await ProfileRepository.findAllProfilesForUserIncludingMovedUser(existingUser);
         log.debug(
           "callbacks:jwt:autoMergeIdentities",
@@ -504,6 +521,7 @@ export const getOptions = ({
         return {
           ...existingUserWithoutTeamsField,
           ...token,
+          requiresTwoFactorSetup: await requiresTwoFactorSetup({ twoFactorEnabled, identityProvider }),
           profileId: profile.id,
           upId,
           belongsToActiveTeam,
@@ -560,6 +578,7 @@ export const getOptions = ({
           profileId: user.profile?.id ?? token.profileId ?? null,
           upId: user.profile?.upId ?? token.upId ?? null,
           inactiveAdminReason: user.inactiveAdminReason,
+          requiresTwoFactorSetup: user.requiresTwoFactorSetup,
         } as JWT;
       }
 
@@ -781,6 +800,7 @@ export const getOptions = ({
           org: token?.org,
           locale: token.locale,
           inactiveAdminReason: token.inactiveAdminReason,
+          requiresTwoFactorSetup: token.requiresTwoFactorSetup,
         },
       };
       return calendsoSession;
