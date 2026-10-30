@@ -19,6 +19,7 @@ export type RecurringEventControllerProps = {
   eventType: EventTypeSetup;
   paymentEnabled: boolean;
   customClassNames?: EventRecurringTabCustomClassNames;
+  user?: { timeZone: string; weekStart: string };
 };
 
 export type EventRecurringTabCustomClassNames = {

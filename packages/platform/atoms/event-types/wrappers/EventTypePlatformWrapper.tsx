@@ -280,6 +280,7 @@ const EventType = forwardRef<
     recurring: tabs.includes("recurring") ? (
       <EventRecurringTabPlatformWrapper
         eventType={eventType}
+        user={user?.data}
         customClassNames={customClassNames?.eventRecurringTab}
       />
     ) : (
