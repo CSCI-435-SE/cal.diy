@@ -281,6 +281,7 @@ model EventType {
   maxLeadThreshold                         Int?
   includeNoShowInRRCalculation             Boolean                @default(false)
   selectedCalendars                        SelectedCalendar[]
+  waitlistEntries                          WaitlistEntry[]
   allowReschedulingPastBookings            Boolean                @default(false)
   hideOrganizerEmail                       Boolean                @default(false)
   maxActiveBookingsPerBooker               Int?
@@ -1468,6 +1469,37 @@ model SelectedSlots {
   isSeat           Boolean  @default(false)
 
   @@unique(fields: [userId, slotUtcStartDate, slotUtcEndDate, uid], name: "selectedSlotUnique")
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  CLAIMED
+  EXPIRED
+  LEFT
+}
+
+model WaitlistEntry {
+  id             Int            @id @default(autoincrement())
+  // Unguessable token that authorizes the claim/leave links sent by email
+  uid            String         @unique @default(uuid())
+  eventTypeId    Int
+  eventType      EventType      @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  name           String
+  email          String
+  timeZone       String
+  dayStart       DateTime
+  dayEnd         DateTime
+  // Set for a specific-time waitlist; null means any time on the day
+  slotStart      DateTime?
+  status         WaitlistStatus @default(WAITING)
+  hostUserId     Int?
+  offerStart     DateTime?
+  offerEnd       DateTime?
+  offerExpiresAt DateTime?
+  createdAt      DateTime       @default(now())
+
+  @@index([eventTypeId, status, dayStart])
 }
 
 enum OAuthClientType {

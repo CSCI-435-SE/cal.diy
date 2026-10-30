@@ -24,6 +24,8 @@ const tasks: Record<TaskTypes, () => Promise<TaskHandler>> = {
     import("./sendBookingReminderEmail").then((module) => module.sendBookingReminderEmail),
   bookingAudit: () => import("./bookingAudit").then((module) => module.bookingAudit),
   cancelBooking: () => import("./cancelBooking").then((module) => module.cancelBooking),
+  offerWaitlistSpot: () => import("./waitlist").then((module) => module.offerWaitlistSpot),
+  expireWaitlistOffer: () => import("./waitlist").then((module) => module.expireWaitlistOffer),
   webhookDelivery: () => import("./webhookDelivery").then((module) => module.webhookDelivery),
 };
 
