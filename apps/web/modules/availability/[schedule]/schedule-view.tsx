@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { AvailabilitySettings } from "@calcom/atoms/availability/AvailabilitySettings";
 import type { BulkUpdatParams } from "@calcom/features/eventtypes/components/BulkEditDefaultForEventsModal";
+import { useAvailabilityView } from "@calcom/features/schedules/hooks/useAvailabilityView";
 import { withErrorFromUnknown } from "@calcom/lib/getClientErrorFromUnknown";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { HttpError } from "@calcom/lib/http-error";
@@ -33,6 +34,7 @@ export const AvailabilitySettingsWebWrapper = ({
   const scheduleId = schedule.id;
   const { timeFormat } = me.data || { timeFormat: null };
   const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
+  const [availabilityView, setAvailabilityView] = useAvailabilityView();
   const bulkUpdateDefaultAvailabilityMutation =
     trpc.viewer.availability.schedule.bulkUpdateToDefaultAvailability.useMutation();
 
@@ -113,6 +115,8 @@ export const AvailabilitySettingsWebWrapper = ({
       isLoading={false}
       isSaving={updateMutation.isPending}
       enableOverrides={true}
+      availabilityView={availabilityView}
+      onAvailabilityViewChange={setAvailabilityView}
       timeFormat={timeFormat}
       weekStart={me.data?.weekStart || "Sunday"}
       backPath={fromEventType ? true : "/availability"}
