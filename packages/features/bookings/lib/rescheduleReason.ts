@@ -4,7 +4,9 @@ export function isRescheduleReasonRequired(
   setting: RescheduleReasonRequirement | null | undefined,
   isHost: boolean
 ): boolean {
-  const requirement = setting ?? RescheduleReasonRequirement.MANDATORY_HOST_ONLY;
+  // Event types created before this setting existed (or that haven't opted in) must not
+  // suddenly require a reschedule reason, so an unset value defaults to no requirement.
+  const requirement = setting ?? RescheduleReasonRequirement.OPTIONAL_BOTH;
 
   switch (requirement) {
     case RescheduleReasonRequirement.OPTIONAL_BOTH:

@@ -1,26 +1,33 @@
-import type { Dispatch, SetStateAction } from "react";
-import { useState } from "react";
-
+import { isRescheduleReasonRequired } from "@calcom/features/bookings/lib/rescheduleReason";
 import { Dialog } from "@calcom/features/components/controlled-dialog";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
+import type { RescheduleReasonRequirement } from "@calcom/prisma/enums";
 import { trpc } from "@calcom/trpc/react";
 import { Button } from "@calcom/ui/components/button";
 import { DialogContent, DialogFooter, DialogHeader } from "@calcom/ui/components/dialog";
 import { TextArea } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
 import { ClockIcon } from "@coss/ui/icons";
+import type { Dispatch, SetStateAction } from "react";
+import { useState } from "react";
 
 interface IRescheduleDialog {
   isOpenDialog: boolean;
   setIsOpenDialog: Dispatch<SetStateAction<boolean>>;
   bookingUid: string;
+  requiresRescheduleReason?: RescheduleReasonRequirement | null;
 }
 
 export const RescheduleDialog = (props: IRescheduleDialog) => {
   const { t } = useLocale();
   const utils = trpc.useUtils();
-  const { isOpenDialog, setIsOpenDialog, bookingUid } = props;
+  const { isOpenDialog, setIsOpenDialog, bookingUid, requiresRescheduleReason } = props;
   const [rescheduleReason, setRescheduleReason] = useState("");
+
+  // Request Reschedule can only be initiated by the booking's organizer, so the "host" branch
+  // of the requirement always applies here.
+  const isReasonRequired = isRescheduleReasonRequired(requiresRescheduleReason, true);
+  const missingRequiredReason = isReasonRequired && !rescheduleReason.trim();
 
   const { mutate: rescheduleApi, isPending } = trpc.viewer.bookings.requestReschedule.useMutation({
     async onSuccess() {
@@ -46,7 +53,7 @@ export const RescheduleDialog = (props: IRescheduleDialog) => {
             <p className="text-subtle text-sm">{t("reschedule_modal_description")}</p>
             <p className="text-emphasis mb-2 mt-6 text-sm font-bold">
               {t("reason_for_reschedule_request")}
-              <span className="text-subtle font-normal"> (Optional)</span>
+              {!isReasonRequired && <span className="text-subtle font-normal"> (Optional)</span>}
             </p>
             <TextArea
               data-testid="reschedule_reason"
@@ -63,7 +70,7 @@ export const RescheduleDialog = (props: IRescheduleDialog) => {
           </Button>
           <Button
             data-testid="send_request"
-            disabled={isPending}
+            disabled={isPending || missingRequiredReason}
             onClick={() => {
               rescheduleApi({
                 bookingUid,
