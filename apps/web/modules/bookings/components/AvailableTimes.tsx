@@ -20,6 +20,7 @@ import { AnimatePresence, m } from "framer-motion";
 import { type ReactNode, useMemo } from "react";
 import type { Slot } from "~/schedules/lib/types";
 import type { IUseBookingLoadingStates } from "../hooks/useBookings";
+import { JoinWaitlistButton } from "./JoinWaitlistButton";
 import { OutOfOfficeInSlots } from "./OutOfOfficeInSlots";
 import { SeatsAvailabilityText } from "./SeatsAvailabilityText";
 
@@ -49,6 +50,10 @@ export type AvailableTimesProps = {
   // It is called when a slot is selected, but it is not a confirmation and a confirm button will be shown besides it.
   onTentativeTimeSelect?: TOnTentativeTimeSelect;
   unavailableTimeSlots?: string[];
+  /** YYYY-MM-DD of `slots`, needed to offer the waitlist */
+  date?: string | null;
+  /** Booked start times on `date` that can be waitlisted */
+  bookedTimes?: string[];
 } & Omit<SlotItemProps, "slot">;
 
 type SlotItemProps = {
@@ -259,29 +264,45 @@ export const AvailableTimes = ({
   slots,
   showTimeFormatToggle = true,
   className,
+  date,
+  bookedTimes = [],
   ...props
 }: AvailableTimesProps) => {
   const { t } = useLocale();
+  const { timeFormat, timezone } = useBookerTime();
 
-  const oooAllDay = slots.every((slot) => slot.away);
+  const oooAllDay = slots.length > 0 && slots.every((slot) => slot.away);
   if (oooAllDay) {
     return <OOOSlot {...slots[0]} />;
   }
 
   // A partial-day entry leaves a run of away slots in the middle of the day. One panel stands in for each run,
   // at the first away slot, so the panel sits between the slots before and after the window.
+  const merged = mergeByTime(slots, date ? bookedTimes : []);
+  const isAway = (item: Slot | string | undefined) => typeof item === "object" && !!item.away;
   const items: ReactNode[] = [];
-  for (let index = 0; index < slots.length; index++) {
-    const slot = slots[index];
+  for (let index = 0; index < merged.length; index++) {
+    const slot = merged[index];
+    if (typeof slot === "string") {
+      items.push(
+        <JoinWaitlistButton
+          key={slot}
+          date={date ?? ""}
+          slotStart={slot}
+          label={t("waitlist_join_time", { time: dayjs.utc(slot).tz(timezone).format(timeFormat) })}
+        />
+      );
+      continue;
+    }
     if (!slot.away) {
       items.push(<SlotItem key={slot.time} slot={slot} {...props} />);
       continue;
     }
-    if (index > 0 && slots[index - 1].away) continue;
+    if (isAway(merged[index - 1])) continue;
     let runEnd = index;
-    while (runEnd + 1 < slots.length && slots[runEnd + 1].away) runEnd++;
+    while (isAway(merged[runEnd + 1])) runEnd++;
     items.push(
-      <OOOSlot key={`ooo-${slot.time}`} {...slot} className={runEnd === slots.length - 1 ? "pb-0" : ""} />
+      <OOOSlot key={`ooo-${slot.time}`} {...slot} className={runEnd === merged.length - 1 ? "pb-0" : ""} />
     );
   }
 
@@ -296,12 +317,24 @@ export const AvailableTimes = ({
             <p className={classNames("text-muted", showTimeFormatToggle ? "-mt-1 text-lg" : "text-sm")}>
               {t("all_booked_today")}
             </p>
+            {date && bookedTimes.length > 0 && (
+              <JoinWaitlistButton date={date} label={t("waitlist_join_day")} className="mb-0 mt-4" />
+            )}
           </div>
         )}
         {items}
       </div>
     </div>
   );
+};
+
+/** Interleaves booked times (as ISO strings) with open slots in time order, skipping times that are still open. */
+const mergeByTime = (slots: Slot[], bookedTimes: string[]): (Slot | string)[] => {
+  if (!bookedTimes.length) return slots;
+  const openTimes = new Set(slots.map((slot) => dayjs(slot.time).valueOf()));
+  const booked = bookedTimes.filter((time) => !openTimes.has(dayjs(time).valueOf()));
+  const timeOf = (item: Slot | string) => dayjs(typeof item === "string" ? item : item.time).valueOf();
+  return [...slots, ...booked].sort((a, b) => timeOf(a) - timeOf(b));
 };
 
 interface IOOOSlotProps {

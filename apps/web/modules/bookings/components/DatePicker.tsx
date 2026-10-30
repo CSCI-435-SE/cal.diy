@@ -1,18 +1,17 @@
-import { shallow } from "zustand/shallow";
-
 import type { Dayjs } from "@calcom/dayjs";
 import dayjs from "@calcom/dayjs";
+import { useSlotsViewOnSmallScreen } from "@calcom/embed-core/embed-iframe";
 import { useBookerStoreContext } from "@calcom/features/bookings/Booker/BookerStoreProvider";
 import type { DatePickerClassNames } from "@calcom/features/bookings/Booker/types";
+import type { Slots } from "@calcom/features/bookings/types";
 import { DatePicker as DatePickerComponent } from "@calcom/features/calendars/components/DatePicker";
-import { useNonEmptyScheduleDays } from "@calcom/web/modules/schedules/hooks/useNonEmptyScheduleDays";
 import { weekdayToWeekIndex } from "@calcom/lib/dayjs";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type { User } from "@calcom/prisma/client";
 import type { PeriodData } from "@calcom/types/Event";
-import { useSlotsViewOnSmallScreen } from "@calcom/embed-core/embed-iframe";
-
-import type { Slots } from "@calcom/features/bookings/types";
+import { useWaitlistBookedTimes } from "@calcom/web/modules/bookings/hooks/useWaitlistBookedTimes";
+import { useNonEmptyScheduleDays } from "@calcom/web/modules/schedules/hooks/useNonEmptyScheduleDays";
+import { shallow } from "zustand/shallow";
 
 const useMoveToNextMonthOnNoAvailability = ({
   browsingDate,
@@ -100,6 +99,7 @@ export const DatePicker = ({
   };
 
   const nonEmptyScheduleDays = useNonEmptyScheduleDays(slots);
+  const bookedTimesByDay = useWaitlistBookedTimes();
   const browsingDate = month ? dayjs(month) : dayjs().startOf("month");
 
   const { moveToNextMonthOnNoAvailability } = useMoveToNextMonthOnNoAvailability({
@@ -157,6 +157,7 @@ export const DatePicker = ({
       }}
       onMonthChange={onMonthChange}
       includedDates={nonEmptyScheduleDays}
+      waitlistDates={Object.keys(bookedTimesByDay)}
       locale={i18n.language}
       browsingDate={month ? dayjs(month) : undefined}
       selected={dayjs(selectedDate)}

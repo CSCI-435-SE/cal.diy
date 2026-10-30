@@ -39,6 +39,7 @@ export { OrganizerRequestReminderEmail } from "./OrganizerRequestReminderEmail";
 export { OrganizerRescheduledEmail } from "./OrganizerRescheduledEmail";
 export { OrganizerScheduledEmail } from "./OrganizerScheduledEmail";
 export { SlugReplacementEmail } from "./SlugReplacementEmail";
+export { WaitlistSpotOpenedEmail } from "./WaitlistSpotOpenedEmail";
 export { TeamInviteEmail } from "./TeamInviteEmail";
 export { VerifyAccountEmail } from "./VerifyAccountEmail";
 export { VerifyEmailByCode } from "./VerifyEmailByCode";

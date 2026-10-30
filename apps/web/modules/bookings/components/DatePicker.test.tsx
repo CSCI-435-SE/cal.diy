@@ -13,6 +13,10 @@ vi.mock("@calcom/features/calendars/components/DatePicker", () => {
   };
 });
 
+vi.mock("@calcom/web/modules/bookings/hooks/useWaitlistBookedTimes", () => ({
+  useWaitlistBookedTimes: () => ({}),
+}));
+
 const noop = () => {
   /* noop */
 };

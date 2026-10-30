@@ -21,6 +21,7 @@ import {
 } from "@calcom/features/webhooks/lib/scheduleTrigger";
 import sendPayload from "@calcom/features/webhooks/lib/sendOrSchedulePayload";
 import type { EventTypeInfo } from "@calcom/features/webhooks/lib/sendPayload";
+import tasker from "@calcom/features/tasker";
 import { HttpError } from "@calcom/lib/http-error";
 import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
@@ -424,6 +425,25 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
       } catch (error) {
         log.error(`Error processing no-show fee for booking ${bookingToDelete.uid}:`, error);
       }
+    }
+  }
+
+  const hostUserId = bookingToDelete.userId;
+  const waitlistEventTypeId = bookingToDelete.eventTypeId;
+  if (waitlistEventTypeId) {
+    try {
+      await Promise.all(
+        updatedBookings.map((booking) =>
+          tasker.create("offerWaitlistSpot", {
+            eventTypeId: waitlistEventTypeId,
+            hostUserId,
+            start: booking.startTime.toISOString(),
+            end: booking.endTime.toISOString(),
+          })
+        )
+      );
+    } catch (error) {
+      log.error("Error queueing waitlist offers", safeStringify({ error }));
     }
   }
 

@@ -44,6 +44,7 @@ import { buildDateRanges } from "@calcom/features/schedules/lib/date-ranges";
 import getSlots from "@calcom/features/schedules/lib/slots";
 import type { ScheduleRepository } from "@calcom/features/schedules/repositories/ScheduleRepository";
 import type { ISelectedSlotRepository } from "@calcom/features/selectedSlots/repositories/ISelectedSlotRepository";
+import { getWaitlistHoldUid } from "@calcom/features/waitlist/lib/getWaitlistHoldUid";
 import type { NoSlotsNotificationService } from "@calcom/features/slots/handleNotificationWhenNoSlots";
 import type { UserRepository } from "@calcom/features/users/repositories/UserRepository";
 import { withSelectedCalendars } from "@calcom/features/users/repositories/UserRepository";
@@ -161,7 +162,11 @@ export class AvailableSlotsService {
         currentTimeInUtc,
       })) || [];
 
-    const slotsSelectedByOtherUsers = unexpiredSelectedSlots.filter((slot) => slot.uid !== bookerClientUid);
+    // A booker who claimed a waitlist offer owns its hold too, so the held slot stays visible to them
+    const ownWaitlistHoldUid = bookerClientUid ? getWaitlistHoldUid(bookerClientUid) : undefined;
+    const slotsSelectedByOtherUsers = unexpiredSelectedSlots.filter(
+      (slot) => slot.uid !== bookerClientUid && slot.uid !== ownWaitlistHoldUid
+    );
 
     await _cleanupExpiredSlots({ eventTypeId });
 

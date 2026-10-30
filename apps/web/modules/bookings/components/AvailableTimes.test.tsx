@@ -112,6 +112,22 @@ describe("AvailableTimes with a partial-day out-of-office window", () => {
     expect(hoursAround(screen.getByText("🦷"))).toEqual({ before: [9, 11, 12, 13], after: [15, 16] });
   });
 
+  it("shows all booked and the waitlist options for a fully booked day instead of a blank panel", () => {
+    render(
+      <AvailableTimes
+        slots={[]}
+        date="2026-10-08"
+        bookedTimes={["2026-10-08T10:00:00.000Z"]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(screen.getByTestId("no-slots-available")).toBeTruthy();
+    expect(screen.getByText("waitlist_join_day")).toBeTruthy();
+    expect(screen.getByText("waitlist_join_time")).toBeTruthy();
+  });
+
   it("renders only the panel when every slot is away, as a whole-day entry does", () => {
     renderDay(dayWith([9, 10, 11, 12, 13, 14, 15, 16]));
 

@@ -1,9 +1,6 @@
-import { useEffect } from "react";
-import { shallow } from "zustand/shallow";
-
 import type { Dayjs } from "@calcom/dayjs";
 import dayjs from "@calcom/dayjs";
-import { useEmbedStyles } from "@calcom/embed-core/embed-iframe";
+import { useEmbedStyles, useSlotsViewOnSmallScreen } from "@calcom/embed-core/embed-iframe";
 import { useBookerStoreContext } from "@calcom/features/bookings/Booker/BookerStoreProvider";
 import { getAvailableDatesInMonth } from "@calcom/features/calendars/lib/getAvailableDatesInMonth";
 import type { Slots } from "@calcom/features/calendars/lib/types";
@@ -15,9 +12,9 @@ import classNames from "@calcom/ui/classNames";
 import { Button } from "@calcom/ui/components/button";
 import { SkeletonText } from "@calcom/ui/components/skeleton";
 import { Tooltip } from "@calcom/ui/components/tooltip";
-
+import { useEffect } from "react";
+import { shallow } from "zustand/shallow";
 import NoAvailabilityDialog from "./NoAvailabilityDialog";
-import { useSlotsViewOnSmallScreen } from "@calcom/embed-core/embed-iframe";
 
 export type DatePickerProps = {
   /** which day of the week to render the calendar. Usually Sunday (=0) or Monday (=1) - default: Sunday */
@@ -38,6 +35,8 @@ export type DatePickerProps = {
   excludedDates?: string[];
   /** defaults to all, which dates are bookable (inverse of excludedDates) */
   includedDates?: string[];
+  /** fully booked dates that stay selectable for joining a waitlist, but are never auto-selected */
+  waitlistDates?: string[];
   /** allows adding classes to the container */
   className?: string;
   /** Shows a small loading spinner next to the month name */
@@ -249,7 +248,7 @@ const Days = ({
   };
 
   const daysToRenderForTheMonth = days.map((day) => {
-    if (!day) return { day: null, disabled: true };
+    if (!day) return { day: null, disabled: true, waitlistOnly: false };
 
     const dateKey = yyyymmdd(day);
     const daySlots = slots?.[dateKey] || [];
@@ -267,11 +266,17 @@ const Days = ({
 
     // OOO dates are selectable only if there's a redirect user OR the note is public
     const oooIsSelectable = oooInfo?.toUser || oooInfo?.showNotePublicly;
-    const disabled = away ? !oooIsSelectable : isNextMonth ? !hasAvailableSlots : !included || excluded;
+    const waitlistOnly = !hasAvailableSlots && !!props.waitlistDates?.includes(dateKey);
+    const disabled = away
+      ? !oooIsSelectable
+      : isNextMonth
+        ? !hasAvailableSlots && !waitlistOnly
+        : !(included || waitlistOnly) || excluded;
 
     return {
       day,
       disabled,
+      waitlistOnly,
       away,
       emoji: oooInfo?.emoji,
       isFirstDayOfNextMonth,
@@ -292,7 +297,9 @@ const Days = ({
     if (selected instanceof Array) {
       return;
     }
-    const firstAvailableDateOfTheMonth = daysToRenderForTheMonth.find((day) => !day.disabled)?.day;
+    const firstAvailableDateOfTheMonth = daysToRenderForTheMonth.find(
+      (day) => !day.disabled && !day.waitlistOnly
+    )?.day;
     const isSelectedDateAvailable = selected
       ? daysToRenderForTheMonth.some(({ day, disabled }) => {
           if (day && yyyymmdd(day) === yyyymmdd(selected) && !disabled) return true;
