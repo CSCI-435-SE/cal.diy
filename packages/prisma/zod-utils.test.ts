@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import z from "zod";
 
-import { excludeOrRequireEmailSchema } from "./zod-utils";
+import { excludeOrRequireEmailSchema, recurringEventType } from "./zod-utils";
 
 describe("excludeOrRequireEmailSchema", () => {
   const parse = (input: string) => z.object({ v: excludeOrRequireEmailSchema }).safeParse({ v: input });
@@ -87,5 +87,35 @@ describe("excludeOrRequireEmailSchema", () => {
     it("rejects Unicode domains (ASCII-only)", () => {
       expect(parse("münchen.de").success).toBe(false);
     });
+  });
+});
+
+describe("recurringEventType", () => {
+  const weekly = { interval: 1, count: 8, freq: 2 };
+
+  it("keeps byweekday and wkst", () => {
+    const result = recurringEventType.parse({ ...weekly, byweekday: [1, 3], wkst: 6 });
+    expect(result).toEqual({ ...weekly, byweekday: [1, 3], wkst: 6 });
+  });
+
+  it("parses a rule saved before byweekday existed without adding the new fields", () => {
+    const result = recurringEventType.parse(weekly);
+    expect(result).toEqual(weekly);
+    expect(result).not.toHaveProperty("byweekday");
+    expect(result).not.toHaveProperty("wkst");
+  });
+
+  it("rejects an empty day list", () => {
+    const result = recurringEventType.safeParse({ ...weekly, byweekday: [] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toBe("Select at least one day");
+  });
+
+  it.each([[[7]], [[-1]], [[1.5]], [["TU"]]])("rejects byweekday %j", (byweekday) => {
+    expect(recurringEventType.safeParse({ ...weekly, byweekday }).success).toBe(false);
+  });
+
+  it.each([7, -1, 1.5, "SU"])("rejects wkst %j", (wkst) => {
+    expect(recurringEventType.safeParse({ ...weekly, wkst }).success).toBe(false);
   });
 });

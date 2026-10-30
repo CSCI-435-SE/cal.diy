@@ -256,7 +256,7 @@ const EventTypeWeb = ({
         orgId={orgBranding?.id ?? null}
       />
     ),
-    recurring: <EventRecurringTab eventType={eventType} />,
+    recurring: <EventRecurringTab eventType={eventType} user={user} />,
     apps: (
       <EventAppsTab
         eventType={{ ...eventType, URL: permalink }}
