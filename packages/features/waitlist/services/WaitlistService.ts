@@ -100,6 +100,8 @@ export class WaitlistService {
     ) {
       return null;
     }
+    // Also re-checked after losing a race below, so concurrent runs for one slot can't offer it twice
+    if (await repo.isOfferedForTime({ eventTypeId: slot.eventTypeId, time: slot.start })) return null;
 
     const entry = await repo.findOldestWaitingForTime({ eventTypeId: slot.eventTypeId, time: slot.start });
     if (!entry) return null;
@@ -114,27 +116,34 @@ export class WaitlistService {
     // Another offer grabbed this entry concurrently; give the slot to the next person instead
     if (!won) return this.offerSpot(slot);
 
-    await repo.createSlotHold({
-      uid: entry.uid,
-      eventTypeId: slot.eventTypeId,
-      userId: slot.hostUserId,
-      start: slot.start,
-      end: slot.end,
-      releaseAt: offerExpiresAt,
-    });
-    await this.deps.scheduleOfferExpiry(entry.id, offerExpiresAt);
+    try {
+      await repo.createSlotHold({
+        uid: entry.uid,
+        eventTypeId: slot.eventTypeId,
+        userId: slot.hostUserId,
+        start: slot.start,
+        end: slot.end,
+        releaseAt: offerExpiresAt,
+      });
+      await this.deps.scheduleOfferExpiry(entry.id, offerExpiresAt);
 
-    const eventType = await repo.findEventTypeForWaitlist(slot.eventTypeId);
-    await this.deps.sendOfferEmail({
-      name: entry.name,
-      email: entry.email,
-      timeZone: entry.timeZone,
-      eventTitle: eventType?.title ?? "",
-      offerStart: slot.start,
-      offerExpiresAt,
-      claimUrl: `${this.deps.webappUrl}/api/waitlist/claim?uid=${entry.uid}`,
-      leaveUrl: `${this.deps.webappUrl}/api/waitlist/leave?uid=${entry.uid}`,
-    });
+      const eventType = await repo.findEventTypeForWaitlist(slot.eventTypeId);
+      await this.deps.sendOfferEmail({
+        name: entry.name,
+        email: entry.email,
+        timeZone: entry.timeZone,
+        eventTitle: eventType?.title ?? "",
+        offerStart: slot.start,
+        offerExpiresAt,
+        claimUrl: `${this.deps.webappUrl}/api/waitlist/claim?uid=${entry.uid}`,
+        leaveUrl: `${this.deps.webappUrl}/api/waitlist/leave?uid=${entry.uid}`,
+      });
+    } catch (error) {
+      // Undo the offer so the task's retry offers the slot to this same person instead of the next one
+      await repo.deleteSlotHolds(entry.uid);
+      await repo.transition(entry.id, WaitlistStatus.OFFERED, WaitlistStatus.WAITING, null);
+      throw error;
+    }
     return entry.id;
   }
 
@@ -142,6 +151,8 @@ export class WaitlistService {
     const repo = this.deps.waitlistRepo;
     const entry = await repo.findById(entryId);
     if (!entry || entry.status !== WaitlistStatus.OFFERED || !entry.offerStart) return;
+    // Left over from an offer attempt that was rolled back and re-made later
+    if (entry.offerExpiresAt && entry.offerExpiresAt.getTime() > this.now()) return;
 
     await repo.deleteSlotHolds(entry.uid);
     const bookedEmails = await repo.findActiveBookingAttendeeEmailsAt({

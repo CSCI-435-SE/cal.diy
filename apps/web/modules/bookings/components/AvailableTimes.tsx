@@ -271,7 +271,7 @@ export const AvailableTimes = ({
   const { t } = useLocale();
   const { timeFormat, timezone } = useBookerTime();
 
-  const oooAllDay = slots.every((slot) => slot.away);
+  const oooAllDay = slots.length > 0 && slots.every((slot) => slot.away);
   if (oooAllDay) {
     return <OOOSlot {...slots[0]} />;
   }

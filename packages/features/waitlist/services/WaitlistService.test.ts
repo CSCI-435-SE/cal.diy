@@ -85,6 +85,13 @@ function makeFakeRepo() {
       for (let i = holds.length - 1; i >= 0; i--) if (holds[i].uid === uid) holds.splice(i, 1);
     },
     findActiveBookingAttendeeEmailsAt: async () => bookedEmails,
+    isOfferedForTime: async (q: { eventTypeId: number; time: Date }) =>
+      rows.some(
+        (r) =>
+          r.status === WaitlistStatus.OFFERED &&
+          r.eventTypeId === q.eventTypeId &&
+          r.offerStart?.getTime() === q.time.getTime()
+      ),
     findActiveBookingStartTimes: async (q: { from: Date; to: Date }) =>
       bookedTimes.filter((t) => t >= q.from && t < q.to),
   };
@@ -105,6 +112,11 @@ describe("WaitlistService", () => {
   let service: WaitlistService;
   const scheduleOfferExpiry = vi.fn();
   const sendOfferEmail = vi.fn();
+  let clock = NOW;
+  const expireAfterWindow = (entryId: number) => {
+    clock = NOW + WAITLIST_CLAIM_WINDOW_MS;
+    return service.expireOffer(entryId);
+  };
 
   const join = (email: string, date = "2026-11-03") =>
     service.join({ eventTypeId: 1, name: email, email, timeZone: "UTC", date });
@@ -119,6 +131,7 @@ describe("WaitlistService", () => {
 
   beforeEach(() => {
     fake = makeFakeRepo();
+    clock = NOW;
     scheduleOfferExpiry.mockReset();
     sendOfferEmail.mockReset();
     service = new WaitlistService({
@@ -126,7 +139,7 @@ describe("WaitlistService", () => {
       webappUrl: "https://app.test",
       scheduleOfferExpiry,
       sendOfferEmail,
-      now: () => NOW,
+      now: () => clock,
     });
   });
 
@@ -221,12 +234,46 @@ describe("WaitlistService", () => {
     expect(await service.offerSpot(freedSlot())).toBeNull();
   });
 
+  it("rolls back a failed offer so the retry goes to the same person, not the next one", async () => {
+    await join("first@x.com");
+    await join("second@x.com");
+    sendOfferEmail.mockRejectedValueOnce(new Error("smtp down"));
+
+    await expect(service.offerSpot(freedSlot())).rejects.toThrow("smtp down");
+    expect(fake.rows.map((r) => r.status)).toEqual([WaitlistStatus.WAITING, WaitlistStatus.WAITING]);
+    expect(fake.holds).toEqual([]);
+
+    expect(await service.offerSpot(freedSlot())).toBe(1);
+    expect(fake.rows[1].status).toBe(WaitlistStatus.WAITING);
+  });
+
+  it("never offers the same slot to two people when offers run concurrently", async () => {
+    await join("first@x.com");
+    await join("second@x.com");
+
+    const results = await Promise.all([service.offerSpot(freedSlot()), service.offerSpot(freedSlot())]);
+
+    expect(results.filter((id) => id !== null)).toHaveLength(1);
+    expect(fake.rows[1].status).toBe(WaitlistStatus.WAITING);
+  });
+
+  it("ignores an expiry task left over from a rolled-back offer", async () => {
+    await join("first@x.com");
+    await join("second@x.com");
+    await service.offerSpot(freedSlot());
+    fake.rows[0].offerExpiresAt = new Date(NOW + 7 * HOUR);
+
+    await expireAfterWindow(1);
+
+    expect(fake.rows[0].status).toBe(WaitlistStatus.OFFERED);
+  });
+
   it("passes an expired, unclaimed offer to the next person", async () => {
     await join("first@x.com");
     await join("second@x.com");
     await service.offerSpot(freedSlot());
 
-    await service.expireOffer(1);
+    await expireAfterWindow(1);
 
     expect(fake.rows[0].status).toBe(WaitlistStatus.EXPIRED);
     expect(fake.rows[1].status).toBe(WaitlistStatus.OFFERED);
@@ -239,7 +286,7 @@ describe("WaitlistService", () => {
     await service.offerSpot(freedSlot());
     fake.setBooked(["first@x.com"]);
 
-    await service.expireOffer(1);
+    await expireAfterWindow(1);
 
     expect(fake.rows[0].status).toBe(WaitlistStatus.CLAIMED);
     expect(fake.rows[1].status).toBe(WaitlistStatus.WAITING);

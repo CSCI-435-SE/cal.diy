@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@calcom/prisma";
 import { BookingStatus, WaitlistStatus } from "@calcom/prisma/enums";
+import { getWaitlistHoldUid } from "../lib/getWaitlistHoldUid";
 
 const entrySelect = {
   id: true,
@@ -86,6 +87,14 @@ export class WaitlistRepository {
     });
   }
 
+  async isOfferedForTime(data: { eventTypeId: number; time: Date }): Promise<boolean> {
+    const entry = await this.prismaClient.waitlistEntry.findFirst({
+      where: { eventTypeId: data.eventTypeId, status: WaitlistStatus.OFFERED, offerStart: data.time },
+      select: { id: true },
+    });
+    return !!entry;
+  }
+
   /** Returns false when the entry was no longer in `fromStatus`, so concurrent transitions can't both win. */
   async transition(
     id: number,
@@ -126,7 +135,7 @@ export class WaitlistRepository {
   }) {
     await this.prismaClient.selectedSlots.create({
       data: {
-        uid: data.uid,
+        uid: getWaitlistHoldUid(data.uid),
         eventTypeId: data.eventTypeId,
         userId: data.userId,
         slotUtcStartDate: data.start,
@@ -137,7 +146,7 @@ export class WaitlistRepository {
   }
 
   async deleteSlotHolds(uid: string) {
-    await this.prismaClient.selectedSlots.deleteMany({ where: { uid } });
+    await this.prismaClient.selectedSlots.deleteMany({ where: { uid: getWaitlistHoldUid(uid) } });
   }
 
   async findActiveBookingStartTimes(data: { eventTypeId: number; from: Date; to: Date }) {
