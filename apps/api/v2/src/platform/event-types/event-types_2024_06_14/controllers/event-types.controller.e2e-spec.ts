@@ -551,6 +551,8 @@ describe("Event types Endpoints", () => {
         color: {
           darkThemeHex: "#292929",
           lightThemeHex: "#fafafa",
+          bookingPageBackgroundHex: "#1e293b",
+          bookingPageTextHex: "#f8fafc",
         },
         customName: `{Event type title} between {Organiser} and {Scheduler}`,
         bookingRequiresAuthentication: true,
@@ -1329,9 +1331,11 @@ describe("Event types Endpoints", () => {
         hideCalendarEventDetails: true,
         hideOrganizerEmail: true,
         lockTimeZoneToggleOnBookingPage: true,
+        // Leaves out the booking page background, so the color stored at create stays; null clears the text color.
         color: {
           darkThemeHex: "#292929",
           lightThemeHex: "#fafafa",
+          bookingPageTextHex: null,
         },
         customName: `{Event type title} betweennnnnnnnnnn {Organiser} and {Scheduler}`,
         bookingRequiresAuthentication: false,
@@ -1405,7 +1409,11 @@ describe("Event types Endpoints", () => {
           expect(updatedEventType.lockTimeZoneToggleOnBookingPage).toEqual(
             body.lockTimeZoneToggleOnBookingPage
           );
-          expect(updatedEventType.color).toEqual(body.color);
+          expect(updatedEventType.color).toStrictEqual({
+            darkThemeHex: "#292929",
+            lightThemeHex: "#fafafa",
+            bookingPageBackgroundHex: "#1e293b",
+          });
           expect(updatedEventType.calVideoSettings?.disableRecordingForGuests).toEqual(
             body.calVideoSettings?.disableRecordingForGuests
           );

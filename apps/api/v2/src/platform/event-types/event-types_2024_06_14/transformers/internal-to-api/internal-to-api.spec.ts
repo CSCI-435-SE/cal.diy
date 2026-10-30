@@ -23,6 +23,7 @@ import type {
   OutputUnknownLocation_2024_06_14,
 } from "@calcom/platform-types";
 
+import { transformEventColorsApiToInternal } from "../api-to-internal/event-colors";
 import {
   transformLocationsInternalToApi,
   transformBookingFieldsInternalToApi,
@@ -1124,6 +1125,67 @@ describe("transformEventTypeColorsInternalToApi", () => {
     const result = transformEventTypeColorsInternalToApi(transformedField);
 
     expect(result).toEqual(expectedOutput);
+  });
+
+  it("should add no booking page keys when none are stored", () => {
+    const transformedField: EventTypeColorsTransformedSchema = {
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+    };
+
+    const result = transformEventTypeColorsInternalToApi(transformedField);
+
+    expect(result).toStrictEqual({
+      darkThemeHex: "#292929",
+      lightThemeHex: "#fafafa",
+    });
+  });
+
+  it("should reverse transform both booking page colors", () => {
+    const transformedField: EventTypeColorsTransformedSchema = {
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+      backgroundColor: "#1e293b",
+      textColor: "#f8fafc",
+    };
+
+    const result = transformEventTypeColorsInternalToApi(transformedField);
+
+    expect(result).toStrictEqual({
+      darkThemeHex: "#292929",
+      lightThemeHex: "#fafafa",
+      bookingPageBackgroundHex: "#1e293b",
+      bookingPageTextHex: "#f8fafc",
+    });
+  });
+
+  it("should reverse transform one booking page color without adding the other key", () => {
+    const transformedField: EventTypeColorsTransformedSchema = {
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+      backgroundColor: "#1e293b",
+    };
+
+    const result = transformEventTypeColorsInternalToApi(transformedField);
+
+    expect(result).toStrictEqual({
+      darkThemeHex: "#292929",
+      lightThemeHex: "#fafafa",
+      bookingPageBackgroundHex: "#1e293b",
+    });
+  });
+
+  it("should round-trip stored booking page colors through the API shape", () => {
+    const stored: EventTypeColorsTransformedSchema = {
+      darkEventTypeColor: "#292929",
+      lightEventTypeColor: "#fafafa",
+      backgroundColor: "#1e293b",
+      textColor: "#f8fafc",
+    };
+
+    const result = transformEventColorsApiToInternal(transformEventTypeColorsInternalToApi(stored));
+
+    expect(result).toStrictEqual(stored);
   });
 });
 

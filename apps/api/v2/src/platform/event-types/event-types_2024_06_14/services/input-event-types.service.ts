@@ -4,11 +4,14 @@ import { getApps, getUsersCredentialsIncludeServiceAccountKey } from "@calcom/pl
 import {
   EventTypeMetaDataSchema,
   EventTypeMetadata,
+  parseEventTypeColor,
   validateCustomEventName,
 } from "@calcom/platform-libraries/event-types";
 import {
+  BOOKING_PAGE_HEX_COLOR,
   CreateEventTypeInput_2024_06_14,
   DestinationCalendar_2024_06_14,
+  type EventTypeColorsTransformedSchema,
   InputBookingField_2024_06_14,
   OutputUnknownLocation_2024_06_14,
   supportedIntegrations,
@@ -64,6 +67,7 @@ export class InputEventTypesService_2024_06_14 {
     inputEventType: CreateEventTypeInput_2024_06_14
   ) {
     await this.validateInputLocations(user, inputEventType.locations);
+    this.validateInputBookingPageColors(inputEventType.color);
     const transformedBody = this.transformInputCreateEventType(inputEventType);
 
     await this.validateEventTypeInputs({
@@ -90,6 +94,7 @@ export class InputEventTypesService_2024_06_14 {
     eventTypeId: number
   ) {
     await this.validateInputLocations(user, inputEventType.locations);
+    this.validateInputBookingPageColors(inputEventType.color);
 
     const transformedBody = await this.transformInputUpdateEventType(inputEventType, eventTypeId);
 
@@ -230,7 +235,7 @@ export class InputEventTypesService_2024_06_14 {
       calVideoSettings,
       ...rest
     } = inputEventType;
-    const eventTypeDb = await this.eventTypesRepository.getEventTypeWithMetaData(eventTypeId);
+    const eventTypeDb = await this.eventTypesRepository.getEventTypeWithMetaDataAndColor(eventTypeId);
     const metadataTransformed = eventTypeDb?.metadata
       ? EventTypeMetaDataSchema.parse(eventTypeDb.metadata)
       : {};
@@ -288,7 +293,10 @@ export class InputEventTypesService_2024_06_14 {
       requiresConfirmation: confirmationPolicyTransformed?.requiresConfirmation ?? undefined,
       requiresConfirmationWillBlockSlot:
         confirmationPolicyTransformed?.requiresConfirmationWillBlockSlot ?? undefined,
-      eventTypeColor: this.transformInputEventTypeColor(color),
+      eventTypeColor: this.transformInputEventTypeColor(
+        color,
+        parseEventTypeColor(eventTypeDb?.eventTypeColor)
+      ),
       ...(seats ? this.transformInputSeatOptions(seats) : { seatsPerTimeSlot: undefined }),
       eventName: customName,
       useEventTypeDestinationCalendarEmail: useDestinationCalendarEmail,
@@ -423,8 +431,27 @@ export class InputEventTypesService_2024_06_14 {
     return transformRecurrenceApiToInternal(recurrence);
   }
 
-  transformInputEventTypeColor(color: CreateEventTypeInput_2024_06_14["color"]) {
-    return transformEventColorsApiToInternal(color);
+  transformInputEventTypeColor(
+    color: CreateEventTypeInput_2024_06_14["color"],
+    storedColors?: EventTypeColorsTransformedSchema | null
+  ) {
+    return transformEventColorsApiToInternal(color, storedColors);
+  }
+
+  // `color` has no @ValidateNested, so the @Matches rules on its booking page fields never run in the
+  // ValidationPipe. Check them here so a value the stored schema rejects is never written.
+  validateInputBookingPageColors(color: CreateEventTypeInput_2024_06_14["color"]) {
+    if (!color) return;
+    const bookingPageColors = {
+      bookingPageBackgroundHex: color.bookingPageBackgroundHex,
+      bookingPageTextHex: color.bookingPageTextHex,
+    };
+    for (const [field, value] of Object.entries(bookingPageColors)) {
+      if (value === undefined || value === null) continue;
+      if (typeof value !== "string" || !BOOKING_PAGE_HEX_COLOR.test(value)) {
+        throw new BadRequestException(`color.${field} must be a hex color such as #ffffff`);
+      }
+    }
   }
 
   transformInputSeatOptions(seats: CreateEventTypeInput_2024_06_14["seats"]) {

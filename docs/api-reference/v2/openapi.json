@@ -7325,6 +7325,18 @@
             "type": "string",
             "description": "Color used for event types in dark theme",
             "example": "#fafafa"
+          },
+          "bookingPageBackgroundHex": {
+            "type": "string",
+            "description": "Background color shown to bookers on the booking page. On update, leave it out to keep the stored color, or send null to clear it.",
+            "example": "#ffffff",
+            "nullable": true
+          },
+          "bookingPageTextHex": {
+            "type": "string",
+            "description": "Text color shown to bookers on the booking page. On update, leave it out to keep the stored color, or send null to clear it.",
+            "example": "#111111",
+            "nullable": true
           }
         },
         "required": ["lightThemeHex", "darkThemeHex"]

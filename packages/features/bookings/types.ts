@@ -66,6 +66,7 @@ export type BookerEvent = Pick<
   | "interfaceLanguage"
   | "team"
   | "owner"
+  | "bookingPageColors"
 > & {
   subsetOfUsers: BookerEventUser[];
   showInstantEventConnectNowModal: boolean;

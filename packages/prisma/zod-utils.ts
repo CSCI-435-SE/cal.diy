@@ -268,10 +268,17 @@ export const iso8601 = z.string().transform((val, ctx) => {
   return d;
 });
 
+// Same pattern as isValidHexCode in @calcom/lib/getBrandColours, which cannot be
+// imported here because that file pulls in @calcom/embed-core.
+const hexColor = z.string().regex(/^#([0-9A-Fa-f]{3}){1,2}$/, "Color must be a hex value, such as #ffffff");
+
 export const eventTypeColor = z
   .object({
     lightEventTypeColor: z.string(),
     darkEventTypeColor: z.string(),
+    // Optional so rows saved before booking page colors existed still parse.
+    backgroundColor: hexColor.optional(),
+    textColor: hexColor.optional(),
   })
   .nullable();
 

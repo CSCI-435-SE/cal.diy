@@ -6,6 +6,7 @@ import { eventTypeMetaDataSchemaWithTypedApps } from "@calcom/app-store/zod-util
 import dayjs from "@calcom/dayjs";
 import { getBookingFieldsWithSystemFields } from "@calcom/features/bookings/lib/getBookingFields";
 import { getDefaultEvent, getUsernameList } from "@calcom/features/eventtypes/lib/defaultEvents";
+import { withBookingPageColors } from "@calcom/features/eventtypes/lib/getBookingPageColors";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
 import { getOrgOrTeamAvatar, getPlaceholderAvatar } from "@calcom/lib/defaultAvatarImage";
 import { getUserAvatarUrl } from "@calcom/lib/getAvatarUrl";
@@ -106,6 +107,7 @@ export const getPublicEventSelect = (fetchAllUsers: boolean) => {
     allowReschedulingCancelledBookings: true,
     seatsShowAvailabilityCount: true,
     bookingFields: true,
+    eventTypeColor: true,
     teamId: true,
     team: {
       select: {
@@ -395,6 +397,7 @@ export const getPublicEvent = async (
       showInstantEventConnectNowModal: false,
       autoTranslateDescriptionEnabled: false,
       fieldTranslations: [],
+      bookingPageColors: null,
     };
   }
 
@@ -556,7 +559,7 @@ export const getPublicEvent = async (
   }
 
   return {
-    ...eventWithUserProfiles,
+    ...withBookingPageColors(eventWithUserProfiles),
     bookerLayouts: bookerLayoutsSchema.parse(eventMetaData?.bookerLayouts || null),
     description: markdownToSafeHTML(eventWithUserProfiles.description),
     metadata: eventMetaData,
@@ -763,7 +766,7 @@ export const processEventDataShared = async ({
   }
 
   return {
-    ...eventData,
+    ...withBookingPageColors(eventData),
     bookerLayouts: bookerLayoutsSchema.parse(metadata?.bookerLayouts || null),
     description: markdownToSafeHTML(eventData.description),
     metadata,
