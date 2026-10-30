@@ -1,0 +1,233 @@
+classDiagram
+    direction LR
+
+    note "Legend<br>new: added by #104<br>modified: changed by #104<br>existing: found during impact analysis, unchanged<br>module: a file of exported functions, drawn as a class whose methods are those functions<br>component: a React function component<br>Inside a modified class, NEW or MOD after a member marks what #104 added or changed"
+
+    %% ---------- Data layer ----------
+    class OutOfOfficeEntry {
+        <<existing>>
+        +start DateTime
+        +end DateTime
+        +notes String
+        +showNotePublicly Boolean
+        +userId Int
+        +toUserId Int
+        +reasonId Int
+    }
+    note for OutOfOfficeEntry "Prisma model. start and end hold the host wall-clock time in UTC columns.<br>00:00:00.000 to 23:59:59.999 means whole day; anything else is a partial-day window (PR #85)."
+
+    class PrismaOOORepository {
+        <<existing>>
+        +findManyOOO(startTimeDate, endTimeDate, allUserIds)
+        +findUserOOODays(userId, dateFrom, dateTo)
+    }
+
+    %% ---------- Availability engine ----------
+    class UserAvailabilityService {
+        <<modified>>
+        +dependencies IUserAvailabilityService
+        +getUsersAvailability(users, query, initialData)
+        +_getUserAvailability(params, initialData) GetUserAvailabilityResult  MOD
+        +calculateOutOfOfficeRanges(outOfOfficeDays, availability, partialDayWindows) IOutOfOfficeData  MOD
+        +calculateHolidayBlockedDates(userId, startDate, endDate, availability) IOutOfOfficeData
+    }
+    note for UserAvailabilityService "_getUserAvailability builds the away map, keeps partial-day windows inside dateRanges<br>and subtracts them only from oooExcludedDateRanges. A holiday now replaces windows on a date<br>but not a whole-day entry. calculateOutOfOfficeRanges writes whole days first, then hangs<br>each window under every date it touches; a whole-day record wins over a window."
+
+    class GetUserAvailabilityResult {
+        <<existing>>
+        +busy
+        +timeZone string
+        +dateRanges DateRange[]
+        +oooExcludedDateRanges DateRange[]
+        +datesOutOfOffice IOutOfOfficeData
+    }
+    note for GetUserAvailabilityResult "dateRanges still contain the window, so its slots are generated (single-host booker).<br>oooExcludedDateRanges do not, so team events and the booking guard treat it as busy."
+
+    class IOutOfOfficeData {
+        <<modified>>
+        +dateKey YYYY-MM-DD maps to IOutOfOfficeEntryData plus windows  MOD
+    }
+    note for IOutOfOfficeData "One record per host-zone date. A record without windows is away all day, as before.<br>A record with windows carries the first window's data at the top level, so whole-day readers keep working."
+
+    class IOutOfOfficeEntryData {
+        <<new>>
+        +fromUser IFromUser
+        +toUser IToUser
+        +reason string
+        +emoji string
+        +notes string
+        +showNotePublicly boolean
+    }
+
+    class IOutOfOfficeWindow {
+        <<new>>
+        +start string ISO
+        +end string ISO
+    }
+    note for IOutOfOfficeWindow "UTC instants as ISO strings so the map survives tRPC serialization."
+
+    class IFromUser {
+        <<existing>>
+        +id number
+        +displayName string
+    }
+
+    class IToUser {
+        <<existing>>
+        +id number
+        +username string
+        +displayName string
+    }
+
+    class toOutOfOfficeEntryData {
+        <<new>>
+        +toOutOfOfficeEntryData(OutOfOfficeDay) IOutOfOfficeEntryData
+    }
+    note for toOutOfOfficeEntryData "Private helper in getUserAvailability.ts shared by whole days and windows.<br>Drops notes unless showNotePublicly is set."
+
+    %% ---------- Date ranges ----------
+    class date_ranges_ts["date-ranges.ts"] {
+        <<module, modified>>
+        +buildDateRanges(availability, timeZone, dateFrom, dateTo, travelSchedules, outOfOffice)  MOD
+        +getPartialDayOutOfOfficeWindows(entries, timeZone) PartialDayOutOfOfficeWindow[]  NEW
+        +getPartialDayOutOfOfficeRanges(entries, timeZone) DateRange[]  MOD
+        +isWholeDayOutOfOffice(start, end) boolean
+        +subtract(sourceRanges, excludedRanges)
+        -wallClockToTimeZone(stored, timeZone) Dayjs
+        -processOOO(outOfOffice, timeZone)
+    }
+    note for date_ranges_ts "getPartialDayOutOfOfficeWindows parses the stored wall-clock values with the DST-safe<br>wallClockToTimeZone and lists every host-zone date a window touches (past midnight gives two dates).<br>buildDateRanges now skips dates with windows when it removes whole days from oooExcludedDateRanges.<br>getPartialDayOutOfOfficeRanges is now a thin map over the new helper."
+
+    class PartialDayOutOfOfficeWindow~T~ {
+        <<new>>
+        +dates string[]
+        +start Dayjs
+        +end Dayjs
+        +entry T
+    }
+
+    %% ---------- Slot engine ----------
+    class AvailableSlotsService {
+        <<existing>>
+        +dependencies IAvailableSlotsService
+        +getAvailableSlots(options)
+        +_getAvailableSlots(input, ctx) IGetAvailableSlots
+        -calculateHostsAndAvailabilities(input, eventType, hosts, ...)
+        -getOOODates(startTimeDate, endTimeDate, allUserIds)
+    }
+    note for AvailableSlotsService "packages/trpc/server/routers/viewer/slots/util.ts. Serves viewer.slots.getSchedule.<br>Passes the first host's datesOutOfOffice and timeZone to getSlots."
+
+    class getAggregatedAvailability_ts["getAggregatedAvailability.ts"] {
+        <<module, existing>>
+        +getAggregatedAvailability(userAvailability, schedulingType) DateRange[]
+    }
+    note for getAggregatedAvailability_ts "Single host: uses dateRanges. Team event: uses oooExcludedDateRanges,<br>so a window is removed there and no away panel appears."
+
+    class slots_ts["slots.ts"] {
+        <<module, modified>>
+        +getSlots(inviteeDate, frequency, dateRanges, eventLength, datesOutOfOffice, datesOutOfOfficeTimeZone, ...)
+        -buildSlotsWithDateRanges(...)  MOD
+        -parseOutOfOfficeWindows(datesOutOfOffice) Map  NEW
+        -findOutOfOfficeForSlot(dayData, windowsOfDay, slotStartMs, slotEndMs)  NEW
+    }
+    note for slots_ts "parseOutOfOfficeWindows turns each date's windows into sorted numbers once per getSlots call.<br>findOutOfOfficeForSlot: no windows means the whole date is away; otherwise the slot is away<br>only if slotStart is before windowEnd and slotEnd is after windowStart (any overlap, matching the booking guard)."
+
+    class OutOfOfficeWindowMs {
+        <<new>>
+        +startMs number
+        +endMs number
+        +data IOutOfOfficeData record
+    }
+
+    class ensureAvailableUsers_ts["ensureAvailableUsers.ts"] {
+        <<module, existing>>
+        +ensureAvailableUsers(eventType, input, loggerWithEventDetails, ...)
+    }
+    note for ensureAvailableUsers_ts "Booking guard. Checks the requested time against oooExcludedDateRanges<br>and throws NoAvailableUsersFound, so an away slot cannot be booked."
+
+    %% ---------- Booker (apps/web/modules/bookings/components) ----------
+    class AvailableTimeSlots {
+        <<component, modified>>
+        +slotsPerDay
+        +isOOODay boolean  MOD
+    }
+    note for AvailableTimeSlots "Hides the time-format toggle only when every slot of the day is away,<br>not when the first one is."
+
+    class AvailableTimes {
+        <<component, modified>>
+        +slots Slot[]
+        +render() items  MOD
+    }
+    note for AvailableTimes "All slots away: one OOOSlot, as before. Otherwise walks the slots, renders each bookable<br>SlotItem and one OOOSlot at the first slot of each run of away slots, so the panel sits<br>between the slots before and after the window. Two windows give two panels."
+
+    class SlotItem {
+        <<component, existing>>
+        +slot Slot
+    }
+
+    class OOOSlot {
+        <<component, existing>>
+        +fromUser
+        +toUser
+        +reason
+        +emoji
+        +notes
+        +time string
+    }
+
+    class OutOfOfficeInSlots {
+        <<component, existing>>
+        +date string
+        +fromUser
+        +toUser
+        +onClick() router.push to toUser.username
+    }
+    note for OutOfOfficeInSlots "Shows emoji, the is-OOO line and the public note. When toUser is set it renders<br>Book with toUser and pushes /username with the same month and date. Unchanged: the redirect only needed the data."
+
+    class Slot {
+        <<existing>>
+        +time string
+        +away boolean
+        +fromUser
+        +toUser
+        +reason
+        +emoji
+    }
+    note for Slot "apps/web/modules/schedules/lib/types.ts, derived from the getSchedule router output."
+
+    %% ---------- Relationships ----------
+    PrismaOOORepository ..> OutOfOfficeEntry : reads
+    UserAvailabilityService o-- PrismaOOORepository : dependencies.oooRepo
+    AvailableSlotsService o-- PrismaOOORepository : dependencies.oooRepo
+    AvailableSlotsService o-- UserAvailabilityService : dependencies.userAvailabilityService
+    ensureAvailableUsers_ts ..> UserAvailabilityService : getUsersAvailability
+    ensureAvailableUsers_ts ..> GetUserAvailabilityResult : reads oooExcludedDateRanges
+
+    UserAvailabilityService ..> GetUserAvailabilityResult : returns
+    UserAvailabilityService ..> date_ranges_ts : calls buildDateRanges, getPartialDayOutOfOfficeWindows, subtract
+    UserAvailabilityService ..> toOutOfOfficeEntryData : uses
+    toOutOfOfficeEntryData ..> IOutOfOfficeEntryData : creates
+
+    GetUserAvailabilityResult "1" *-- "0..1" IOutOfOfficeData : datesOutOfOffice
+    IOutOfOfficeData "1" *-- "0..*" IOutOfOfficeEntryData : one record per date
+    IOutOfOfficeData "1" *-- "0..*" IOutOfOfficeWindow : windows per date
+    IOutOfOfficeWindow --|> IOutOfOfficeEntryData : extends
+    IOutOfOfficeEntryData --> "0..1" IFromUser : fromUser
+    IOutOfOfficeEntryData --> "0..1" IToUser : toUser
+
+    date_ranges_ts ..> PartialDayOutOfOfficeWindow : creates
+    date_ranges_ts ..> IOutOfOfficeData : buildDateRanges reads outOfOffice
+    PartialDayOutOfOfficeWindow --> OutOfOfficeEntry : entry, as loaded by the repository
+
+    AvailableSlotsService ..> getAggregatedAvailability_ts : merges host ranges
+    AvailableSlotsService ..> slots_ts : getSlots(datesOutOfOffice)
+    slots_ts ..> IOutOfOfficeData : reads
+    slots_ts *-- OutOfOfficeWindowMs : builds per call
+    slots_ts ..> Slot : produces away slots
+
+    AvailableTimeSlots *-- AvailableTimes : renders one per day
+    AvailableTimes *-- SlotItem : bookable slots
+    AvailableTimes *-- OOOSlot : one per run of away slots
+    OOOSlot *-- OutOfOfficeInSlots : renders
+    AvailableTimes --> "0..*" Slot : slots
+    OutOfOfficeInSlots --> IToUser : redirect target
