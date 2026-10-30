@@ -30,6 +30,11 @@ interface EnableTwoFactorModalProps {
   onEnable: () => void;
 
   /**
+   * Called once the code is verified and two-factor auth is active, before the user closes the backup codes
+   */
+  onBackupCodesShown?: () => void;
+
+  /**
    * Used when an admin requires 2FA site-wide: the modal can't be dismissed until setup is finished
    */
   isRequired?: boolean;
@@ -60,6 +65,7 @@ interface EnableTwoFactorValues {
 
 const EnableTwoFactorModal = ({
   onEnable,
+  onBackupCodesShown,
   onCancel,
   open,
   onOpenChange,
@@ -87,6 +93,13 @@ const EnableTwoFactorModal = ({
     setPassword("");
     setErrorMessage(null);
     setStep(SetupStep.ConfirmPassword);
+  };
+
+  // Setup was finished elsewhere (e.g. another tab) while this modal was open, so there is nothing left to do here
+  const handleAlreadyEnabled = () => {
+    resetState();
+    showToast(t("2fa_already_enabled"), "success");
+    onEnable();
   };
 
   async function handleSetup(e: React.FormEvent) {
@@ -119,7 +132,9 @@ const EnableTwoFactorModal = ({
         return;
       }
 
-      if (body.error === ErrorCode.IncorrectPassword) {
+      if (body.error === ErrorCode.TwoFactorAlreadyEnabled) {
+        handleAlreadyEnabled();
+      } else if (body.error === ErrorCode.IncorrectPassword) {
         setErrorMessage(t("incorrect_password"));
       } else {
         setErrorMessage(t("something_went_wrong"));
@@ -148,10 +163,13 @@ const EnableTwoFactorModal = ({
 
       if (response.status === 200) {
         setStep(SetupStep.DisplayBackupCodes);
+        onBackupCodesShown?.();
         return;
       }
 
-      if (body.error === ErrorCode.IncorrectTwoFactorCode) {
+      if (body.error === ErrorCode.TwoFactorAlreadyEnabled) {
+        handleAlreadyEnabled();
+      } else if (body.error === ErrorCode.IncorrectTwoFactorCode) {
         setErrorMessage(`${t("code_is_incorrect")} ${t("please_try_again")}`);
       } else {
         setErrorMessage(t("something_went_wrong"));
@@ -261,7 +279,7 @@ const EnableTwoFactorModal = ({
             </WithStep>
             <WithStep step={SetupStep.DisplayQrCode} current={step}>
               <Button
-                type="submit"
+                type="button"
                 data-testid="goto-otp-screen"
                 className="me-2 ms-2"
                 onClick={() => setStep(SetupStep.EnterTotpCode)}>
