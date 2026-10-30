@@ -133,6 +133,8 @@ export interface RecurringEvent {
   freq: Frequency;
   until?: Date | undefined;
   tzid?: string | undefined;
+  byweekday?: number[] | undefined;
+  wkst?: number | undefined;
 }
 
 export type { IntervalLimit, IntervalLimitUnit } from "@calcom/lib/intervalLimits/intervalLimitSchema";

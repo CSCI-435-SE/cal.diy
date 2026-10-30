@@ -245,6 +245,12 @@ export const recurringEventType = z
     freq: z.nativeEnum(Frequency),
     until: z.date().optional(),
     tzid: z.string().optional(),
+    // rrule weekday numbers (0 = Monday). Integers only: other values make rrule throw or loop forever.
+    byweekday: z
+      .array(z.number().int().min(0).max(6))
+      .min(1, { message: "Select at least one day" })
+      .optional(),
+    wkst: z.number().int().min(0).max(6).optional(),
   })
   .nullable();
 
