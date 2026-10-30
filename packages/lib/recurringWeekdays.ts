@@ -5,6 +5,16 @@ import type { z } from "zod";
 type RecurringEventRule = NonNullable<z.infer<typeof recurringEventType>>;
 type StoredWeekdayFields = Pick<RecurringEvent, "byweekday" | "tzid" | "wkst">;
 
+// Saved rules use rrule's numbering (0 = Monday), but Date.getDay() and the user's week-start
+// setting use 0 = Sunday. Converting anywhere else risks moving every selected day by one.
+export function jsDayToRRuleWeekday(jsDay: number): number {
+  return (jsDay + 6) % 7;
+}
+
+export function rruleWeekdayToJsDay(rruleWeekday: number): number {
+  return (rruleWeekday + 1) % 7;
+}
+
 /**
  * Decides which recurring rule to save when an event type is updated.
  * - Only weekly rules keep selected days: the form keeps them while the host switches to

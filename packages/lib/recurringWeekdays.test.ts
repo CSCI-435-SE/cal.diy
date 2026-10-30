@@ -1,9 +1,38 @@
 import { Frequency } from "@calcom/prisma/zod-utils";
 import { describe, expect, it } from "vitest";
-import { mergeRecurringEventUpdate } from "./recurringWeekdays";
+import { jsDayToRRuleWeekday, mergeRecurringEventUpdate, rruleWeekdayToJsDay } from "./recurringWeekdays";
 
 const weekly = { interval: 1, count: 8, freq: Frequency.WEEKLY };
 const savedDays = { byweekday: [1, 3], tzid: "America/New_York", wkst: 6 };
+
+// [day, Date.getDay() number (0 = Sunday), rrule number (0 = Monday)]
+const days: [string, number, number][] = [
+  ["Sunday", 0, 6],
+  ["Monday", 1, 0],
+  ["Tuesday", 2, 1],
+  ["Wednesday", 3, 2],
+  ["Thursday", 4, 3],
+  ["Friday", 5, 4],
+  ["Saturday", 6, 5],
+];
+
+describe("weekday number conversion", () => {
+  it.each(days)("%s: getDay() %i is rrule %i", (_day, jsDay, rruleWeekday) => {
+    expect(jsDayToRRuleWeekday(jsDay)).toBe(rruleWeekday);
+    expect(rruleWeekdayToJsDay(rruleWeekday)).toBe(jsDay);
+  });
+
+  it("matches what Date.getDay() returns for a known Tuesday", () => {
+    const tuesday = new Date(Date.UTC(2026, 10, 3, 12));
+    expect(jsDayToRRuleWeekday(tuesday.getUTCDay())).toBe(1);
+  });
+
+  it("round-trips every day", () => {
+    for (let jsDay = 0; jsDay < 7; jsDay++) {
+      expect(rruleWeekdayToJsDay(jsDayToRRuleWeekday(jsDay))).toBe(jsDay);
+    }
+  });
+});
 
 describe("mergeRecurringEventUpdate", () => {
   it("saves the selected days, time zone and week start of a weekly rule", () => {
