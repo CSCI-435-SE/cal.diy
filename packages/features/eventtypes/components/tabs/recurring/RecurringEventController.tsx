@@ -7,6 +7,9 @@ import type {
   SettingsToggleClassNames,
 } from "@calcom/features/eventtypes/lib/types";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
+import { jsDayToRRuleWeekday } from "@calcom/lib/recurringWeekdays";
+import { weekdayNames } from "@calcom/lib/weekday";
+import { weekStartNum } from "@calcom/lib/weekstart";
 import { Frequency } from "@calcom/prisma/zod-utils";
 import type { RecurringEvent } from "@calcom/types/Calendar";
 import classNames from "@calcom/ui/classNames";
@@ -33,6 +36,11 @@ export type EventRecurringTabCustomClassNames = {
     suffixText?: string;
     container?: string;
   };
+  weekdaysInput?: {
+    container?: string;
+    label?: string;
+    button?: string;
+  };
   experimentalAlert?: string;
   paymentAlert?: string;
 };
@@ -41,8 +49,9 @@ export default function RecurringEventController({
   eventType,
   paymentEnabled,
   customClassNames,
+  user,
 }: RecurringEventControllerProps) {
-  const { t } = useLocale();
+  const { t, i18n } = useLocale();
   const formMethods = useFormContext<FormValues>();
   const [recurringEventState, setRecurringEventState] = useState<RecurringEvent | null>(
     formMethods.getValues("recurringEvent")
@@ -58,6 +67,23 @@ export default function RecurringEventController({
     }));
 
   const recurringLocked = { disabled: false };
+
+  const weekStart = weekStartNum(user?.weekStart);
+  const shortDayNames = weekdayNames(i18n.language, weekStart, "short");
+  const longDayNames = weekdayNames(i18n.language, weekStart, "long");
+  // Saved with the days so the booking side judges "Tuesday" by the host's clock and week.
+  const hostWeekContext = user ? { tzid: user.timeZone, wkst: jsDayToRRuleWeekday(weekStart) } : {};
+
+  const toggleWeekday = (rruleWeekday: number) => {
+    if (!recurringEventState) return;
+    const selected = recurringEventState.byweekday ?? [];
+    const byweekday = selected.includes(rruleWeekday)
+      ? selected.filter((day) => day !== rruleWeekday)
+      : [...selected, rruleWeekday].sort((a, b) => a - b);
+    const newVal = { ...recurringEventState, ...hostWeekContext, byweekday };
+    formMethods.setValue("recurringEvent", newVal, { shouldDirty: true });
+    setRecurringEventState(newVal);
+  };
 
   return (
     <div className={classNames("block items-start sm:flex", customClassNames?.container)}>
@@ -113,6 +139,7 @@ export default function RecurringEventController({
                     interval: 1,
                     count: 12,
                     freq: Frequency.WEEKLY,
+                    byweekday: [],
                   };
                   formMethods.setValue("recurringEvent", newVal, { shouldDirty: true });
                   setRecurringEventState(newVal);
@@ -165,6 +192,48 @@ export default function RecurringEventController({
                         }}
                       />
                     </div>
+                    {recurringEventState.freq === Frequency.WEEKLY && (
+                      <div
+                        data-testid="recurring-event-weekdays"
+                        className={classNames("mt-4", customClassNames?.weekdaysInput?.container)}>
+                        <div className="flex items-center">
+                          <p
+                            className={classNames(
+                              "text-emphasis ltr:mr-2 rtl:ml-2",
+                              customClassNames?.weekdaysInput?.label
+                            )}>
+                            {t("repeats_on")}
+                          </p>
+                          <div className="flex gap-1">
+                            {shortDayNames.map((shortName, index) => {
+                              const rruleWeekday = jsDayToRRuleWeekday((index + weekStart) % 7);
+                              const isSelected = !!recurringEventState.byweekday?.includes(rruleWeekday);
+                              return (
+                                <button
+                                  key={rruleWeekday}
+                                  type="button"
+                                  aria-pressed={isSelected}
+                                  aria-label={longDayNames[index]}
+                                  disabled={recurringLocked.disabled}
+                                  onClick={() => toggleWeekday(rruleWeekday)}
+                                  className={classNames(
+                                    "h-8 min-w-8 rounded-full px-2 text-xs font-medium",
+                                    isSelected
+                                      ? "bg-brand-default text-brand"
+                                      : "border-default bg-default text-default border",
+                                    customClassNames?.weekdaysInput?.button
+                                  )}>
+                                  {shortName}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {recurringEventState.byweekday?.length === 0 && (
+                          <p className="text-error mt-2 text-sm">{t("recurring_select_at_least_one_day")}</p>
+                        )}
+                      </div>
+                    )}
                     <div
                       className={classNames(
                         "mt-4 flex items-center",

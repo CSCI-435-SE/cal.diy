@@ -1080,6 +1080,8 @@
   "event_remaining_one": "{{count}} event remaining",
   "event_remaining_other": "{{count}} events remaining",
   "repeats_every": "Repeats every",
+  "repeats_on": "Repeats on",
+  "recurring_select_at_least_one_day": "Select at least one day",
   "occurrence_one": "occurrence",
   "occurrence_other": "occurrences",
   "weekly_one": "week",
