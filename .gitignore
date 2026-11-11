@@ -119,3 +119,6 @@ agents/devin-knowledge.json
 _pagefind/
 
 .specstory
+# StrykerJS mutation testing (local reports; course reports go in docs/sprint3/mutation/reports/)
+/reports/mutation/
+.stryker-tmp/
