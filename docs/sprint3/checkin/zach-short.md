@@ -1,6 +1,6 @@
 # Sprint 3 mid-sprint check-in: zach-short
 
-**Code PR:** TODO — link the #130 PR here before Nov 12, 11:59 PM (it must be open and ready for review, or merged).
+**Code PR:** TODO: link the #130 PR here before Nov 12, 11:59 PM (it must be open and ready for review, or merged).
 
 ## What have you implemented so far, and what remains?
 
