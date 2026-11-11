@@ -93,6 +93,8 @@
     "@playwright/test": "1.57.0",
     "@prisma/internals": "6.16.2",
     "@snaplet/copycat": "4.1.0",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@testing-library/jest-dom": "5.17.0",
     "@testing-library/react": "16.0.1",
     "@vitest/coverage-v8": "4.1.8",
