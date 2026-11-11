@@ -24,8 +24,8 @@ Full draft spec (acceptance criteria, edge cases, proposed answers, decisions wi
 
 | # | Sub-issue | Area in #131 | Size | Depends on | Sprint | Owner |
 |---|---|---|---|---|---|---|
-| 1 | OIDC provider data model and repository | Provider configuration | M | — | 3 | |
-| 2 | Local Keycloak test provider and realm | Test setup | S | — | 3 | |
+| 1 | OIDC provider data model and repository | Provider configuration | M | none | 3 | |
+| 2 | Local Keycloak test provider and realm | Test setup | S | none | 3 | |
 | 3 | Admin provider service and tRPC procedures | Provider configuration | M | 1 | 3 | |
 | 4 | Admin "Identity providers" settings page | Provider configuration | M | 3 | 3 | |
 | 5 | Load providers per request and create new OIDC users | Login and sign-up | M | 1 | 3 | |

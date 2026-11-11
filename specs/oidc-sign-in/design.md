@@ -110,7 +110,7 @@ Each answer is a proposal. **Every one needs customer confirmation**; the questi
 | More than one provider? Turn off password login? | Yes, up to 10. Password-login switch only in Sprint 4, with an admin break-glass rule. Needs customer confirmation. | 9, 41 |
 | How are secrets stored, who can see them? | Encrypted with the instance key; write-only in the UI; only `ADMIN` can change them; no one can read them back. Needs customer confirmation. | 6 |
 | Unlink? Only login method? | Yes, unless it is the last login method. Needs customer confirmation. | 35 |
-| Groups to roles? | No in Sprints 3–4. Record in future work. Needs customer confirmation. | — |
+| Groups to roles? | No in Sprints 3–4. Record in future work. Needs customer confirmation. | none |
 | How to test without a real IdP? | Local Keycloak with a realm export. Needs customer confirmation that Keycloak is acceptable as the reference provider. | 42–43 |
 | Existing data after upgrade? | No behavior change until an admin adds a provider. Needs customer confirmation. | 39–40 |
 
