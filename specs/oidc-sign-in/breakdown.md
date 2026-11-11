@@ -6,10 +6,12 @@ Full spec: `specs/oidc-sign-in/design.md` (criteria numbers below refer to it). 
 
 ## Rules for every sub-issue
 
-- One GitHub assignee, who writes or refines the sub-issue spec before code.
-- A spec-review comment from another teammate before implementation.
-- One PR under 500 changed lines and under 10 code files; drafts first; reviewer merges.
-- Each implemented sub-issue gets a class and a sequence diagram in `docs/sprint3/diagrams/` (or `sprint4`).
+- One GitHub assignee, who writes or refines the sub-issue spec before code. The spec states its scope (small or medium) and one or two sentences on why.
+- Link each sub-issue to #131 and attach it to the Sprint 3 milestone. Sub-issues count toward each member's two-medium-issue minimum.
+- A spec-review comment from another teammate before implementation. It must say what was checked: each acceptance criterion clear and testable, which cases were considered, whether the scope fits. "Looks good" alone does not count.
+- One PR under 500 changed lines and under 10 code files. The description has `Closes #<sub-issue>`, the Tech Debt section and the Test Evidence table (one row per criterion; expected values come from the criterion, never from the code's output).
+- Merge only after a teammate approves the latest commit. After that approval the author may merge. Request the review on GitHub and tell the reviewer on Zulip; reviewers answer within 24 hours.
+- Sprint 3 replaces UML diagrams with mutation testing (StrykerJS with the Vitest runner) on one of each member's issues. Rows 1, 3 and 5 have the most unit-testable logic for this.
 - Zach Bowden cannot run the Next.js dev server. Rows 1, 3 and 5 can be verified with unit tests alone; rows 4, 6 and 8 need a browser.
 
 ## Comment for #131
