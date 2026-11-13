@@ -16,6 +16,7 @@ import { ZHasWrongAssignmentReportInputSchema } from "./hasWrongAssignmentReport
 import { ZReportBookingInputSchema } from "./reportBooking.schema";
 import { ZReportWrongAssignmentInputSchema } from "./reportWrongAssignment.schema";
 import { ZRequestRescheduleInputSchema } from "./requestReschedule.schema";
+import { ZRunningLateInputSchema } from "./runningLate.schema";
 import { ZUpdateWrongAssignmentReportStatusInputSchema } from "./updateWrongAssignmentReportStatus.schema";
 import { bookingsProcedure } from "./util";
 
@@ -36,6 +37,15 @@ export const bookingsRouter = router({
       ctx,
       input,
       source: "WEBAPP",
+    });
+  }),
+
+  runningLate: authedProcedure.input(ZRunningLateInputSchema).mutation(async ({ input, ctx }) => {
+    const { runningLateHandler } = await import("./runningLate.handler");
+
+    return runningLateHandler({
+      ctx,
+      input,
     });
   }),
 

@@ -8,6 +8,7 @@ export { AttendeeDeclinedEmail } from "./AttendeeDeclinedEmail";
 export { AttendeeLocationChangeEmail } from "./AttendeeLocationChangeEmail";
 export { AttendeeRequestEmail } from "./AttendeeRequestEmail";
 export { AttendeeRescheduledEmail } from "./AttendeeRescheduledEmail";
+export { AttendeeRunningLateEmail } from "./AttendeeRunningLateEmail";
 export { AttendeeScheduledEmail } from "./AttendeeScheduledEmail";
 export { AttendeeUpdatedEmail } from "./AttendeeUpdatedEmail";
 export { AttendeeWasRequestedToRescheduleEmail } from "./AttendeeWasRequestedToRescheduleEmail";

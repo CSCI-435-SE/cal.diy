@@ -8,6 +8,7 @@ import {
   getVideoOptionsActions,
   getEditEventActions,
   getAfterEventActions,
+  getRunningLateAction,
   shouldShowPendingActions,
   shouldShowEditActions,
   shouldShowRecurringCancelAction,
@@ -762,5 +763,72 @@ describe("Booking Actions", () => {
 
       expect(getActionLabel("no_show", contextWithNoShow)).toBe("unmark_as_no_show");
     });
+  });
+});
+
+describe("getRunningLateAction", () => {
+  const now = new Date("2026-11-12T12:00:00Z");
+  const MINUTE = 60 * 1000;
+
+  function contextStartingIn(
+    msFromNow: number,
+    overrides: Partial<BookingActionContext> = {},
+    bookingOverrides: Partial<BookingActionContext["booking"]> = {}
+  ) {
+    const base = createMockContext(overrides);
+    const startTime = new Date(now.getTime() + msFromNow);
+    const endTime = new Date(startTime.getTime() + 30 * MINUTE);
+    return {
+      ...base,
+      booking: {
+        ...base.booking,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        ...bookingOverrides,
+      },
+    } as BookingActionContext;
+  }
+
+  it("shows the action to the organizer of an accepted booking starting soon", () => {
+    const action = getRunningLateAction(contextStartingIn(30 * MINUTE), now);
+
+    expect(action).toEqual({
+      id: "running_late",
+      label: "running_late",
+      icon: "clock",
+      disabled: false,
+      bookingUid: "booking-123",
+    });
+  });
+
+  it("shows the action while the booking is in progress", () => {
+    expect(getRunningLateAction(contextStartingIn(-10 * MINUTE), now)).not.toBeNull();
+  });
+
+  it("hides the action for bookings more than 2 hours away", () => {
+    expect(getRunningLateAction(contextStartingIn(3 * 60 * MINUTE), now)).toBeNull();
+  });
+
+  it("hides the action once the booking has ended", () => {
+    expect(getRunningLateAction(contextStartingIn(-60 * MINUTE), now)).toBeNull();
+  });
+
+  it("hides the action for bookings that are not confirmed", () => {
+    expect(getRunningLateAction(contextStartingIn(30 * MINUTE, { isConfirmed: false }), now)).toBeNull();
+  });
+
+  it("hides the action from attendees viewing the booking", () => {
+    const base = createMockContext();
+    const context = contextStartingIn(
+      30 * MINUTE,
+      {},
+      { loggedInUser: { ...base.booking.loggedInUser, userId: 2, userEmail: "john@example.com" } }
+    );
+
+    expect(getRunningLateAction(context, now)).toBeNull();
+  });
+
+  it("hides the action when the booking has no owner", () => {
+    expect(getRunningLateAction(contextStartingIn(30 * MINUTE, {}, { user: null }), now)).toBeNull();
   });
 });
