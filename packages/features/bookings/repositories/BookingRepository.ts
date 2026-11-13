@@ -893,6 +893,40 @@ export class BookingRepository implements IBookingRepository {
     });
   }
 
+  async findByIdIncludeUserAndAttendeeTimeZones(bookingId: number) {
+    return await this.prismaClient.booking.findUnique({
+      where: {
+        id: bookingId,
+      },
+      select: {
+        id: true,
+        uid: true,
+        title: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+        userId: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        attendees: {
+          select: {
+            name: true,
+            email: true,
+            timeZone: true,
+            locale: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+    });
+  }
+
   async findBookingIncludeCalVideoSettingsAndReferences({ bookingUid }: { bookingUid: string }) {
     return await this.prismaClient.booking.findUnique({
       where: {
