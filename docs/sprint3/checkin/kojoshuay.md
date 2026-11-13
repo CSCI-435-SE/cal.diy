@@ -1,5 +1,5 @@
 ## What have you implemented so far, and what remains?
-So far, I have implemented the running late feature. In the case that an organizer of an event will be late, the organizer can send an email to all attendes to let them know the organizer will be late. What remains is implementing another medium issue. 
+So far, I have implemented the running late feature. In the case that an organizer of an event will be late, the organizer can send an email to all attendes to let them know the organizer will be late. What remains is implementing another medium issue. This includes the backend RunningLateService built with DI, a tRPC mutation proteced by Zod, and the frontend dialog for the bookings list. Also wrote tests. 
 
 ## What is one thing you learned about testing in your project?
 One major thing I learned about is Zod, which is a TypeScript schema declaration and validation library that lets me write strict rules for my data, and enforces those rules in real time. 
