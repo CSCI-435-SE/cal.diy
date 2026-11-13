@@ -1,5 +1,7 @@
 import { useEventTypeForm } from "@calcom/atoms/event-types/hooks/useEventTypeForm";
 import type { EventTypeSetupProps, EventTypeUpdateInput } from "@calcom/features/eventtypes/lib/types";
+import type { Flags } from "@calcom/features/flags/context/provider";
+import { FeatureProvider } from "@calcom/features/flags/context/provider";
 import { CancellationReasonRequirement, RescheduleReasonRequirement } from "@calcom/prisma/enums";
 import { Form } from "@calcom/ui/components/form";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
@@ -35,8 +37,9 @@ vi.mock("./RequiresConfirmationController", () => ({
   default: () => null,
 }));
 
+// Renders a marker so tests can check where neighbouring settings are placed.
 vi.mock("./DisableReschedulingController", () => ({
-  default: () => null,
+  default: () => <div data-testid="disable-rescheduling-controller" />,
 }));
 
 const mockEventType = {
@@ -57,23 +60,31 @@ const mockEventType = {
   requiresRescheduleReason: RescheduleReasonRequirement.OPTIONAL_BOTH,
 } as unknown as EventTypeSetupProps["eventType"];
 
-function AdvancedTabHarness({ onSubmit }: { onSubmit: (data: EventTypeUpdateInput) => void }) {
+function AdvancedTabHarness({
+  onSubmit,
+  flags = {},
+}: {
+  onSubmit: (data: EventTypeUpdateInput) => void;
+  flags?: Flags;
+}) {
   const { form, handleSubmit } = useEventTypeForm({ eventType: mockEventType, onSubmit });
 
   return (
-    <TooltipProvider>
-      <Form form={form} handleSubmit={handleSubmit}>
-        <EventAdvancedTab
-          eventType={mockEventType}
-          team={null}
-          calendarsQuery={{ data: undefined, isPending: false, error: null }}
-          showToast={vi.fn()}
-          showBookerLayoutSelector={false}
-          orgId={null}
-        />
-        <button type="submit">Save event type</button>
-      </Form>
-    </TooltipProvider>
+    <FeatureProvider value={flags}>
+      <TooltipProvider>
+        <Form form={form} handleSubmit={handleSubmit}>
+          <EventAdvancedTab
+            eventType={mockEventType}
+            team={null}
+            calendarsQuery={{ data: undefined, isPending: false, error: null }}
+            showToast={vi.fn()}
+            showBookerLayoutSelector={false}
+            orgId={null}
+          />
+          <button type="submit">Save event type</button>
+        </Form>
+      </TooltipProvider>
+    </FeatureProvider>
   );
 }
 
@@ -107,5 +118,27 @@ describe("EventAdvancedTab - require reschedule reason", () => {
     const payload = onSubmit.mock.calls[0][0];
     expect(payload).toMatchObject({ id: 1, requiresRescheduleReason: savedValue });
     expect(payload).not.toHaveProperty("requiresCancellationReason");
+  });
+});
+
+describe("EventAdvancedTab - minimum cancellation notice", () => {
+  it("hides the setting while the feature flag is off", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} />);
+
+    expect(screen.getByTestId("disable-rescheduling-controller")).toBeInTheDocument();
+    expect(screen.queryByTestId("minimum-cancellation-notice-toggle")).not.toBeInTheDocument();
+  });
+
+  it("places the setting directly after Disable rescheduling, below Disable Cancelling", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} flags={{ "minimum-cancellation-notice": true }} />);
+
+    const disableCancelling = screen.getByTestId("disable-cancelling-toggle");
+    const disableRescheduling = screen.getByTestId("disable-rescheduling-controller");
+    const cancellationNotice = screen.getByTestId("minimum-cancellation-notice-toggle");
+
+    expect(disableCancelling.compareDocumentPosition(disableRescheduling)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(disableRescheduling.nextElementSibling).toContainElement(cancellationNotice);
   });
 });
