@@ -1,0 +1,17 @@
+# Sprint 3 Mid-Sprint Check-in — @dchan01-wm
+
+## 1. What have you implemented so far, and what remains?
+<!-- Draft — edit in your own words. -->
+So far this sprint my work has been specs and reviews rather than code. I posted the spec review on #130 (showing the hours of a partial-day out-of-office window), checking each acceptance criterion against the code and listing five problems, such as the 12h/24h toggle being hidden on all-away days and API v2 2024-04-15 returning the new fields. I drafted sub-issue 6 of our team feature #131 (OIDC provider buttons on the login and sign-up pages, plus sign-in error messages) and three round-robin out-of-office bug reports I found while reviewing #110; these are still local drafts. I also made the showcase brochure (#132). My Sprint 2 recurrence issues (#117, #118, #63, #64) are closed. What remains: file sub-issue 6, get its spec reviewed, implement it with unit tests, open the PR, and run StrykerJS mutation testing on it (D6).
+
+## 2. What is one thing you learned about testing in your project?
+<!-- PROMPT (delete): While tracing the round-robin out-of-office bug, you could follow the code path but had not reproduced it at runtime. What did that teach you about what the existing tests do and don't cover? -->
+<!-- PROMPT (delete): In the #130 spec review you asked for a stated date format so a test "has an expected value that does not come from the code's own output." Why does that matter for testing? -->
+<!-- PROMPT (delete): Anything from setting up or reading about StrykerJS (#135), or from `yarn type-check:ci` not working on Windows, that changed how you think about this project's test suite? -->
+Specifically in Cal.diy, I learned that our tests are really flakey. For example, on my machine, running the exact same docker container, and having followed the students.md file exactly and being on the same branch as my teammates, some of my tests would randomly fail (this was a recurring problem during code reviews because I would say the tests fail on my machine, but another person and the original implementer would both have all tests pass). There were also many times where I would run the whole unit test suite, and without changing anything, some runs would have hundreds of tests fail, then the very next run would have 0 failures. It is even worse with the e2e tests, and they take forever to actually run (making the production build the playwright tests against legitimately took over an hour on my machine).
+
+## 3. What is one risk to finishing your work by Nov 19, and what will you do about it?
+One risk is that we have not yet decomposed Issue #131, which is the one that will require a working demo by the end of the sprint. Zach Short started breaking it up, and I have looked into his proposed split and used Claude to incorporate the new information (issue comments) into the plan. There are a couple questions that still need answering, for example "What does the user sees when the IdP is down or misconfigured (discovery fetch fails, timeout, bad client secret, issuer mismatch)?". I also planned on implementing some of the subissues, so not having it decomposed will be problematic.
+
+## Code PR
+Sorry, could not get it done in time.
