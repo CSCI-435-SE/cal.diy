@@ -175,6 +175,17 @@ describe("confirmHandler - individual recurring occurrences", () => {
     expect(handleConfirmationMock).not.toHaveBeenCalled();
   });
 
+  it("keeps Confirm all passing the series id to the bulk confirmation flow", async () => {
+    mockBooking();
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+
+    const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
+
+    expect(res.status).toBe(BookingStatus.ACCEPTED);
+    expect(handleConfirmationMock).toHaveBeenCalledTimes(1);
+    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+  });
+
   it("keeps bulk reject limited to pending occurrences of the series", async () => {
     mockBooking();
     prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
