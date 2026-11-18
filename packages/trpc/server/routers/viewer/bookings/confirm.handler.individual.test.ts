@@ -141,6 +141,7 @@ describe("confirmHandler - individual recurring occurrences", () => {
     for (const confirmed of [true, false]) {
       await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
         code: "BAD_REQUEST",
+        message: expect.stringMatching(new RegExp(`\\b11\\b.*${status}`)),
       });
     }
     expect(handleConfirmationMock).not.toHaveBeenCalled();
@@ -161,6 +162,7 @@ describe("confirmHandler - individual recurring occurrences", () => {
 
     await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
       code: "BAD_REQUEST",
+      message: expect.stringMatching(/\b11\b.*ended/),
     });
     expect(handleConfirmationMock).not.toHaveBeenCalled();
   });
@@ -183,6 +185,16 @@ describe("confirmHandler - individual recurring occurrences", () => {
 
     expect(res.status).toBe(BookingStatus.ACCEPTED);
     expect(handleConfirmationMock).toHaveBeenCalledTimes(1);
+    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+  });
+
+  it("keeps Confirm all working when the series' first booking has already ended", async () => {
+    mockBooking({ startTime: future(-3), endTime: future(-2) });
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+
+    const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
+
+    expect(res.status).toBe(BookingStatus.ACCEPTED);
     expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
   });
 

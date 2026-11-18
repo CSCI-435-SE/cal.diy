@@ -31,6 +31,7 @@ describe("getRecurringOccurrencesHandler", () => {
 
     await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
       code: "FORBIDDEN",
+      message: expect.stringMatching(/\S/),
     });
     expect(mockBookingAccessService.doesUserIdHaveAccessToBooking).toHaveBeenCalledWith({
       userId: 1,
@@ -45,7 +46,18 @@ describe("getRecurringOccurrencesHandler", () => {
 
     await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
       code: "BAD_REQUEST",
+      message: expect.stringMatching(/\b10\b/),
     });
+  });
+
+  it("throws BAD_REQUEST when the booking does not exist", async () => {
+    mockBookingAccessService.doesUserIdHaveAccessToBooking.mockResolvedValue(true);
+    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue(null);
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(mockBookingRepo.findByRecurringEventId).not.toHaveBeenCalled();
   });
 
   it("returns every occurrence of the series", async () => {

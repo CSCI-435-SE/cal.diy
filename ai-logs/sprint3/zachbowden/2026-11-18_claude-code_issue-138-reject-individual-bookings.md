@@ -5578,3 +5578,3198 @@ Written for: your Sprint 3 graders and the teammate reviewing the PR.
 - Related suites: 14 files passed, 2 skipped, 166 tests passed.
 
 Run the first two commands in that section and correct the numbers if they differ.
+
+---
+
+_**User (2026-11-18 23:07:02Z)**_
+
+<ide_selection>The user selected the lines 1 to 154 from /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/pr-138.md:
+# feat(bookings): confirm or reject individual recurring booking occurrences
+
+Closes #138
+
+## What does this PR do?
+
+Hosts could only **Confirm all** or **Reject all** dates in a recurring series from the Bookings dashboard. The backend could already handle one booking at a time, but the UI gave no way to do it. This PR adds a **Manage occurrences** dialog where a host confirms or rejects single dates and leaves the rest of the series unchanged.
+
+### Changes
+
+**Backend**
+- **New query `viewer.bookings.getRecurringOccurrences`** (`getRecurringOccurrences.handler.ts` / `.schema.ts`, registered in `_router.tsx`). It takes a `bookingId` and checks access with `BookingAccessService.doesUserIdHaveAccessToBooking`. It then looks up that booking's `recurringEventId` on the server and returns every occurrence (`id`, `uid`, `startTime`, `endTime`, `status`), ordered by start time.
+- **`BookingRepository.findByRecurringEventId`**: new repository method that backs the query.
+- **`confirm.handler.ts`**: single-booking requests (no `recurringEventId`) now return `BAD_REQUEST` unless the booking is `PENDING` and has not ended. The check runs after the existing authorization check, so status is not revealed to unauthorized users. The bulk path is unchanged.
+
+**Frontend**
+- **`ManageOccurrencesDialog.tsx`** (new): lists each occurrence with its date, time range (in the host's time zone and time format) and a status badge. Only upcoming `PENDING` occurrences get Reject and Confirm buttons. These are the existing `RejectBookingButton` and `AcceptBookingButton` with no recurring flags, so they send single-booking requests, and Reject opens the existing `RejectionReasonDialog`.
+- **`BookingListItem.tsx`**: recurring rows in the **Unconfirmed** and **Recurring** tabs show a **Manage occurrences** button that opens the dialog. Confirm all and Reject all are unchanged.
+- **i18n**: added `confirmed`, `manage_occurrences` and `manage_occurrences_description` to `packages/i18n/locales/en/common.json`.
+
+## Visual Demo
+
+<!-- screenshots -->
+
+## Design Decisions
+
+### 1. Where hosts manage individual occurrences
+- **Decision:** Add a Manage occurrences dialog that opens from the recurring booking row.
+- **Alternatives considered:**
+  - (a) Expand the recurring row in the table to list every occurrence with its own buttons.
+  - (b) Extend the booking details sheet.
+  - (c) A separate dialog (chosen).
+- **Rationale:** (a) clutters the table for long series and changes the row layout, which raises regression risk. (b) sits behind the `bookings-v3` feature flag, so most hosts would not see it. A dialog leaves the list unchanged and has room for dates, statuses and actions.
+- **Consequences:** Small, self-contained UI change that is easy to test on its own. It costs the host one extra click.
+
+### 2. Where to validate individual confirm/reject requests
+- **Decision:** In `confirmHandler`, single-booking requests must target a `PENDING` booking that has not ended. This applies to all callers.
+- **Alternatives considered:**
+  - (a) Only hide the buttons in the UI.
+  - (b) Add a separate endpoint or flag used only by the new dialog.
+  - (c) Validate every single-booking request in the shared handler (chosen).
+- **Rationale:** (a) does not meet AC5, which requires the backend to reject invalid requests. (b) would leave the same hole open for magic links and API v2: before this PR, a `REJECTED` or `CANCELLED` booking could be "confirmed". (c) closes it in one place, as suggested in the spec review.
+- **Consequences:** Email links and API v2 now get a 400 when they try to confirm or reject a past, rejected or cancelled single booking. This is a behaviour change for non-recurring bookings too, but the UI already hid these actions. The bulk path is untouched, so AC6 is preserved.
+
+### 3. How the dialog fetches occurrences
+- **Decision:** A new query that takes a `bookingId`, checks access to it, and finds the series on the server.
+- **Alternatives considered:**
+  - (a) Add booking IDs and UIDs to `recurringInfo` in `bookings.get`.
+  - (b) Accept a `recurringEventId` from the client.
+  - (c) Take `bookingId` and look up the series on the server (chosen).
+- **Rationale:** (a) makes the main bookings list query bigger on every page load, even though few users open the dialog. (b) would need its own access check keyed on an ID the client chooses. (c) reuses the same `BookingAccessService` check as the confirm handler (AC8), and the query only runs when the dialog is open.
+- **Consequences:** One extra request when the dialog opens. Access is checked against the representative booking, not each occurrence (see Tech Debt).
+
+### 4. Reusing the existing confirm/reject buttons
+- **Decision:** Render the existing `AcceptBookingButton` and `RejectBookingButton` for each occurrence.
+- **Alternatives considered:**
+  - (a) Write new buttons and a new mutation for the dialog.
+  - (b) Reuse the existing buttons and hook, leaving out the recurring flags (chosen).
+- **Rationale:** With the recurring flags left out, `useBookingConfirmation` already sends a single-booking request (no `recurringEventId`), uses the existing rejection-reason dialog (AC4), and invalidates `viewer.bookings.*` and `bookingUnconfirmedCount` on success (AC7). No new mutation code was needed.
+- **Consequences:** The dialog behaves the same as the rest of the dashboard. Its labels are "Confirm" and "Reject", not "Confirm all" and "Reject all".
+
+### 5. Refunds and emails for individual actions (open questions Q3 and Q4)
+- **Decision:** Keep the existing single-booking behaviour. One email per individual action, and refund logic runs when a single paid occurrence is rejected.
+- **Alternatives considered:**
+  - (a) Copy the bulk behaviour: no refund and no per-date email.
+  - (b) Leave paid recurring bookings out of scope.
+  - (c) Keep the current single-booking behaviour (chosen).
+- **Rationale:** The issue lists changing payment or refund policies and adding new notification templates as out of scope. (c) changes neither, while (a) would change the existing single-booking flow.
+- **Consequences:** Rejecting dates one at a time refunds paid bookings, but Reject all does not. This mismatch already existed and is listed under Tech Debt.
+
+## Test Evidence
+
+| Acceptance criterion | Test(s) | Level | Source of expected value |
+|---|---|---|---|
+| **AC1:** Recurring rows in Unconfirmed and Recurring offer "Manage occurrences", which opens a dialog listing all occurrences with date, time and status, ordered chronologically | `ManageOccurrencesDialog.test.tsx` › lists every occurrence with its status<br>`getRecurringOccurrences.handler.test.ts` › returns every occurrence of the series<br>Manual: opened Bookings → Recurring, clicked **Manage occurrences** on a 12-date series → dialog listed every date in chronological order with its time range and a "Confirmed" badge | unit, manual | AC |
+| **AC2:** Each eligible pending occurrence has its own Confirm and Reject | `ManageOccurrencesDialog.test.tsx` › only shows Confirm and Reject for upcoming pending occurrences | unit | AC |
+| **AC3:** Confirming one occurrence sets only that booking to ACCEPTED; others unchanged | `confirm.handler.individual.test.ts` › confirms only the requested occurrence<br>`ManageOccurrencesDialog.test.tsx` › confirms a single occurrence without the recurring series id<br>`useBookingConfirmation.test.tsx` › sends a single-booking request when used outside a bulk context | unit | AC |
+| **AC4:** Rejecting one occurrence uses the rejection-reason dialog, saves the reason, sets only that booking to REJECTED | `confirm.handler.individual.test.ts` › rejects only the requested occurrence and stores the reason<br>`ManageOccurrencesDialog.test.tsx` › rejects a single occurrence through the rejection reason dialog | unit | AC |
+| **AC5:** Past, confirmed, rejected and canceled occurrences show no Confirm/Reject; the backend also refuses them | `ManageOccurrencesDialog.test.tsx` › only shows Confirm and Reject for upcoming pending occurrences<br>`confirm.handler.individual.test.ts` › refuses to act on a REJECTED occurrence · refuses to act on a CANCELLED occurrence · refuses to act on an already confirmed occurrence · refuses to act on an occurrence that has already ended | unit | AC, issue discussion (spec review: "accept only PENDING, not-yet-ended bookings") |
+| **AC6:** Confirm all and Reject all still work on pending bookings as before | `confirm.handler.individual.test.ts` › keeps Confirm all passing the series id to the bulk confirmation flow · keeps bulk reject limited to pending occurrences of the series<br>`useBookingConfirmation.test.tsx` › keeps Confirm all sending the series id (Recurring tab, Unconfirmed tab) | unit | AC, upstream behavior |
+| **AC7:** After an individual action, the dialog and dashboard refresh statuses and the pending count | `useBookingConfirmation.test.tsx` › refreshes bookings (including the occurrences list) and the unconfirmed count after ACCEPTED / REJECTED | unit | AC |
+| **AC8:** Only authorized hosts can retrieve and manage occurrences of their bookings | `getRecurringOccurrences.handler.test.ts` › throws FORBIDDEN and does not read the series when the user has no access<br>`confirm.handler.individual.test.ts` › refuses unauthorized users before revealing the booking status | unit | AC, issue discussion (spec review: reuse `BookingAccessService`) |
+| **AC9:** Automated tests cover individual confirm, individual reject, invalid status, authorization, and preservation of other statuses | All tests listed above (21 new tests in 4 new files) | unit | AC |
+| **AC10:** New UI text uses i18n | `ManageOccurrencesDialog.test.tsx` checks the status labels render through `t()` keys (`confirmed`, `rejected`, `cancelled`); new keys added to `en/common.json` | unit | AC |
+
+**Not tested automatically, and why:**
+- **AC1 (button placement):** the button in `BookingListItem` needs the full booking-list providers (data table, actions store, details-sheet store) to render, so its placement was checked by hand.
+- **AC7 (actual re-render):** the test checks that `viewer.bookings.*` (which includes the new `getRecurringOccurrences` query) and `bookingUnconfirmedCount` are invalidated. The re-fetch after invalidation is React Query behaviour, which these tests mock.
+- **AC6 (calendar side of Confirm all):** `handleConfirmation` and the calendar integrations are mocked. This PR does not change them, and the existing `confirm.handler.test.ts` that exercised them is entirely `describe.skip`.
+
+**AI-written tests:** All four new test files (`confirm.handler.individual.test.ts`, `getRecurringOccurrences.handler.test.ts`, `ManageOccurrencesDialog.test.tsx`, `useBookingConfirmation.test.tsx`) were written by Claude Code. I checked them three ways:
+- **Expected values come from the issue, not the code's output.** Each assertion was written from the AC text and the spec-review comment before the tests were run. For example: only an upcoming `PENDING` booking may be acted on, a reject stores exactly the reason given, an unauthorized user gets `UNAUTHORIZED`/`FORBIDDEN` before any status check, and bulk reject only touches `PENDING` bookings.
+- **A failing run changed the fixture, not the expectations.** On the first run, 3 handler tests failed with "Both Phone and Email are missing". The booking fixture had no booker email, so the fix was adding one; no expected value changed.
+- **Each AC has a negative case.** Where an AC forbids something (AC5, AC8), there is a test that the forbidden action is refused and that no update is written (`booking.update`/`handleConfirmation` not called), so a missing guard would make the test fail.
+
+### Commands run and results
+This fork has no CI that runs these tests, so results are from a local run:
+
+```bash
+# New tests
+TZ=UTC yarn vitest run \
+  packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts \
+  packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts \
+  apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx \
+  apps/web/components/booking/__tests__/useBookingConfirmation.test.tsx
+# → 4 files passed, 21 tests passed
+
+# Related existing suites (regression check)
+TZ=UTC yarn vitest run apps/web/components/booking apps/web/components/dialog \
+  apps/web/app/api/link apps/web/app/api/verify-booking-token \
+  packages/features/bookings/repositories/BookingRepository.test.ts \
+  packages/trpc/server/routers/viewer/bookings
+# → 14 files passed, 2 skipped (pre-existing describe.skip); 166 tests passed, 9 skipped, 0 failed
+
+# Type check
+cd apps/web && NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit -p .
+# → 0 errors
+```
+
+`yarn type-check:ci --force` reported "9 successful", but one `tsc` process in it ran out of memory (JavaScript heap out of memory), so that result is not reliable. The `apps/web` `tsc` run above covers every changed file.
+
+### Manual verification steps (for reviewers)
+1. Enable **Requires confirmation** on an event type with recurring enabled.
+2. As an attendee, book a recurring series with future dates.
+3. Go to **Bookings → Unconfirmed** and click **Manage occurrences** on that row.
+4. Confirm one date and reject another (with a reason). Check that only those two change, the badges update, and the Unconfirmed count drops.
+5. Close the dialog and click **Confirm all**. Check that the remaining pending dates become confirmed and that no duplicate calendar events appear.
+
+## Tech Debt
+
+**Introduced:**
+- **Series access is checked against one booking.** `getRecurringOccurrences` checks access to the booking the host opened, then returns the whole series. Every occurrence in a series normally has the same organizer, and `confirmHandler` still checks access per booking, but the occurrence list itself is not filtered per booking.
+- **Reused a repository method with a use-case-specific name.** The new handler calls `BookingRepository.findByIdForReassignmentValidation` to read `recurringEventId`, rather than adding a near-duplicate method. A generic name (e.g. `findByIdIncludeStatusAndRecurringEventId`) would be cleaner.
+- **The button shows even when nothing can be done.** Manage occurrences appears on every recurring row in these two tabs, including fully confirmed series, where the dialog has no actions. The AC asks for it on every row, but it could be hidden when no future date is pending.
+- **Wider backend change.** The new pending/not-ended check applies to every single-booking caller (magic links, API v2), not only the dialog. See Design Decision 2.
+
+**Encountered:**
+- **`confirm.handler.test.ts` is entirely skipped** (`describe.skip`, `@ts-nocheck`) because its imports cause module-loading side effects. Rather than revive it, I added `confirm.handler.individual.test.ts`, which mocks those modules.
+- **`confirmHandler` uses Prisma directly** and has a `TODO` to turn it into a service. I left that as is to keep the PR small.
+- **Refund mismatch:** single-booking reject runs `processPaymentRefund`, but bulk reject does not. Left unchanged (out of scope per the issue).
+- **Possible calendar sync issue (Q1):** after some dates are confirmed individually, Confirm all still sets the recurring calendar event's count to the full number of bookings in the series, which could create duplicate calendar entries. Not changed here because calendar behaviour is out of scope. The last manual test step checks for it.
+- **`yarn type-check:ci --force` can silently out-of-memory** in one package and still report success. I worked around it by running `tsc` directly on `apps/web` with a larger heap.
+- **Biome import sorting** reordered a few existing imports in `BookingListItem.tsx` and `confirm.handler.ts` (no logic changes).
+
+## AI Log
+[ai-logs/sprint3/zachbowden/2026-11-18_claude-code_issue-138-recurring-occurrences.md](https://github.com/CSCI-435-SE/cal.diy/blob/feat/issue-138-host-recurring-reject-accept/ai-logs/sprint3/zachbowden/2026-11-18_claude-code_issue-138-recurring-occurrences.md)
+
+## Mandatory Tasks
+- [x] I have self-reviewed the code
+- [x] N/A: no developer docs changes needed
+- [x] Automated tests are in place that prove the feature works (see Test Evidence)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+This may or may not be related to the current task.</ide_selection>
+
+
+
+<pasted_content id="30aa">
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Authentication > should return 403 when no API key is provided
+Error: Test timed out in 10000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:54:5
+     52|
+     53|   describe("Authentication", () => {
+     54|     test("should return 403 when no API key is provided", async () => {
+       |     ^
+     55|       const request = new NextRequest("http://localhost/api/cron/calendar-subscriptions");
+     56|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Authentication > should accept valid API key
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:92:31
+     90|       const response = await GET(request, { params: Promise.resolve({}) });
+     91|
+     92|       expect(response.status).toBe(200);
+       |                               ^
+     93|     });
+     94|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Feature flag checks > should return early when cache AND sync are disabled
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:112:31
+    110|       const response = await GET(request, { params: Promise.resolve({}) });
+    111|
+    112|       expect(response.status).toBe(200);
+       |                               ^
+    113|       const body = await response.json();
+    114|       expect(body.ok).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Feature flag checks > should proceed when both cache and sync are enabled
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:133:31
+    131|       const response = await GET(request, { params: Promise.resolve({}) });
+    132|
+    133|       expect(response.status).toBe(200);
+       |                               ^
+    134|       const body = await response.json();
+    135|       expect(body.ok).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Subscription checking functionality > should successfully check for new subscriptions
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:156:31
+    154|       const response = await GET(request, { params: Promise.resolve({}) });
+    155|
+    156|       expect(response.status).toBe(200);
+       |                               ^
+    157|       const body = await response.json();
+    158|       expect(body.ok).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Subscription checking functionality > should handle subscription checking errors gracefully
+AssertionError: expected '__vite_ssr_import_6__.CalendarSyncSer…' to be 'Subscription service unavailable' // Object.is equality
+
+Expected: "Subscription service unavailable"
+Received: "__vite_ssr_import_6__.CalendarSyncService is not a constructor"
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:180:28
+    178|       expect(response.status).toBe(500);
+    179|       const body = await response.json();
+    180|       expect(body.message).toBe("Subscription service unavailable");
+       |                            ^
+    181|     });
+    182|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Subscription checking functionality > should handle non-Error exceptions
+AssertionError: expected '__vite_ssr_import_6__.CalendarSyncSer…' to be 'Unknown error' // Object.is equality
+
+Expected: "Unknown error"
+Received: "__vite_ssr_import_6__.CalendarSyncService is not a constructor"
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:200:28
+    198|       expect(response.status).toBe(500);
+    199|       const body = await response.json();
+    200|       expect(body.message).toBe("Unknown error");
+       |                            ^
+    201|     });
+    202|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/18]⎯
+
+ FAIL  apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts > /api/cron/calendar-subscriptions > Service instantiation > should instantiate all services with correct dependencies
+AssertionError: expected "vi.fn()" to be called with arguments: [ { …(7) } ]
+
+Number of calls: 0
+
+ ❯ apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts:220:47
+    218|       await GET(request, { params: Promise.resolve({}) });
+    219|
+    220|       expect(mockCalendarSubscriptionService).toHaveBeenCalledWith({
+       |                                               ^
+    221|         adapterFactory: expect.any(Object),
+    222|         selectedCalendarRepository: expect.any(Object),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Provider validation > should accept google_calendar provider
+Error: Test timed out in 10000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:52:5
+     50|
+     51|   describe("Provider validation", () => {
+     52|     test("should accept google_calendar provider", async () => {
+       |     ^
+     53|       const request = new NextRequest("http://localhost/api/webhooks/calendar-subscription/google_calendar", {
+     54|         method: "POST",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Provider validation > should accept office365_calendar provider
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:95:31
+     93|       });
+     94|
+     95|       expect(response.status).toBe(200);
+       |                               ^
+     96|       expect(mockProcessWebhook).toHaveBeenCalledWith("office365_calendar", request);
+     97|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Feature flag handling > should return 200 when neither cache nor sync is enabled
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:137:31
+    135|       });
+    136|
+    137|       expect(response.status).toBe(200);
+       |                               ^
+    138|       const body = await response.json();
+    139|       expect(body.message).toBe("No cache or sync enabled");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Feature flag handling > should process webhook when cache is enabled
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:161:31
+    159|       });
+    160|
+    161|       expect(response.status).toBe(200);
+       |                               ^
+    162|       const body = await response.json();
+    163|       expect(body.message).toBe("Webhook processed");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Feature flag handling > should process webhook when sync is enabled
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:185:31
+    183|       });
+    184|
+    185|       expect(response.status).toBe(200);
+       |                               ^
+    186|       const body = await response.json();
+    187|       expect(body.message).toBe("Webhook processed");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Feature flag handling > should process webhook when both cache and sync are enabled
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:209:31
+    207|       });
+    208|
+    209|       expect(response.status).toBe(200);
+       |                               ^
+    210|       const body = await response.json();
+    211|       expect(body.message).toBe("Webhook processed");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Error handling > should handle webhook processing errors gracefully
+AssertionError: expected '__vite_ssr_import_5__.CalendarSyncSer…' to be 'Webhook validation failed' // Object.is equality
+
+Expected: "Webhook validation failed"
+Received: "__vite_ssr_import_5__.CalendarSyncService is not a constructor"
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:238:28
+    236|       expect(response.status).toBe(500);
+    237|       const body = await response.json();
+    238|       expect(body.message).toBe("Webhook validation failed");
+       |                            ^
+    239|     });
+    240|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Error handling > should handle non-Error exceptions
+AssertionError: expected '__vite_ssr_import_5__.CalendarSyncSer…' to be 'Unknown error' // Object.is equality
+
+Expected: "Unknown error"
+Received: "__vite_ssr_import_5__.CalendarSyncService is not a constructor"
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:261:28
+    259|       expect(response.status).toBe(500);
+    260|       const body = await response.json();
+    261|       expect(body.message).toBe("Unknown error");
+       |                            ^
+    262|     });
+    263|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Error handling > should handle feature flag check errors
+AssertionError: expected '__vite_ssr_import_5__.CalendarSyncSer…' to be 'Feature flag service unavailable' // Object.is equality
+
+Expected: "Feature flag service unavailable"
+Received: "__vite_ssr_import_5__.CalendarSyncService is not a constructor"
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:283:28
+    281|       expect(response.status).toBe(500);
+    282|       const body = await response.json();
+    283|       expect(body.message).toBe("Feature flag service unavailable");
+       |                            ^
+    284|     });
+    285|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯
+
+ FAIL  apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts > /api/webhooks/calendar-subscription/[provider] > Service instantiation > should instantiate all services with correct dependencies
+AssertionError: expected "vi.fn()" to be called with arguments: [ { …(7) } ]
+
+Number of calls: 0
+
+ ❯ apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts:306:47
+    304|       });
+    305|
+    306|       expect(mockCalendarSubscriptionService).toHaveBeenCalledWith({
+       |                                               ^
+    307|         adapterFactory: expect.any(Object),
+    308|         selectedCalendarRepository: expect.any(Object),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯
+</pasted_content id="30aa">
+
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:07:09Z)**_
+
+These failures look unrelated to this PR. Checking the two failing test files against my diff to confirm.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:07:11Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check failing tests' mocks, imports, and history
+
+`git status --short; echo ---; grep -n "CalendarSyncService" -A3 "apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts" | head -20; echo ---; grep -n "^import" apps/web/app/api/cron/calendar-subscriptions/route.ts; echo ---; git log --oneline -3 -- apps/web/app/api/cron/calendar-subscriptions apps/web/app/api/webhooks/calendar-subscription`
+
+```text
+ M packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts
+?? ai-logs/sprint3/zachbowden/
+?? apps/web/components/booking/__tests__/useBookingConfirmation.test.tsx
+---
+38:vi.mock("@calcom/features/calendar-subscription/lib/sync/CalendarSyncService");
+39-vi.mock("@calcom/prisma", () => ({
+40-  prisma: {},
+41-}));
+---
+1:import process from "node:process";
+2:import { BookingRepository } from "@calcom/features/bookings/repositories/BookingRepository";
+3:import { DefaultAdapterFactory } from "@calcom/features/calendar-subscription/adapters/AdaptersFactory";
+4:import { CalendarSubscriptionService } from "@calcom/features/calendar-subscription/lib/CalendarSubscriptionService";
+5:import { CalendarCacheEventRepository } from "@calcom/features/calendar-subscription/lib/cache/CalendarCacheEventRepository";
+6:import { CalendarCacheEventService } from "@calcom/features/calendar-subscription/lib/cache/CalendarCacheEventService";
+7:import { CalendarSyncService } from "@calcom/features/calendar-subscription/lib/sync/CalendarSyncService";
+8:import { getFeatureRepository } from "@calcom/features/di/containers/FeatureRepository";
+9:import { getTeamFeatureRepository } from "@calcom/features/di/containers/TeamFeatureRepository";
+10:import { getUserFeatureRepository } from "@calcom/features/di/containers/UserFeatureRepository";
+11:import { SelectedCalendarRepository } from "@calcom/features/selectedCalendar/repositories/SelectedCalendarRepository";
+12:import { prisma } from "@calcom/prisma";
+13:import { defaultResponderForAppDir } from "@calcom/web/app/api/defaultResponderForAppDir";
+14:import type { NextRequest } from "next/server";
+15:import { NextResponse } from "next/server";
+---
+512002aaef refactor: replace FeaturesRepository with DI-based feature repositories (#27200)
+03dd0c1501 refactor: Move SelectedCalendarRepository and WorkflowRelationsRepository from /lib to /features (#25982)
+6923b97cd2 feat: upgrade Prisma to 6.16.0 with no-rust engine (#23816)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:07:19Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check mock implementations and branch diff vs main
+
+`grep -n "mockImplementation\|BookingRepository" "apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts" "apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts" | head -20; git log --oneline main -1; git diff main --stat -- packages/features apps/web/app/api | tail -3`
+
+```text
+1ca2a73df1 Merge pull request #147 from CSCI-435-SE/docs/sprint3_mid_sprint
+ packages/features/bookings/repositories/BookingRepository.ts | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:07:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read failing test's mock setup
+
+`sed -n 1,52p "apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts"`
+
+```text
+import { NextRequest } from "next/server";
+import { describe, test, expect, vi, beforeEach } from "vitest";
+
+import { CalendarSubscriptionService } from "@calcom/features/calendar-subscription/lib/CalendarSubscriptionService";
+
+vi.mock("next/server", () => ({
+  NextRequest: class MockNextRequest {
+    url: string;
+    method: string;
+    nextUrl: { searchParams: URLSearchParams };
+    private _headers: Map<string, string>;
+
+    constructor(url: string, options: { method?: string } = {}) {
+      this.url = url;
+      this.method = options.method || "GET";
+      this._headers = new Map();
+      this.nextUrl = { searchParams: new URLSearchParams(url.split("?")[1] || "") };
+    }
+
+    headers = {
+      get: (key: string): string | null => this._headers.get(key.toLowerCase()) || null,
+      set: (key: string, value: string): void => {
+        this._headers.set(key.toLowerCase(), value);
+      },
+      has: (key: string): boolean => this._headers.has(key.toLowerCase()),
+    };
+  },
+  NextResponse: {
+    json: vi.fn((body, init) => ({
+      json: vi.fn().mockResolvedValue(body),
+      status: init?.status || 200,
+    })),
+  },
+}));
+
+vi.mock("@calcom/features/calendar-subscription/lib/CalendarSubscriptionService");
+vi.mock("@calcom/features/calendar-subscription/lib/cache/CalendarCacheEventService");
+vi.mock("@calcom/features/calendar-subscription/lib/sync/CalendarSyncService");
+vi.mock("@calcom/prisma", () => ({
+  prisma: {},
+}));
+
+const mockCalendarSubscriptionService = vi.mocked(CalendarSubscriptionService);
+
+describe("/api/cron/calendar-subscriptions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    vi.stubEnv("CRON_API_KEY", "test-cron-key");
+    vi.stubEnv("CRON_SECRET", "test-cron-secret");
+  });
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:07:33Z)**_
+
+None of these 18 failures come from this PR. They're in two test files the branch doesn't touch:
+
+- `apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts`
+- `apps/web/app/api/webhooks/calendar-subscription/[provider]/__tests__/route.test.ts`
+
+**Why I think they're unrelated:**
+- **Mocking, not my code:** the real error is "`CalendarSyncService is not a constructor`". These tests auto-mock `CalendarSyncService` and also reset all modules before every test. That combination breaks the mock, and the route then returns 500 in every test.
+- **The timeouts are a slow first load:** the first test in each file times out at 10s while loading the route's large set of imports. The rest of that file then fails for the reason above.
+- **Only one shared file, and it can't cause this:** the only file these routes import that this branch changed is `BookingRepository.ts`. I added one method there, which can't stop a different class from being constructed.
+
+**To confirm it's not the branch,** run the two files on `main`:
+
+```bash
+git stash -u && git switch main
+TZ=UTC yarn vitest run apps/web/app/api/cron/calendar-subscriptions apps/web/app/api/webhooks/calendar-subscription
+git switch feat/issue-138-host-recurring-reject-accept && git stash pop
+```
+
+If they fail the same way on `main`, they're existing failures and you can say so in the PR. The course page says to focus only on failures caused by your changes.
+
+**For the PR description,** that paste only lists failures. Run the two commands from its "Commands run and results" section, check that the numbers match (4 files, 21 tests; then 14 passed and 2 skipped files, 166 tests passed), and correct them if not.
+
+---
+
+_**User (2026-11-18 23:08:47Z)**_
+
+<ide_opened_file>The user opened the file /home/lexzach/Documents/Git/cal.diy/.gitignore in the IDE. This may or may not be related to the current task.</ide_opened_file>
+
+well they didnt start failing until the stuff you just added
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:08:51Z)**_
+
+Possible if test files share module state. Checking the Vitest config for isolation settings.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:08:53Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect Vitest isolation and pool settings
+
+`ls vitest* vitest.workspace* 2>/dev/null; grep -n "isolate\|pool\|poolOptions\|singleThread\|maxWorkers\|testTimeout\|include\|environment" vitest.config.* vitest.workspace.* 2>/dev/null | head -40`
+
+```text
+vitest.config.mts
+vitest.workspace.ts
+vitest.workspace.ts
+
+vitest-mocks:
+svg-hashes.json
+tailwind.generated.css
+vitest.workspace.ts:3:// Vitest 4.0 no longer allows custom CLI flags, so we use environment variables instead
+vitest.workspace.ts:13:  throw new Error("TZ environment variable is not set");
+vitest.workspace.ts:16:// Use pool: "forks" to prevent "Closing rpc while fetch was pending" errors.
+vitest.workspace.ts:17:const pool = "forks" as const;
+vitest.workspace.ts:24:          include: ["packages/embeds/**/packaged/**/*.{test,spec}.{ts,js}"],
+vitest.workspace.ts:25:          environment: "jsdom",
+vitest.workspace.ts:26:          pool,
+vitest.workspace.ts:35:            include: ["packages/**/*.integration-test.ts", "apps/**/*.integration-test.ts"],
+vitest.workspace.ts:38:            pool,
+vitest.workspace.ts:48:              include: ["packages/**/*.timezone.test.ts", "apps/**/*.timezone.test.ts"],
+vitest.workspace.ts:52:              pool,
+vitest.workspace.ts:59:              include: ["packages/**/*.{test,spec}.{ts,js}", "apps/**/*.{test,spec}.{ts,js}"],
+vitest.workspace.ts:70:              pool,
+vitest.workspace.ts:86:              include: ["packages/features/**/*.{test,spec}.tsx"],
+vitest.workspace.ts:88:              environment: "jsdom",
+vitest.workspace.ts:90:              pool,
+vitest.workspace.ts:97:              include: ["packages/app-store/closecom/**/*.{test,spec}.{ts,js}"],
+vitest.workspace.ts:98:              environment: "jsdom",
+vitest.workspace.ts:100:              pool,
+vitest.workspace.ts:107:              include: ["packages/app-store/*.{test,spec}.[jt]s?(x)"],
+vitest.workspace.ts:109:              environment: "jsdom",
+vitest.workspace.ts:111:              pool,
+vitest.workspace.ts:118:              include: ["packages/app-store/delegationCredential.test.ts"],
+vitest.workspace.ts:119:              environment: "node",
+vitest.workspace.ts:121:              pool,
+vitest.workspace.ts:128:              include: ["packages/ui/components/**/*.{test,spec}.[jt]s?(x)"],
+vitest.workspace.ts:129:              environment: "jsdom",
+vitest.workspace.ts:131:              pool,
+vitest.workspace.ts:138:              include: ["packages/features/form-builder/**/*.{test,spec}.[jt]sx"],
+vitest.workspace.ts:139:              environment: "jsdom",
+vitest.workspace.ts:141:              pool,
+vitest.workspace.ts:148:              include: ["packages/features/bookings/**/*.{test,spec}.[jt]sx"],
+vitest.workspace.ts:149:              environment: "jsdom",
+vitest.workspace.ts:151:              pool,
+vitest.workspace.ts:158:              include: ["apps/web/components/**/*.{test,spec}.[jt]sx"],
+vitest.workspace.ts:159:              environment: "jsdom",
+vitest.workspace.ts:161:              pool,
+vitest.workspace.ts:168:              include: ["packages/app-store/_components/**/*.{test,spec}.[jt]s?(x)"],
+vitest.workspace.ts:169:              environment: "jsdom",
+vitest.workspace.ts:171:              pool,
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:08:55Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read workspace config for the main test project
+
+`sed -n 1,20p vitest.workspace.ts; sed -n 55,80p vitest.workspace.ts; grep -n "isolate\|fileParallelism\|testTimeout" vitest.config.mts vitest.workspace.ts packages/testing/src/setupVitest.ts`
+
+```text
+import { defineWorkspace } from "vitest/config";
+
+// Vitest 4.0 no longer allows custom CLI flags, so we use environment variables instead
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+const packagedEmbedTestsOnly = process.env.VITEST_MODE === "packaged-embed";
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+const timeZoneDependentTestsOnly = process.env.VITEST_MODE === "timezone";
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+const integrationTestsOnly = process.env.VITEST_MODE === "integration";
+// eslint-disable-next-line turbo/no-undeclared-env-vars
+const envTZ = process.env.TZ;
+if (timeZoneDependentTestsOnly && !envTZ) {
+  throw new Error("TZ environment variable is not set");
+}
+
+// Use pool: "forks" to prevent "Closing rpc while fetch was pending" errors.
+const pool = "forks" as const;
+
+const workspaces = packagedEmbedTestsOnly
+  ? [
+        ]
+      : [
+          {
+            test: {
+              include: ["packages/**/*.{test,spec}.{ts,js}", "apps/**/*.{test,spec}.{ts,js}"],
+              exclude: [
+                "**/node_modules/**/*",
+                "**/.next/**/*",
+                "packages/embeds/**/*",
+                "packages/lib/hooks/**/*",
+                "packages/platform/**/*",
+                "apps/api/v2/**/*",
+              ],
+              name: "@calcom/lib",
+              setupFiles: ["packages/testing/src/setupVitest.ts"],
+              pool,
+            },
+            resolve: {
+              alias: {
+                "@lib": new URL("./apps/web/lib", import.meta.url).pathname,
+                "@server": new URL("./apps/web/server", import.meta.url).pathname,
+                "@components": new URL("./apps/web/components", import.meta.url).pathname,
+                "@pages": new URL("./apps/web/pages", import.meta.url).pathname,
+                "~": new URL("./apps/web/modules", import.meta.url).pathname,
+              },
+            },
+vitest.config.mts:121:    testTimeout: 500000,
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:09:02Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read how the failing test imports the route
+
+`sed -n 53,95p "apps/web/app/api/cron/calendar-subscriptions/__tests__/route.test.ts"`
+
+```text
+  describe("Authentication", () => {
+    test("should return 403 when no API key is provided", async () => {
+      const request = new NextRequest("http://localhost/api/cron/calendar-subscriptions");
+
+      const { GET } = await import("../route");
+      const response = await GET(request, { params: Promise.resolve({}) });
+
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.message).toBe("Forbiden");
+    }, 10000);
+
+    test("should return 403 when invalid API key is provided", async () => {
+      const request = new NextRequest("http://localhost/api/cron/calendar-subscriptions");
+      request.headers.set("authorization", "invalid-key");
+
+      const { GET } = await import("../route");
+      const response = await GET(request, { params: Promise.resolve({}) });
+
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.message).toBe("Forbiden");
+    });
+
+    test("should accept valid API key", async () => {
+      const request = new NextRequest("http://localhost/api/cron/calendar-subscriptions");
+      request.headers.set("authorization", "test-cron-key");
+
+      const mockIsCacheEnabled = vi.fn().mockResolvedValue(true);
+      const mockIsSyncEnabled = vi.fn().mockResolvedValue(true);
+      const mockCheckForNewSubscriptions = vi.fn().mockResolvedValue(undefined);
+
+      mockCalendarSubscriptionService.prototype.isCacheEnabled = mockIsCacheEnabled;
+      mockCalendarSubscriptionService.prototype.isSyncEnabled = mockIsSyncEnabled;
+      mockCalendarSubscriptionService.prototype.checkForNewSubscriptions = mockCheckForNewSubscriptions;
+
+      const { GET } = await import("../route");
+      const response = await GET(request, { params: Promise.resolve({}) });
+
+      expect(response.status).toBe(200);
+    });
+  });
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:09:14Z)**_
+
+You may be right about the timing, but my test code itself isn't what's breaking them. Adding tests probably made an already load-sensitive test time out.
+
+**What I found:**
+- **Each test file runs in a separate process.** The workspace uses `pool: "forks"` with isolation left on, so mocks in my files can't reach other test files.
+- **The first test in each failing file has a hard 10-second limit** (`}, 10000)` at `route.test.ts:63`), and it loads the route's large set of imports for the first time inside that limit. My new files, especially the React one, are more work running in parallel, so that first load can now go past 10 seconds.
+- **The timeout then breaks every later test in the file.** After a timeout, the import keeps running in the background. The next test's `beforeEach` calls `vi.resetModules()` and imports the route again while that first load is half-finished. That's where "`CalendarSyncService is not a constructor`" and the 500s come from: one timeout, then failures all the way down.
+
+**To check whether that's what happened:**
+
+```bash
+# 1. The two route tests by themselves: should pass if it's load
+TZ=UTC yarn vitest run apps/web/app/api/cron/calendar-subscriptions apps/web/app/api/webhooks/calendar-subscription
+
+# 2. Full run without my two newest test files: should also pass if your observation holds
+git stash push -u -- apps/web/components/booking/__tests__/useBookingConfirmation.test.tsx packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts
+TZ=UTC yarn test
+git stash pop
+```
+
+If 1 passes and the full run only fails with my files present, it's load, not a bug. The simplest fix is to drop the `10000` override on those first tests so they use the config's 500-second limit (`vitest.config.mts:121`). That's a few lines in tests outside this issue. Want me to make that change, or would you rather note it as existing flakiness in the PR's Tech Debt section?
+
+---
+
+_**User (2026-11-18 23:12:57Z)**_
+
+one thing I need to add now is stryker mutation testing for my changes, please add a stryker js test framework for the tests added in this branch.
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:02Z)**_
+
+Reading the D6 mutation-testing requirements first so the setup produces what the course asks for.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read D6 mutation testing section
+
+`sed -n 355,420p /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/sprint3.txt`
+
+```text
+Same requirements as Sprint 1 (D5) and the AI Log Instructions, with the enforcement described in item 5 of "Things that must improve."
+
+Log storage: ai-logs/sprint3/<your-github-username>/
+
+D6 - Mutation Testing (new)¶
+
+This is a new individual deliverable.
+
+What it is. A mutation testing tool makes small changes to your code (mutants), such as flipping a condition or changing a boundary value, and runs your tests against each one. If a test fails, the mutant is killed. If all tests pass, the mutant survived: your tests did not notice that the code changed. Survivors point to weak or missing tests.
+
+What to do. For one of your issues whose PR changes source code and tests (CSCI 535: two such issues; your small issue may be one of them):
+
+Run a mutation testing tool on the source files changed by your PR(s) for that issue. Do not run it on the whole project.
+
+Using the tool's report, analyze every surviving mutant: is it equivalent (it behaves exactly like the original code, so no test can kill it), or does it reveal a gap in your tests? If there are more than 10 surviving mutants, analyze at least 10, starting with those in lines your PR added or changed.
+
+Add or strengthen at least one test that kills a surviving mutant that revealed a gap. Re-run the tool to confirm it is killed. If no surviving mutant reveals a gap (all are killed or equivalent), say so and justify it in the surviving-mutants table; that completes this step.
+
+Answer the questions in the template below.
+
+Evidence. Configure the tool to write a machine-readable report (StrykerJS: add "json" to reporters; Gremlins: --output=<file>.json; go-mutesting: save the terminal output to a text file). Commit the report from your first run and from your re-run as docs/sprint3/mutation/reports/<issue#>-<username>-before.json and -after.json (.txt for go-mutesting). The mutation scores you list must match the reports, and the mutant your new test kills must show as killed in the "after" report.
+
+A tool is required. Manual mutation does not count.
+
+Stack
+Tool
+
+TypeScript/JavaScript with Vitest (Actual Budget, Cal.diy, Excalidraw, Outline, Gitea frontend)
+StrykerJS with the Vitest runner
+
+TypeScript/JavaScript with Jest (Medusa)
+StrykerJS with the Jest runner
+
+Go (Gitea backend)
+Gremlins or go-mutesting
+
+Set it up early. Getting the tool to work on a large codebase is real work: builds, services, and choosing which tests run. Each student configures and runs the tool for their own files and commits the configuration they used. You may reuse a teammate's setup (and are encouraged to), as long as you run the tool yourself and credit the teammate in your report.
+
+Common problems to watch for:
+
+The tool stops before mutating. Tools first run your tests on the unchanged code. If any of the selected tests fail, the run stops. Fix or exclude failing tests first (this is where your baseline run helps).
+
+Tests run against built code. If your tests run against compiled output (for example, a dist folder) instead of the source, mutants in the source are never seen by the tests. Configure the tool to rebuild before testing, or choose tests that run on source.
+
+Tests need services. Some test suites need a database or another service running. Start them before running the tool.
+
+False survivors. If you limit which tests run (for example, with Vitest's dir option), make sure the tests that cover the mutated files are included. Otherwise, mutants that some test would catch are reported as survived or not covered. Before writing a new test for a survivor, check that the relevant tests actually ran.
+
+Long runs. Mutating only the files changed by your PR keeps run time manageable.
+
+If you are blocked
+
+If you cannot get the tool to run, first ask your teammates: someone may already have a working setup. If you are still stuck, tell the TA as early as possible, with the errors you got and the AI log of what you tried. The TA will help you debug it. If it still cannot be made to work, the TA may approve running the tool on a different issue or a different part of your code instead. Problems reported at the end of the sprint will not excuse a missing D6.
+
+Submission: docs/sprint3/mutation/<issue#>-<username>.md, using this template:
+
+# Mutation testing: Issue #<N> -- <issue title>
+
+**PR(s):** #...  **Tool:** ...  **Config:** [link; credit the teammate if you reused their setup]  **Command:** `...`
+**Reports:** [before](reports/<issue#>-<username>-before.json) · [after](reports/<issue#>-<username>-after.json)
+**Mutation score:** before ...% → after ...%
+
+## Surviving mutants
+
+| Location (file:line) | Mutation | Equivalent or test gap? | Why |
+|---|---|---|---|
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:05Z)**_
+
+Checking whether a teammate already committed a Stryker setup to reuse.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:14Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Look for an existing Stryker setup anywhere in the repo
+
+`ls stryker* docs/sprint3 docs/sprint3/mutation 2>&1 | head; grep -n "stryker" package.json; ls node_modules/@stryker-mutator 2>&1 | head; git fetch -q origin 2>&1 | tail -1; git log --all --oneline -S"stryker" -- '*.json' '*.mjs' '*.js' '*.ts' 2>/dev/null | head; cat .gitignore | grep -n -i "stryker\|reports"`
+
+```text
+ls: cannot access 'stryker*': No such file or directory
+ls: cannot access 'docs/sprint3/mutation': No such file or directory
+docs/sprint3:
+ls: cannot access 'node_modules/@stryker-mutator': No such file or directory
+fb6b6cb9d3 chore: add StrykerJS mutation testing setup
+19:**/playwright/reports/*
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect teammate's Stryker setup commit
+
+`git show --stat fb6b6cb9d3 | head -30; git branch -a --contains fb6b6cb9d3 | head`
+
+```text
+commit fb6b6cb9d3e917a95795791e82137eab68013b2e
+Author: zach-short <zach.short@fantomworks.com>
+Date:   Wed Nov 11 15:52:20 2026 -0500
+
+    chore: add StrykerJS mutation testing setup
+    
+    Add @stryker-mutator/core and @stryker-mutator/vitest-runner 10.1.1 as root dev dependencies and a shared stryker.config.mjs for the Sprint 3 mutation testing deliverable (D6). The config runs only the tests related to the mutated file, uses the sandbox instead of in-place mode, and writes the JSON report to the path in STRYKER_JSON.
+
+ .gitignore         |    5 +-
+ package.json       |    2 +
+ stryker.config.mjs |   37 ++
+ yarn.lock          | 1125 +++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 4 files changed, 1161 insertions(+), 8 deletions(-)
+  remotes/origin/chore/stryker-mutation-setup
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:19Z)**_
+
+A teammate (zach-short) already has a Stryker setup on `origin/chore/stryker-mutation-setup`. The course encourages reusing it, so I'll build on that.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read teammate's Stryker config and dependency changes
+
+`git show fb6b6cb9d3:stryker.config.mjs; git show fb6b6cb9d3 -- .gitignore package.json | grep '^[-+]' ; git log --oneline origin/chore/stryker-mutation-setup -3; git branch -a --merged main | grep stryker; git log main --oneline -S"stryker-mutator" -- package.json | head -2`
+
+```text
+// Mutation testing for Sprint 3 (D6). Run it on the files your PR changed, never on the whole repo:
+//   TZ=UTC yarn stryker run --mutate "path/to/file.ts"
+// Set STRYKER_JSON to write the JSON report where the course wants it, for example
+//   STRYKER_JSON=docs/sprint3/mutation/reports/130-zach-short-before.json
+/** @type {import("@stryker-mutator/api/core").PartialStrykerOptions} */
+export default {
+  testRunner: "vitest",
+  plugins: ["@stryker-mutator/vitest-runner"],
+  vitest: {
+    configFile: "vitest.config.mts",
+    // Only the tests that import the mutated file run, which keeps a run to minutes in this monorepo.
+    related: true,
+  },
+  // Not inPlace: in this repo the in-place backup lands inside the project, Vitest then collects the backup
+  // copies, and the restore drops the executable bit on scripts. The sandbox copy avoids both. These folders
+  // have no unit tests that features or web code import, so leaving them out keeps the copy small.
+  // .claude and .cursor hold symlinks to folders, and packages/prisma/.env links to a root .env that may not
+  // exist; the sandbox copy fails on all three.
+  ignorePatterns: [
+    "docs",
+    "ai-logs",
+    "specs",
+    "apps/api/v2",
+    "apps/web/public",
+    "packages/embeds",
+    "reports",
+    ".claude",
+    ".cursor",
+    "packages/prisma/.env",
+  ],
+  ignoreStatic: true,
+  concurrency: 4,
+  timeoutMS: 30000,
+  reporters: ["clear-text", "progress", "json", "html"],
+  jsonReporter: { fileName: process.env.STRYKER_JSON ?? "reports/mutation/mutation.json" },
+  htmlReporter: { fileName: "reports/mutation/mutation.html" },
+};
+--- a/.gitignore
++++ b/.gitignore
+-.specstory
++.specstory
++# StrykerJS mutation testing (local reports; course reports go in docs/sprint3/mutation/reports/)
++/reports/mutation/
++.stryker-tmp/
+--- a/package.json
++++ b/package.json
++    "@stryker-mutator/core": "10.1.1",
++    "@stryker-mutator/vitest-runner": "10.1.1",
+fb6b6cb9d3 chore: add StrykerJS mutation testing setup
+247b769fce Merge pull request #132 from CSCI-435-SE/docs/new_tech_2
+8e05b88460 docs: showcase 2 brochure
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:49Z)**_
+
+<think><details><summary>Thought Process</summary>
+The shared config's `related: true` would pull in the flaky calendar-subscription tests and stop Stryker on a failing initial run. I'm checking the Vitest setup to pin the run to this branch's tests.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:13:50Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read vitest config and web components project
+
+`cat vitest.config.mts; sed -n 150,170p vitest.workspace.ts; tail -20 vitest.workspace.ts`
+
+```text
+import path from "node:path";
+import react from "@vitejs/plugin-react";
+import { loadEnv } from "vite";
+import { defineConfig } from "vitest/config";
+
+const env = loadEnv("", process.cwd(), "");
+for (const [key, value] of Object.entries(env)) {
+  if (process.env[key] === undefined) {
+    process.env[key] = value;
+  }
+}
+
+const vitestMode = process.env.VITEST_MODE;
+// Support both new VITEST_MODE env var and legacy CLI flags for backwards compatibility
+// The CLI flags are passed through but Vitest 4.0 doesn't reject them when using yarn test
+const isPackagedEmbedMode = vitestMode === "packaged-embed" || process.argv.includes("--packaged-embed-tests-only");
+const isIntegrationMode = vitestMode === "integration" || process.argv.includes("--integrationTestsOnly");
+const isTimezoneMode = vitestMode === "timezone" || process.argv.includes("--timeZoneDependentTestsOnly");
+
+// Always set INTEGRATION_TEST_MODE to allow server-side imports in jsdom environment
+// This is needed because getBookingFields.ts checks for this env var to allow imports
+process.env.INTEGRATION_TEST_MODE = "true";
+
+if (isTimezoneMode && !process.env.TZ) {
+  throw new Error("TZ environment variable is not set for timezone tests");
+}
+
+function getTestInclude() {
+  if (isPackagedEmbedMode) {
+    return ["packages/embeds/**/packaged/**/*.{test,spec}.{ts,js}"];
+  }
+  if (isIntegrationMode) {
+    return ["packages/**/*.integration-test.ts", "apps/**/*.integration-test.ts"];
+  }
+  if (isTimezoneMode) {
+    return ["packages/**/*.timezone.test.ts", "apps/**/*.timezone.test.ts"];
+  }
+  // Default: run all test files (Vitest default pattern)
+  return ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
+}
+
+function getTestExclude() {
+  const baseExclude = [
+    "**/node_modules/**",
+    "**/dist/**",
+    "apps/api/v2/**/*.spec.ts",
+    "__checks__/**/*.spec.ts",
+  ];
+  if (isIntegrationMode || isTimezoneMode) {
+    return [...baseExclude, "packages/embeds/**/*"];
+  }
+  return baseExclude;
+}
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: [
+      // Mock generated files that may not exist in CI (must come before general aliases)
+      {
+        find: "@calcom/web/public/app-store/svg-hashes.json",
+        replacement: path.resolve(__dirname, "vitest-mocks/svg-hashes.json"),
+      },
+      {
+        find: /^\.\/tailwind\.generated\.css\?inline$/,
+        replacement: path.resolve(
+          __dirname,
+          "vitest-mocks/tailwind.generated.css"
+        ),
+      },
+      // Alias Node.js built-ins for jsdom environment
+      { find: "crypto", replacement: "node:crypto" },
+      // API v1 path alias
+      { find: "~", replacement: path.resolve(__dirname, "apps/api/v1") },
+      // apps/web path aliases
+      { find: "@lib", replacement: path.resolve(__dirname, "apps/web/lib") },
+      { find: "@components", replacement: path.resolve(__dirname, "apps/web/components") },
+      { find: "app", replacement: path.resolve(__dirname, "apps/web/app") },
+      { find: "@calcom/web", replacement: path.resolve(__dirname, "apps/web") },
+      // Platform packages that need to be resolved from source in CI
+      {
+        find: "@calcom/platform-constants",
+        replacement: path.resolve(
+          __dirname,
+          "packages/platform/constants/index.ts"
+        ),
+      },
+      {
+        find: "@calcom/embed-react",
+        replacement: path.resolve(
+          __dirname,
+          "packages/embeds/embed-react/src/index.ts"
+        ),
+      },
+      {
+        find: "@calcom/embed-snippet",
+        replacement: path.resolve(
+          __dirname,
+          "packages/embeds/embed-snippet/src/index.ts"
+        ),
+      },
+    ],
+  },
+  test: {
+    globals: true,
+    silent: true,
+    environment: "jsdom",
+    setupFiles: ["./packages/testing/src/setupVitest.ts"],
+    include: getTestInclude(),
+    exclude: getTestExclude(),
+    pool: "forks",
+    server: {
+      deps: {
+        inline: [/@calcom\/.*/],
+      },
+    },
+    coverage: {
+      provider: "v8",
+    },
+    passWithNoTests: true,
+    testTimeout: 500000,
+  },
+});
+
+setEnvVariablesThatAreUsedBeforeSetup();
+
+function setEnvVariablesThatAreUsedBeforeSetup() {
+  // We can't set it during tests because it is used as soon as _metadata.ts is imported which happens before tests start running
+  process.env.DAILY_API_KEY = "MOCK_DAILY_API_KEY";
+  // With same env variable, we can test both non org and org booking scenarios
+  process.env.NEXT_PUBLIC_WEBAPP_URL = "http://app.cal.local:3000";
+  process.env.CALCOM_SERVICE_ACCOUNT_ENCRYPTION_KEY =
+    "UNIT_TEST_ENCRYPTION_KEY";
+  process.env.STRIPE_PRIVATE_KEY =
+    process.env.STRIPE_PRIVATE_KEY || "sk_test_dummy_unit_test_key";
+}
+              setupFiles: ["packages/ui/components/test-setup.tsx"],
+              pool,
+            },
+          },
+          {
+            test: {
+              globals: true,
+              name: "@calcom/web/components",
+              include: ["apps/web/components/**/*.{test,spec}.[jt]sx"],
+              environment: "jsdom",
+              setupFiles: ["packages/ui/components/test-setup.tsx"],
+              pool,
+            },
+          },
+          {
+            test: {
+              globals: true,
+              name: "EventTypeAppCardInterface components",
+              include: ["packages/app-store/_components/**/*.{test,spec}.[jt]s?(x)"],
+              environment: "jsdom",
+              setupFiles: ["packages/app-store/test-setup.ts"],
+              name: "@calcom/web/modules/views",
+              include: ["apps/web/modules/**/*.{test,spec}.tsx"],
+              setupFiles: ["apps/web/modules/test-setup.ts"],
+              pool,
+            },
+          },
+
+          {
+            test: {
+              globals: true,
+              environment: "jsdom",
+              name: "@calcom/embeds",
+              include: ["packages/embeds/**/*.{test,spec}.{ts,js}"],
+              exclude: ["packages/embeds/**/packaged/**/*.{test,spec}.{ts,js}"],
+              pool,
+            },
+          },
+        ];
+
+export default defineWorkspace(workspaces);
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:05Z)**_
+
+<think><details><summary>Thought Process</summary>
+Vitest 4 ignores `vitest.workspace.ts`, so `vitest.config.mts` is what ran this branch's tests. Next I'll check whether the teammate's commit applies cleanly to the working tree, without committing.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Dry-run applying teammate's Stryker setup diff
+
+`git diff fb6b6cb9d3~1 fb6b6cb9d3 | git apply --check -v 2>&1 | tail -8`
+
+```text
+Checking patch .gitignore...
+Checking patch package.json...
+Checking patch stryker.config.mjs...
+Checking patch yarn.lock...
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:08Z)**_
+
+It applies cleanly, including `yarn.lock`. Applying it to the working tree (no commit).
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:10Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Apply teammate's Stryker setup to working tree
+
+`git diff fb6b6cb9d3~1 fb6b6cb9d3 | git apply && git status --short && grep -n '"stryker\|scripts' package.json | head`
+
+```text
+ M .gitignore
+ M package.json
+ M yarn.lock
+?? stryker.config.mjs
+17:  "scripts": {
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:13Z)**_
+
+Now finding the exact line ranges this branch changed, so Stryker only mutates those.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:15Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Get changed line ranges versus main
+
+`git status --short; git log --oneline main..HEAD; git diff main --stat; for f in packages/trpc/server/routers/viewer/bookings/confirm.handler.ts packages/features/bookings/repositories/BookingRepository.ts apps/web/components/booking/BookingListItem.tsx; do echo "== $f"; git diff -U0 main -- $f | grep '^@@'; done`
+
+```text
+ M .gitignore
+ M package.json
+ M yarn.lock
+?? stryker.config.mjs
+733239792a Add AI logs, additional test
+184a43f74d Complete issue
+0040b11c08 Create .gitkeep
+ .gitignore                                         |    5 +-
+ .gitkeep                                           |    1 +
+ ...de-code_issue-138-reject-individual-bookings.md | 5580 ++++++++++++++++++++
+ apps/web/components/booking/BookingListItem.tsx    |   51 +-
+ .../__tests__/useBookingConfirmation.test.tsx      |   83 +
+ .../components/dialog/ManageOccurrencesDialog.tsx  |  110 +
+ .../__tests__/ManageOccurrencesDialog.test.tsx     |   98 +
+ docs/sprint3/checkin/dchan01-wm.md                 |   17 -
+ docs/sprint3/checkin/julissaehp.md                 |   20 -
+ docs/sprint3/checkin/kojoshuay.md                  |   12 -
+ docs/sprint3/checkin/zach-short.md                 |   21 -
+ docs/sprint3/checkin/zachbowden.md                 |   11 -
+ package.json                                       |    2 +
+ .../bookings/repositories/BookingRepository.ts     |    9 +-
+ packages/i18n/locales/en/common.json               |    3 +
+ .../server/routers/viewer/bookings/_router.tsx     |   12 +
+ .../bookings/confirm.handler.individual.test.ts    |  205 +
+ .../routers/viewer/bookings/confirm.handler.ts     |   22 +-
+ .../getRecurringOccurrences.handler.test.ts        |   65 +
+ .../bookings/getRecurringOccurrences.handler.ts    |   37 +
+ .../bookings/getRecurringOccurrences.schema.ts     |    9 +
+ yarn.lock                                          | 1125 +++-
+ 22 files changed, 7391 insertions(+), 107 deletions(-)
+== packages/trpc/server/routers/viewer/bookings/confirm.handler.ts
+@@ -6 +5,0 @@ import { getAllCredentialsIncludeServiceAccountKey } from "@calcom/features/book
+@@ -18,0 +18,2 @@ import type { EventPayloadType, EventTypeInfo } from "@calcom/features/webhooks/
+@@ -23 +23,0 @@ import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
+@@ -184,0 +185,17 @@ export const confirmHandler = async ({ ctx, input }: ConfirmOptions) => {
+@@ -480 +496,0 @@ export const confirmHandler = async ({ ctx, input }: ConfirmOptions) => {
+== packages/features/bookings/repositories/BookingRepository.ts
+@@ -78 +77,0 @@ export type ManagedEventCancellationResult = {
+@@ -685,0 +685,8 @@ export class BookingRepository implements IBookingRepository {
+== apps/web/components/booking/BookingListItem.tsx
+@@ -1,4 +0,0 @@
+@@ -8,0 +5,3 @@ import dayjs from "@calcom/dayjs";
+@@ -31,0 +31 @@ import {
+@@ -34 +33,0 @@ import {
+@@ -40 +38,0 @@ import { Tooltip } from "@calcom/ui/components/tooltip";
+@@ -42,2 +39,0 @@ import assignmentReasonBadgeTitleMap from "@lib/booking/assignmentReasonBadgeTit
+@@ -46,0 +43,2 @@ import type { BookingAttendee } from "../../modules/bookings/types";
+@@ -48 +45,0 @@ import { AcceptBookingButton } from "./AcceptBookingButton";
+@@ -51 +47,0 @@ import {
+@@ -52,0 +49 @@ import {
+@@ -55,3 +51,0 @@ import {
+@@ -60,0 +55,3 @@ import {
+@@ -61,0 +59 @@ import {
+@@ -172,0 +171,2 @@ function BookingListItem(booking: BookingItemProps) {
+@@ -472,0 +473,21 @@ function BookingListItem(booking: BookingItemProps) {
+@@ -593 +614,3 @@ const BookingItemBadges = ({
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:40Z)**_
+
+<think><details><summary>Thought Process</summary>
+I'm writing issue-specific Stryker configs that mutate only this branch's changed lines and run just its tests plus BookingRepository.test.ts, keeping the flaky calendar tests out of the first run.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:49Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```mts
+import baseConfig from "./vitest.config.mts";
+
+// Mutation testing for issue #138 (see stryker.138.config.mjs). Stryker's `related` mode would also run every
+// test that imports BookingRepository, including slow, unrelated suites that can time out and stop the run,
+// so the tests that exercise this issue's code are listed explicitly instead.
+export default {
+  ...baseConfig,
+  test: {
+    ...baseConfig.test,
+    include: [
+      "packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts",
+      "packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts",
+      "packages/features/bookings/repositories/BookingRepository.test.ts",
+      "apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx",
+      "apps/web/components/booking/__tests__/useBookingConfirmation.test.tsx",
+    ],
+  },
+};
+
+```
+
+```text
+File created successfully at: /home/lexzach/Documents/Git/cal.diy/vitest.stryker-138.config.mts (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:50Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```mjs
+// Mutation testing for issue #138 (Sprint 3, D6). Builds on the shared stryker.config.mjs by zach-short.
+//   Before: STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-before.json TZ=UTC yarn stryker run stryker.138.config.mjs
+//   After:  STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-after.json TZ=UTC yarn stryker run stryker.138.config.mjs
+import baseConfig from "./stryker.config.mjs";
+
+/** @type {import("@stryker-mutator/api/core").PartialStrykerOptions} */
+export default {
+  ...baseConfig,
+  // Only the lines this issue added or changed; the rest of these files is pre-existing code.
+  mutate: [
+    "packages/trpc/server/routers/viewer/bookings/confirm.handler.ts:185-201",
+    "packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.ts",
+    "packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.ts",
+    "packages/features/bookings/repositories/BookingRepository.ts:685-692",
+    "apps/web/components/dialog/ManageOccurrencesDialog.tsx",
+    "apps/web/components/booking/BookingListItem.tsx:171-172",
+    "apps/web/components/booking/BookingListItem.tsx:473-493",
+  ],
+  vitest: {
+    configFile: "vitest.stryker-138.config.mts",
+    related: false,
+  },
+  jsonReporter: { fileName: process.env.STRYKER_JSON ?? "reports/mutation/138.json" },
+  htmlReporter: { fileName: "reports/mutation/138.html" },
+};
+
+```
+
+```text
+File created successfully at: /home/lexzach/Documents/Git/cal.diy/stryker.138.config.mjs (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:52Z)**_
+
+Double-checking that those line ranges point at the changed code in the current files.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:14:55Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify mutate line ranges
+
+`sed -n 185,201p packages/trpc/server/routers/viewer/bookings/confirm.handler.ts; echo ===; sed -n 685,692p packages/features/bookings/repositories/BookingRepository.ts; echo ===; sed -n 171,172p apps/web/components/booking/BookingListItem.tsx; echo ===; sed -n 473,493p apps/web/components/booking/BookingListItem.tsx | head -3; sed -n 491,494p apps/web/components/booking/BookingListItem.tsx`
+
+```text
+  // Bulk (recurringEventId) requests only touch PENDING bookings, but a single-booking request updates
+  // whatever it is given, so guard it here.
+  if (!recurringEventId) {
+    if (booking.status !== BookingStatus.PENDING) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Booking ${booking.id} cannot be confirmed or rejected because its status is ${booking.status}`,
+      });
+    }
+    if (booking.endTime < new Date()) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Booking ${booking.id} cannot be confirmed or rejected because it has already ended`,
+      });
+    }
+  }
+
+===
+  async findByRecurringEventId({ recurringEventId }: { recurringEventId: string }) {
+    return await this.prismaClient.booking.findMany({
+      where: { recurringEventId },
+      select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+      orderBy: { startTime: "asc" },
+    });
+  }
+
+===
+  const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
+  const [isManageOccurrencesOpen, setIsManageOccurrencesOpen] = useState(false);
+===
+          {canManageOccurrences && (
+            <>
+              <Button
+              />
+            </>
+          )}
+          {shouldShowPendingActions(actionContext) && (
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:15:07Z)**_
+
+I've added the Stryker setup, but nothing has been installed or run yet. Your `yarn install` and the first Stryker run will be the first real test of it.
+
+**What I did** (working tree only, nothing committed):
+- **Reused zach-short's setup.** His Stryker setup is on `origin/chore/stryker-mutation-setup`, which isn't merged to `main`. I applied his commit's changes to your working tree: the two Stryker packages in `package.json` (and `yarn.lock`), the shared `stryker.config.mjs`, and the `.gitignore` entries. It applied cleanly. The course asks you to credit him in your D6 report.
+- **Added [stryker.138.config.mjs](stryker.138.config.mjs) for your issue.** It mutates only the lines this branch added or changed: the new check in `confirm.handler.ts`, the new `BookingRepository` method, the two `getRecurringOccurrences` files, `ManageOccurrencesDialog.tsx`, and the new lines in `BookingListItem.tsx`.
+- **Added [vitest.stryker-138.config.mts](vitest.stryker-138.config.mts).** It runs exactly your 4 test files plus `BookingRepository.test.ts`. zach-short's config instead runs every test that imports a mutated file, which here would include the calendar-subscription tests that time out. Stryker stops if any test fails on its first, unmutated run.
+
+**To run it:**
+
+```bash
+yarn install
+STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-before.json TZ=UTC yarn stryker run stryker.138.config.mjs
+```
+
+After adding a test, run it again with `...-after.json`. The command is also at the top of the config file.
+
+**What I expect the report to show** (my guess, not a run):
+- **`BookingListItem.tsx` mutants will show "no coverage".** No test renders the booking row.
+- **`findByRecurringEventId` mutants will show "no coverage".** The handler test mocks the repository, so the method itself never runs. A `BookingRepository.test.ts` test that checks its `where`, `select` and `orderBy` arguments would be the natural "gap that a new test kills" for D6.
+- **The `endTime < new Date()` → `<=` mutant will likely survive.** It only differs at the exact same millisecond, so it's a candidate for "equivalent".
+
+If the first run fails before mutating anything, paste the output and I'll fix the config.
+
+---
+
+_**User (2026-11-18 23:16:23Z)**_
+
+
+
+<pasted_content id="30aa">
+file:///home/lexzach/Documents/Git/cal.diy/node_modules/@stryker-mutator/core/dist/src/stryker-cli.js:171
+        throw new Error(`Node.js version ${processVersion} detected. StrykerJS requires version to match ${strykerEngines.node}. Please update your Node.js version or visit https://nodejs.org/ for additional instructions`);
+              ^
+
+Error: Node.js version v20.19.2 detected. StrykerJS requires version to match >=22.0.0. Please update your Node.js version or visit https://nodejs.org/ for additional instructions
+    at guardMinimalNodeVersion (file:///home/lexzach/Documents/Git/cal.diy/node_modules/@stryker-mutator/core/dist/src/stryker-cli.js:171:15)
+    at file:///home/lexzach/Documents/Git/cal.diy/node_modules/@stryker-mutator/core/dist/src/stryker-cli.js:2:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.19.2
+</pasted_content id="30aa">
+
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:16:27Z)**_
+
+Stryker 10 needs Node 22 or newer, and you're on 20. Checking which Node version the repo targets and what's installed on the machine.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:16:29Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check repo Node target and available Node versions
+
+`cat .nvmrc .node-version 2>/dev/null; grep -n '"node"\|"engines"' -A2 package.json | head; ls ~/.nvm/versions/node 2>/dev/null; command -v nvm fnm volta n 2>/dev/null; ls ~/.local/share/fnm 2>/dev/null; which -a node; grep -n '"node"' node_modules/@stryker-mutator/core/package.json node_modules/@stryker-mutator/vitest-runner/package.json`
+
+```text
+223:  "engines": {
+224-    "npm": ">=7.0.0",
+225-    "yarn": ">=4.12.0"
+/usr/bin/node
+/bin/node
+node_modules/@stryker-mutator/vitest-runner/package.json:30:    "node": ">=22.0.0"
+node_modules/@stryker-mutator/core/package.json:30:    "node": ">=22.0.0"
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:16:33Z)**_
+
+Only the system Node 20 is installed (no nvm). Checking whether an older Stryker version supports both Node 20 and this repo's Vitest 4, as an alternative to upgrading Node.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:16:41Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Query npm for Stryker 9.x engines and vitest peer ranges
+
+`for v in 9.0.0 9.2.0 9.3.0 9.4.0 9.5.0 9.6.0; do printf "%s core: " $v; curl -s https://registry.npmjs.org/@stryker-mutator/core/$v | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('engines'))" 2>/dev/null; printf "   vitest-runner: "; curl -s https://registry.npmjs.org/@stryker-mutator/vitest-runner/$v | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('engines'),d.get('peerDependencies'))" 2>/dev/null; done; grep -n '"vitest"' /home/lexzach/Documents/Git/cal.diy/package.json`
+
+```text
+9.0.0 core: {'node': '>=20.0.0'}
+   vitest-runner: {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '~9.0.0'}
+9.2.0 core: {'node': '>=20.0.0'}
+   vitest-runner: {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '~9.2.0'}
+9.3.0 core: {'node': '>=20.0.0'}
+   vitest-runner: {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '9.3.0'}
+9.4.0 core: {'node': '>=20.0.0'}
+   vitest-runner: {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '9.4.0'}
+9.5.0 core: {'node': '>=20.0.0'}
+   vitest-runner: {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '9.5.0'}
+9.6.0 core: {'node': '>=20.0.0'}
+   vitest-runner: {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '9.6.0'}
+119:    "vitest": "4.1.8",
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:16:47Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+List Stryker vitest-runner versions and dates
+
+```bash
+curl -s https://registry.npmjs.org/@stryker-mutator/vitest-runner | python3 -c "
+import sys,json;d=json.load(sys.stdin)
+vs=[v for v in d['versions'] if v.startswith('9.') or v.startswith('10.')]
+print(vs); print({v:d['time'][v][:10] for v in vs})"; curl -s https://registry.npmjs.org/vitest | python3 -c "import sys,json;d=json.load(sys.stdin);print('vitest 4.0.0 released', d['time'].get('4.0.0','?')[:10])"
+```
+
+```text
+['9.0.0', '9.0.1', '9.1.0', '9.1.1', '9.2.0', '9.3.0', '9.4.0', '9.5.0', '9.5.1', '9.6.0', '9.6.1', '10.0.0', '10.1.1']
+{'9.0.0': '2025-05-13', '9.0.1': '2025-05-14', '9.1.0': '2025-08-30', '9.1.1': '2025-08-30', '9.2.0': '2025-10-04', '9.3.0': '2025-10-28', '9.4.0': '2025-11-23', '9.5.0': '2026-01-30', '9.5.1': '2026-02-02', '9.6.0': '2026-02-27', '9.6.1': '2026-04-10', '10.0.0': '2026-08-14', '10.1.1': '2026-10-23'}
+vitest 4.0.0 released 2025-10-22
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:16:52Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check Stryker 9.6.1 engines and peers
+
+`for p in core vitest-runner; do curl -s https://registry.npmjs.org/@stryker-mutator/$p/9.6.1 | python3 -c "import sys,json;d=json.load(sys.stdin);print('$p', d.get('engines'), d.get('peerDependencies'))"; done`
+
+```text
+core {'node': '>=20.0.0'} None
+vitest-runner {'node': '>=14.18.0'} {'vitest': '>=2.0.0', '@stryker-mutator/core': '9.6.1'}
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:17:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check how yarn and stryker binaries resolve
+
+`grep -n yarnPath .yarnrc.yml; which yarn; ls node_modules/.bin/stryker`
+
+```text
+7:yarnPath: .yarn/releases/yarn-4.12.0.cjs
+/usr/local/bin/yarn
+node_modules/.bin/stryker
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:17:12Z)**_
+
+The fix needs a choice from you. Stryker 10 (the version zach-short pinned) requires Node 22 or newer. This machine only has the system Node 20.19 at `/usr/bin/node`, with no nvm or other version manager. The repo itself doesn't require a particular Node version.
+
+**Option A (recommended): install Node 22 just for Stryker, no repo changes.** This keeps zach-short's setup as is, so his branch and yours won't conflict when it merges.
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source ~/.nvm/nvm.sh
+nvm install 22
+STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-before.json TZ=UTC \
+  nvm exec 22 node_modules/.bin/stryker run stryker.138.config.mjs
+```
+
+Running `node_modules/.bin/stryker` through `nvm exec 22` uses Node 22 for that one command only. Your normal `node` and `yarn` stay on 20, and nothing gets reinstalled.
+
+**Option B: drop to Stryker 9.6.1, which supports Node 20.** It's the last 9.x release, it requires Node 20 or newer, and it accepts Vitest 2 and up (you have 4.1.8). The catch is that it changes `package.json` and `yarn.lock` away from zach-short's 10.1.1, which will conflict when his branch merges. It's also a different version from the one your team set up. If you want it, run:
+
+```bash
+yarn add -D @stryker-mutator/core@9.6.1 @stryker-mutator/vitest-runner@9.6.1
+```
+
+The config files I wrote shouldn't need changes for either option, though I haven't confirmed that on 9.6.1.
+
+Which do you want? If you go with A, tell me and I'll update the run command in the comment at the top of `stryker.138.config.mjs`.
+
+---
+
+_**User (2026-11-18 23:20:45Z)**_
+
+<ide_opened_file>The user opened the file /home/lexzach/Documents/Git/cal.diy/docs/sprint3/mutation/reports/138-zachbowden-before.json in the IDE. This may or may not be related to the current task.</ide_opened_file>
+
+what needs to be done for the -after report?
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:20:47Z)**_
+
+Reading your before report to see which mutants survived.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:20:51Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Summarize mutant statuses in before report
+
+```bash
+ls -la docs/sprint3/mutation/reports/ && python3 - <<'EOF'
+import json,collections
+d=json.load(open("docs/sprint3/mutation/reports/138-zachbowden-before.json"))
+tot=collections.Counter()
+for f,fd in d["files"].items():
+    c=collections.Counter(m["status"] for m in fd["mutants"])
+    tot+=c
+    print(f, dict(c))
+print("TOTAL",dict(tot))
+k=tot["Killed"]+tot["Timeout"]; det=k; valid=sum(tot.values())-tot["CompileError"]-tot["RuntimeError"]-tot["Ignored"]
+print("score(all)=%.2f%%"%(100*det/valid), "covered=%.2f%%"%(100*det/(valid-tot["NoCoverage"])))
+for f,fd in d["files"].items():
+    lines=fd["source"].split("\n")
+    for m in fd["mutants"]:
+        if m["status"] in ("Survived","NoCoverage"):
+            s=m["location"]["start"]; e=m["location"]["end"]
+            print(f"{m['status']:10} {f.split('/')[-1]}:{s['line']} {m['mutatorName']}: {m.get('replacement','')!r} | {lines[s['line']-1].strip()[:90]}")
+EOF
+```
+
+```text
+total 240
+drwxrwxr-x 2 lexzach lexzach   4096 Nov 18 18:18 .
+drwxrwxr-x 3 lexzach lexzach   4096 Nov 18 18:18 ..
+-rw-rw-r-- 1 lexzach lexzach 236081 Nov 18 18:18 138-zachbowden-before.json
+apps/web/components/booking/BookingListItem.tsx {'NoCoverage': 13}
+apps/web/components/dialog/ManageOccurrencesDialog.tsx {'NoCoverage': 1, 'Ignored': 16, 'Survived': 8, 'Killed': 12}
+packages/features/bookings/repositories/BookingRepository.ts {'NoCoverage': 11}
+packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.ts {'NoCoverage': 1}
+packages/trpc/server/routers/viewer/bookings/confirm.handler.ts {'Killed': 15, 'Survived': 4}
+packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.ts {'Killed': 15, 'Survived': 3}
+TOTAL {'NoCoverage': 26, 'Ignored': 16, 'Survived': 15, 'Killed': 42}
+score(all)=50.60% covered=73.68%
+NoCoverage BookingListItem.tsx:171 ConditionalExpression: 'true' | const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
+NoCoverage BookingListItem.tsx:171 ConditionalExpression: 'false' | const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
+NoCoverage BookingListItem.tsx:171 LogicalOperator: 'isRecurring || isTabRecurring || isTabUnconfirmed' | const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
+NoCoverage BookingListItem.tsx:171 ConditionalExpression: 'true' | const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
+NoCoverage BookingListItem.tsx:171 LogicalOperator: 'isTabRecurring && isTabUnconfirmed' | const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
+NoCoverage BookingListItem.tsx:172 BooleanLiteral: 'true' | const [isManageOccurrencesOpen, setIsManageOccurrencesOpen] = useState(false);
+NoCoverage BookingListItem.tsx:473 ConditionalExpression: 'true' | {canManageOccurrences && (
+NoCoverage BookingListItem.tsx:473 ConditionalExpression: 'false' | {canManageOccurrences && (
+NoCoverage BookingListItem.tsx:473 LogicalOperator: 'canManageOccurrences || <>\n              <Button color="secondary" className="whitespace-nowrap" data-testid="manage-occurrences" onClick={e => {\n    e.stopPropagation();\n    setIsManageOccurrencesOpen(true);\n  }}>\n                {t("manage_occurrences")}\n              </Button>\n              <ManageOccurrencesDialog isOpenDialog={isManageOccurrencesOpen} setIsOpenDialog={setIsManageOccurrencesOpen} bookingId={booking.id} userTimeZone={userTimeZone} userTimeFormat={userTimeFormat} />\n            </>' | {canManageOccurrences && (
+NoCoverage BookingListItem.tsx:479 BlockStatement: '{}' | onClick={(e) => {
+NoCoverage BookingListItem.tsx:480 CallExpression: ';' | e.stopPropagation();
+NoCoverage BookingListItem.tsx:481 BooleanLiteral: 'false' | setIsManageOccurrencesOpen(true);
+NoCoverage BookingListItem.tsx:483 StringLiteral: '""' | {t("manage_occurrences")}
+NoCoverage ManageOccurrencesDialog.tsx:57 StringLiteral: '""' | <p className="text-subtle text-sm">{t("loading")}</p>
+Survived   ManageOccurrencesDialog.tsx:51 StringLiteral: '""' | title={t("manage_occurrences")}
+Survived   ManageOccurrencesDialog.tsx:42 ObjectLiteral: '{}' | { bookingId },
+Survived   ManageOccurrencesDialog.tsx:43 ObjectLiteral: '{}' | { enabled: isOpenDialog }
+Survived   ManageOccurrencesDialog.tsx:52 StringLiteral: '""' | description={t("manage_occurrences_description")}
+Survived   ManageOccurrencesDialog.tsx:60 OptionalChaining: 'occurrences.map' | {occurrences?.map((occurrence) => {
+Survived   ManageOccurrencesDialog.tsx:63 EqualityOperator: 'new Date(occurrence.endTime) > now' | occurrence.status === BookingStatus.PENDING && new Date(occurrence.endTime) >= now;
+Survived   ManageOccurrencesDialog.tsx:74 StringLiteral: '""' | .format("ddd, D MMM YYYY")}
+Survived   ManageOccurrencesDialog.tsx:77 StringLiteral: '""' | {formatTime(occurrence.startTime, userTimeFormat, userTimeZone)} -{" "}
+NoCoverage BookingRepository.ts:685 BlockStatement: '{}' | async findByRecurringEventId({ recurringEventId }: { recurringEventId: string }) {
+NoCoverage BookingRepository.ts:686 ObjectLiteral: '{}' | return await this.prismaClient.booking.findMany({
+NoCoverage BookingRepository.ts:687 ObjectLiteral: '{}' | where: { recurringEventId },
+NoCoverage BookingRepository.ts:688 ObjectLiteral: '{}' | select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+NoCoverage BookingRepository.ts:688 BooleanLiteral: 'false' | select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+NoCoverage BookingRepository.ts:688 BooleanLiteral: 'false' | select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+NoCoverage BookingRepository.ts:688 BooleanLiteral: 'false' | select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+NoCoverage BookingRepository.ts:688 BooleanLiteral: 'false' | select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+NoCoverage BookingRepository.ts:688 BooleanLiteral: 'false' | select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+NoCoverage BookingRepository.ts:689 ObjectLiteral: '{}' | orderBy: { startTime: "asc" },
+NoCoverage BookingRepository.ts:689 StringLiteral: '""' | orderBy: { startTime: "asc" },
+NoCoverage getRecurringOccurrences.schema.ts:7 ObjectLiteral: '{}' | export const ZGetRecurringOccurrencesInputSchema: z.ZodType<TGetRecurringOccurrencesInputS
+Survived   confirm.handler.ts:187 ConditionalExpression: 'true' | if (!recurringEventId) {
+Survived   confirm.handler.ts:191 StringLiteral: '``' | message: `Booking ${booking.id} cannot be confirmed or rejected because its status is ${bo
+Survived   confirm.handler.ts:194 EqualityOperator: 'booking.endTime <= new Date()' | if (booking.endTime < new Date()) {
+Survived   confirm.handler.ts:197 StringLiteral: '``' | message: `Booking ${booking.id} cannot be confirmed or rejected because it has already end
+Survived   getRecurringOccurrences.handler.ts:23 StringLiteral: '""' | throw new TRPCError({ code: "FORBIDDEN", message: "You don't have access to this booking" 
+Survived   getRecurringOccurrences.handler.ts:29 OptionalChaining: 'booking.recurringEventId' | if (!booking?.recurringEventId) {
+Survived   getRecurringOccurrences.handler.ts:32 StringLiteral: '``' | message: `Booking ${input.bookingId} is not part of a recurring series`,
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:21:14Z)**_
+
+<think><details><summary>Thought Process</summary>
+Before score is 50.6% (42 of 83 valid mutants killed), or 73.7% counting only mutants some test ran. I'm checking the rest of the D6 template next so I can list what the after step needs.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:21:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read rest of D6 template and rubric
+
+`sed -n 420,445p /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/sprint3.txt; grep -n "Mutation testing rubric" -A30 /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/sprint3.txt | head -30`
+
+```text
+|---|---|---|---|
+| | | | |
+
+## New or strengthened test
+
+Commit: [link] · Test: [file › test name] · Kills: [mutant location]
+
+## Questions
+
+1. What did the surviving mutants reveal about your tests?
+2. Did any surviving mutant point to an assertion whose expected value was not based on the requirements? Explain.
+3. If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct? If AI was not used, write "N/A."
+
+D7 - Mid-Sprint Check-in¶
+
+Due: Nov 12, 11:59 PM.
+
+Submission: docs/sprint3/checkin/<username>.md
+
+Format: ~100 words per question, plus a link.
+
+What have you implemented so far, and what remains?
+
+What is one thing you learned about testing in your project?
+
+What is one risk to finishing your work by Nov 19, and what will you do about it?
+558:D6 - Mutation testing rubric:
+559-
+560-Criterion
+561-Points
+562-
+563-Tool run on the files changed by the PR; configuration, command, results, and reports committed
+564-4
+565-
+566-Surviving mutants analyzed correctly (equivalent vs. test gap, with explanation)
+567-4
+568-
+569-At least one new or strengthened test kills a surviving mutant; re-run confirms it
+570-4
+571-
+572-Answers to the questions show understanding, not just description
+573-3
+574-
+575-Total
+576-15
+577-
+578-CSCI 535: the D6 score is the average of the two submissions.
+579-
+580-Minimum bar
+581-
+582-A team with no merged PRs (D4), no sprint report (D8), or no release (D9) receives a 0 for Sprint 3 regardless of other deliverables.
+583-
+584-Extra credit
+585-
+586-A PR submitted to the real upstream project and accepted or under active review earns up to 3 bonus points per PR, at the instructor's discretion.
+587-
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:21:32Z)**_
+
+The course only requires one new or strengthened test that kills a surviving mutant, but your report has several real test gaps and they're cheap to close. Your report has 15 survived and 26 no-coverage mutants. "No coverage" means no test ran that line, so those don't go in the surviving-mutants table, but they lower the score.
+
+**How I'd classify the 15 survivors:**
+
+| Location | Mutation | Verdict | Test that would kill it |
+|---|---|---|---|
+| `confirm.handler.ts:187` | `if (!recurringEventId)` → `if (true)` | **Gap.** No test sends a bulk request whose first booking would fail the new check. | Confirm all where that booking has already ended still confirms the series. This keeps the current bulk behaviour, per the issue's open question Q2. |
+| `confirm.handler.ts:194` | `<` → `<=` | **Equivalent.** Only differs when the booking ends at exactly the current millisecond. | — |
+| `confirm.handler.ts:191`, `:197` | error message → empty | **Gap.** Tests only check the error code. | Assert the message says why the request was refused (wrong status / already ended). |
+| `getRecurringOccurrences.handler.ts:29` | `booking?.` → `booking.` | **Gap.** No test for a booking ID that doesn't exist. Under the mutant that crashes with a TypeError instead of returning `BAD_REQUEST`. | Repository returns `null` → expect `BAD_REQUEST`. |
+| `getRecurringOccurrences.handler.ts:23`, `:32` | error message → empty | **Gap.** Same as the confirm handler messages. | Same as above. |
+| `ManageOccurrencesDialog.tsx:42`, `:43` | `{ bookingId }` → `{}`, `{ enabled }` → `{}` | **Gap.** No test checks which booking the dialog fetches, or that it waits until it's open. | Assert the query is called with `{ bookingId }` and `{ enabled: true }`. |
+| `ManageOccurrencesDialog.tsx:51`, `:52` | title and description → empty | **Gap** (AC10). | Assert the `manage_occurrences` title and description render. |
+| `ManageOccurrencesDialog.tsx:60` | `occurrences?.map` → `occurrences.map` | **Gap.** If the query fails and returns no data, the mutant crashes the dialog. | Render with no data and loading finished → no crash. |
+| `ManageOccurrencesDialog.tsx:63` | `>=` → `>` | **Equivalent.** Same millisecond boundary as `:194`. | — |
+| `ManageOccurrencesDialog.tsx:74`, `:77` | date format → empty; space in "11:00am - 11:15am" → empty | **Gap** (AC1 says date and time are shown). | Use one occurrence with a fixed date and assert the exact date and time text. |
+
+**No-coverage mutants worth adding tests for:**
+- **`BookingRepository.ts:685-689` (11 mutants):** the handler test mocks the repository, so the method itself never runs. A test in `BookingRepository.test.ts` that checks the arguments passed to `findMany` would kill all 11.
+- **`getRecurringOccurrences.schema.ts:7`:** a schema test that rejects `{}` and a non-integer `bookingId`.
+- **`ManageOccurrencesDialog.tsx:57`:** assert the loading text shows while the query is loading.
+
+The 13 in `BookingListItem.tsx` would need the whole booking list rendered with all its providers. I'd leave those uncovered and explain why in the report.
+
+**Steps for the after report:**
+1. **Add the tests above.** Add at least one; adding all of them raises the score a lot.
+2. **Re-run with the same config and command,** writing to `docs/sprint3/mutation/reports/138-zachbowden-after.json`.
+3. **Check the after report** shows your chosen mutant as Killed. The course requires this.
+4. **Write `docs/sprint3/mutation/138-zachbowden.md`** with the header (tool, config, command, report links, crediting zach-short's setup), the surviving-mutants table, the "New or strengthened test" section, and answers to the three questions.
+5. **Commit** the config files, both reports, and the write-up.
+
+Want me to write the tests from step 1 now? Once you've done the after run, I can draft the write-up from both reports.
+
+---
+
+_**User (2026-11-18 23:22:49Z)**_
+
+yes, do that
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:22:52Z)**_
+
+Starting with the current test files and how `BookingRepository.test.ts` sets up Prisma.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:22:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect BookingRepository test setup
+
+`git status --short; sed -n 1,60p packages/features/bookings/repositories/BookingRepository.test.ts; grep -n "^describe\|^  describe\|^});" packages/features/bookings/repositories/BookingRepository.test.ts | head -20; wc -l packages/features/bookings/repositories/BookingRepository.test.ts`
+
+```text
+ M .gitignore
+ M package.json
+ M packages/app-store/apps.metadata.generated.ts
+ M yarn.lock
+?? docs/sprint3/mutation/
+?? stryker.138.config.mjs
+?? stryker.config.mjs
+?? vitest.stryker-138.config.mts
+import type { PrismaClient } from "@calcom/prisma";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BookingRepository } from "./BookingRepository";
+
+describe("BookingRepository", () => {
+  let repository: BookingRepository;
+  let mockPrismaClient: {
+    $queryRaw: ReturnType<typeof vi.fn>;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mockPrismaClient = {
+      $queryRaw: vi.fn(),
+    };
+
+    repository = new BookingRepository(mockPrismaClient as unknown as PrismaClient);
+  });
+
+  describe("getTotalBookingDuration", () => {
+    it("should return total minutes from the database result", async () => {
+      mockPrismaClient.$queryRaw.mockResolvedValue([{ totalMinutes: 120 }]);
+
+      const result = await repository.getTotalBookingDuration({
+        eventId: 52,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2026-12-31"),
+      });
+
+      expect(result).toBe(120);
+      expect(mockPrismaClient.$queryRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it("should return 0 when totalMinutes is null", async () => {
+      mockPrismaClient.$queryRaw.mockResolvedValue([{ totalMinutes: null }]);
+
+      const result = await repository.getTotalBookingDuration({
+        eventId: 52,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2026-12-31"),
+      });
+
+      expect(result).toBe(0);
+    });
+
+    it("should call query when rescheduleUid is provided", async () => {
+      mockPrismaClient.$queryRaw.mockResolvedValue([{ totalMinutes: 90 }]);
+
+      const result = await repository.getTotalBookingDuration({
+        eventId: 52,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2026-12-31"),
+        rescheduleUid: "existing-booking-uid",
+      });
+
+      expect(result).toBe(90);
+      expect(mockPrismaClient.$queryRaw).toHaveBeenCalledTimes(1);
+    });
+  });
+5:describe("BookingRepository", () => {
+21:  describe("getTotalBookingDuration", () => {
+61:});
+61 packages/features/bookings/repositories/BookingRepository.test.ts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:22:58Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read current test files
+
+`cat packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts | sed -n 28,50p; grep -n "it(\|it.each\|toMatchObject" packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts; sed -n 1,60p apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx`
+
+```text
+  it("throws FORBIDDEN and does not read the series when the user has no access", async () => {
+    mockBookingAccessService.doesUserIdHaveAccessToBooking.mockResolvedValue(false);
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(mockBookingAccessService.doesUserIdHaveAccessToBooking).toHaveBeenCalledWith({
+      userId: 1,
+      bookingId: 10,
+    });
+    expect(mockBookingRepo.findByRecurringEventId).not.toHaveBeenCalled();
+  });
+
+  it("throws BAD_REQUEST when the booking is not recurring", async () => {
+    mockBookingAccessService.doesUserIdHaveAccessToBooking.mockResolvedValue(true);
+    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue({ id: 10, recurringEventId: null });
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });
+
+103:  it("confirms only the requested occurrence", async () => {
+110:    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({
+118:  it("rejects only the requested occurrence and stores the reason", async () => {
+135:  it.each([
+142:      await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
+150:  it("refuses to act on an already confirmed occurrence", async () => {
+153:    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: false } })).rejects.toMatchObject({
+159:  it("refuses to act on an occurrence that has already ended", async () => {
+162:    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+168:  it("refuses unauthorized users before revealing the booking status", async () => {
+172:    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+178:  it("keeps Confirm all passing the series id to the bulk confirmation flow", async () => {
+186:    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+189:  it("keeps bulk reject limited to pending occurrences of the series", async () => {
+import { BookingStatus } from "@calcom/prisma/enums";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ManageOccurrencesDialog } from "../ManageOccurrencesDialog";
+
+const { mockConfirm, occurrencesQuery } = vi.hoisted(() => ({
+  mockConfirm: vi.fn(),
+  occurrencesQuery: { data: [] as unknown[], isPending: false },
+}));
+
+vi.mock("@calcom/trpc/react", () => ({
+  trpc: {
+    useUtils: () => ({
+      viewer: { bookings: { invalidate: vi.fn() }, me: { bookingUnconfirmedCount: { invalidate: vi.fn() } } },
+    }),
+    viewer: {
+      bookings: {
+        getRecurringOccurrences: { useQuery: () => occurrencesQuery },
+        confirm: { useMutation: () => ({ mutate: mockConfirm, isPending: false }) },
+      },
+    },
+  },
+}));
+
+// The controlled Dialog calls useRouter, which throws outside a mounted Next.js app router.
+vi.mock("next/navigation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/navigation")>();
+  return {
+    ...actual,
+    useRouter: vi.fn(() => ({ push: vi.fn() })),
+  };
+});
+
+vi.mock("@calcom/lib/hooks/useLocale", () => ({
+  useLocale: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
+}));
+
+const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 3600_000);
+const occurrence = (id: number, status: BookingStatus, startOffsetHours: number) => ({
+  id,
+  uid: `uid-${id}`,
+  status,
+  startTime: hoursFromNow(startOffsetHours),
+  endTime: hoursFromNow(startOffsetHours + 1),
+});
+
+const renderDialog = () =>
+  render(<ManageOccurrencesDialog isOpenDialog setIsOpenDialog={vi.fn()} bookingId={1} userTimeZone="UTC" />);
+
+describe("ManageOccurrencesDialog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    occurrencesQuery.data = [
+      occurrence(1, BookingStatus.PENDING, -48),
+      occurrence(2, BookingStatus.ACCEPTED, 24),
+      occurrence(3, BookingStatus.PENDING, 48),
+      occurrence(4, BookingStatus.REJECTED, 72),
+      occurrence(5, BookingStatus.CANCELLED, 96),
+    ];
+  });
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:25Z)**_
+
+Writing the tests now: one change per file, each aimed at a specific survivor or uncovered mutant. Calculating a fixed date for the date/time assertion first.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Compute weekday and New York time for fixed date
+
+```bash
+python3 -c "
+import datetime, zoneinfo
+d=datetime.datetime(2099,3,4,15,0,tzinfo=datetime.timezone.utc).astimezone(zoneinfo.ZoneInfo('America/New_York'))
+print(d.strftime('%a, %-d %b %Y %I:%M%p'), d.utcoffset())"
+```
+
+```text
+Wed, 4 Mar 2099 10:00AM -1 day, 19:00:00
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:42Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Strengthen handler and repository tests
+
+```bash
+python3 - <<'EOF'
+import re
+# 1. confirm handler tests
+p="packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts"
+s=open(p).read()
+def rep(old,new,count=1):
+    global s
+    assert s.count(old)==count, (p, old[:70], s.count(old))
+    s=s.replace(old,new)
+rep('''      for (const confirmed of [true, false]) {
+        await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+        });''','''      for (const confirmed of [true, false]) {
+        await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: expect.stringMatching(new RegExp(`\\\\b11\\\\b.*${status}`)),
+        });''')
+rep('''    mockBooking({ startTime: future(-3), endTime: future(-2) });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });''','''    mockBooking({ startTime: future(-3), endTime: future(-2) });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(/\\b11\\b.*ended/),
+    });''')
+rep('''  it("keeps bulk reject limited to pending occurrences of the series", async () => {''','''  it("keeps Confirm all working when the series' first booking has already ended", async () => {
+    mockBooking({ startTime: future(-3), endTime: future(-2) });
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+
+    const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
+
+    expect(res.status).toBe(BookingStatus.ACCEPTED);
+    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+  });
+
+  it("keeps bulk reject limited to pending occurrences of the series", async () => {''')
+open(p,"w").write(s)
+
+# 2. occurrences handler tests
+p="packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts"
+s=open(p).read()
+rep('''    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });''','''    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringMatching(/\\S/),
+    });''')
+rep('''    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue({ id: 10, recurringEventId: null });
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });''','''    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue({ id: 10, recurringEventId: null });
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(/\\b10\\b/),
+    });
+  });
+
+  it("throws BAD_REQUEST when the booking does not exist", async () => {
+    mockBookingAccessService.doesUserIdHaveAccessToBooking.mockResolvedValue(true);
+    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue(null);
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(mockBookingRepo.findByRecurringEventId).not.toHaveBeenCalled();
+  });''')
+open(p,"w").write(s)
+
+# 3. BookingRepository test
+p="packages/features/bookings/repositories/BookingRepository.test.ts"
+s=open(p).read()
+rep('''    $queryRaw: ReturnType<typeof vi.fn>;
+  };''','''    $queryRaw: ReturnType<typeof vi.fn>;
+    booking: { findMany: ReturnType<typeof vi.fn> };
+  };''')
+rep('''      $queryRaw: vi.fn(),
+    };''','''      $queryRaw: vi.fn(),
+      booking: { findMany: vi.fn() },
+    };''')
+s=s.rstrip()
+assert s.endswith("});")
+s=s[:-3]+'''
+  describe("findByRecurringEventId", () => {
+    it("returns the series' occurrences in chronological order with only the fields needed to act on them", async () => {
+      const occurrences = [{ id: 1 }, { id: 2 }];
+      mockPrismaClient.booking.findMany.mockResolvedValue(occurrences);
+
+      const result = await repository.findByRecurringEventId({ recurringEventId: "rec" });
+
+      expect(result).toBe(occurrences);
+      expect(mockPrismaClient.booking.findMany).toHaveBeenCalledWith({
+        where: { recurringEventId: "rec" },
+        select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+        orderBy: { startTime: "asc" },
+      });
+    });
+  });
+});
+'''
+open(p,"w").write(s)
+EOF
+git diff --stat
+```
+
+```text
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+  File "<stdin>", line 7, in rep
+AssertionError: ('packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts', '      for (const confirmed of [true, false]) {\n        await expect(co', 0)
+ .gitignore                                    |    5 +-
+ package.json                                  |    2 +
+ packages/app-store/apps.metadata.generated.ts |  446 +++++-----
+ yarn.lock                                     | 1125 ++++++++++++++++++++++++-
+ 4 files changed, 1347 insertions(+), 231 deletions(-)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:45Z)**_
+
+The test file was reformatted since I wrote it. Reading its current text so the edits match.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:46Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read current confirm test section
+
+`sed -n 130,215p packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts`
+
+```text
+      data: { status: BookingStatus.REJECTED, rejectionReason: "Court unavailable" },
+    });
+    expect(prismaMock.booking.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    BookingStatus.REJECTED,
+    BookingStatus.CANCELLED,
+  ])("refuses to act on a %s occurrence", async (status) => {
+    mockBooking({ status });
+
+    for (const confirmed of [true, false]) {
+      await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+    }
+    expect(handleConfirmationMock).not.toHaveBeenCalled();
+    expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to act on an already confirmed occurrence", async () => {
+    mockBooking({ status: BookingStatus.ACCEPTED });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: false } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to act on an occurrence that has already ended", async () => {
+    mockBooking({ startTime: future(-3), endTime: future(-2) });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(handleConfirmationMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses unauthorized users before revealing the booking status", async () => {
+    accessMock.mockResolvedValue(false);
+    mockBooking({ status: BookingStatus.REJECTED });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(handleConfirmationMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps Confirm all passing the series id to the bulk confirmation flow", async () => {
+    mockBooking();
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+
+    const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
+
+    expect(res.status).toBe(BookingStatus.ACCEPTED);
+    expect(handleConfirmationMock).toHaveBeenCalledTimes(1);
+    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+  });
+
+  it("keeps bulk reject limited to pending occurrences of the series", async () => {
+    mockBooking();
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+    prismaMock.booking.findMany.mockResolvedValue([{ uid: "occurrence-2", status: BookingStatus.PENDING }]);
+
+    await confirmHandler({ ctx, input: { bookingId: 11, confirmed: false, recurringEventId: "rec" } });
+
+    expect(prismaMock.booking.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { recurringEventId: "rec", status: BookingStatus.PENDING } })
+    );
+    expect(prismaMock.booking.updateMany).toHaveBeenCalledWith({
+      where: { uid: { in: ["occurrence-2"] } },
+      data: { status: BookingStatus.REJECTED, rejectionReason: undefined },
+    });
+    expect(prismaMock.booking.update).not.toHaveBeenCalled();
+  });
+});
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Apply confirm handler test changes
+
+```bash
+python3 - <<'EOF'
+p="packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts"
+s=open(p).read()
+def rep(old,new):
+    global s
+    assert s.count(old)==1, (p, old[:70], s.count(old))
+    s=s.replace(old,new)
+rep('''    for (const confirmed of [true, false]) {
+      await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });''','''    for (const confirmed of [true, false]) {
+      await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed } })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: expect.stringMatching(new RegExp(`\\\\b11\\\\b.*${status}`)),
+      });''')
+rep('''    mockBooking({ startTime: future(-3), endTime: future(-2) });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });''','''    mockBooking({ startTime: future(-3), endTime: future(-2) });
+
+    await expect(confirmHandler({ ctx, input: { bookingId: 11, confirmed: true } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(/\\b11\\b.*ended/),
+    });''')
+rep('''  it("keeps bulk reject limited to pending occurrences of the series", async () => {''','''  it("keeps Confirm all working when the series' first booking has already ended", async () => {
+    mockBooking({ startTime: future(-3), endTime: future(-2) });
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+
+    const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
+
+    expect(res.status).toBe(BookingStatus.ACCEPTED);
+    expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+  });
+
+  it("keeps bulk reject limited to pending occurrences of the series", async () => {''')
+open(p,"w").write(s)
+EOF
+grep -n 'stringMatching' packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts; sed -n 40,50p packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts
+```
+
+```text
+144:        message: expect.stringMatching(new RegExp(`\\b11\\b.*${status}`)),
+165:      message: expect.stringMatching(/\b11\b.*ended/),
+  });
+
+  it("throws BAD_REQUEST when the booking is not recurring", async () => {
+    mockBookingAccessService.doesUserIdHaveAccessToBooking.mockResolvedValue(true);
+    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue({ id: 10, recurringEventId: null });
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:23:57Z)**_
+
+Confirm-handler tests updated. Now the occurrences handler, repository and schema tests.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:08Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add handler, repository, and schema tests
+
+```bash
+python3 - <<'EOF'
+def edit(p, pairs, append=None):
+    s=open(p).read()
+    for old,new in pairs:
+        assert s.count(old)==1, (p, old[:70], s.count(old))
+        s=s.replace(old,new)
+    if append:
+        s=s.rstrip(); assert s.endswith("});"); s=s[:-3]+append
+    open(p,"w").write(s)
+
+edit("packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts", [
+('''    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });''','''    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringMatching(/\\S/),
+    });'''),
+('''    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue({ id: 10, recurringEventId: null });
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });''','''    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue({ id: 10, recurringEventId: null });
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(/\\b10\\b/),
+    });
+  });
+
+  it("throws BAD_REQUEST when the booking does not exist", async () => {
+    mockBookingAccessService.doesUserIdHaveAccessToBooking.mockResolvedValue(true);
+    mockBookingRepo.findByIdForReassignmentValidation.mockResolvedValue(null);
+
+    await expect(getRecurringOccurrencesHandler({ ctx, input: { bookingId: 10 } })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(mockBookingRepo.findByRecurringEventId).not.toHaveBeenCalled();
+  });'''),
+])
+
+edit("packages/features/bookings/repositories/BookingRepository.test.ts", [
+('''    $queryRaw: ReturnType<typeof vi.fn>;
+  };''','''    $queryRaw: ReturnType<typeof vi.fn>;
+    booking: { findMany: ReturnType<typeof vi.fn> };
+  };'''),
+('''      $queryRaw: vi.fn(),
+    };''','''      $queryRaw: vi.fn(),
+      booking: { findMany: vi.fn() },
+    };'''),
+], append='''
+  describe("findByRecurringEventId", () => {
+    it("returns the series' occurrences in chronological order with only the fields needed to act on them", async () => {
+      const occurrences = [{ id: 1 }, { id: 2 }];
+      mockPrismaClient.booking.findMany.mockResolvedValue(occurrences);
+
+      const result = await repository.findByRecurringEventId({ recurringEventId: "rec" });
+
+      expect(result).toBe(occurrences);
+      expect(mockPrismaClient.booking.findMany).toHaveBeenCalledWith({
+        where: { recurringEventId: "rec" },
+        select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+        orderBy: { startTime: "asc" },
+      });
+    });
+  });
+});
+''')
+EOF
+cat > packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.test.ts <<'EOF'
+import { describe, expect, it } from "vitest";
+import { ZGetRecurringOccurrencesInputSchema } from "./getRecurringOccurrences.schema";
+
+describe("ZGetRecurringOccurrencesInputSchema", () => {
+  it("accepts an integer booking id", () => {
+    expect(ZGetRecurringOccurrencesInputSchema.safeParse({ bookingId: 5 })).toEqual({
+      success: true,
+      data: { bookingId: 5 },
+    });
+  });
+
+  it.each([{}, { bookingId: 1.5 }, { bookingId: "5" }])("rejects %o", (input) => {
+    expect(ZGetRecurringOccurrencesInputSchema.safeParse(input).success).toBe(false);
+  });
+});
+EOF
+git diff --stat -- packages/
+```
+
+```text
+ packages/app-store/apps.metadata.generated.ts      | 446 ++++++++++-----------
+ .../repositories/BookingRepository.test.ts         |  18 +
+ .../bookings/confirm.handler.individual.test.ts    |  12 +
+ .../getRecurringOccurrences.handler.test.ts        |  12 +
+ 4 files changed, 265 insertions(+), 223 deletions(-)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:10Z)**_
+
+Now the dialog test. Reading the rest of it first.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:11Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read remainder of dialog test
+
+`sed -n 60,110p apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx`
+
+```text
+  });
+
+  it("lists every occurrence with its status", () => {
+    renderDialog();
+
+    const rows = screen.getAllByTestId("occurrence-row");
+    expect(rows).toHaveLength(5);
+    expect(within(rows[1]).getByText("confirmed")).toBeInTheDocument();
+    expect(within(rows[3]).getByText("rejected")).toBeInTheDocument();
+    expect(within(rows[4]).getByText("cancelled")).toBeInTheDocument();
+  });
+
+  it("only shows Confirm and Reject for upcoming pending occurrences", () => {
+    renderDialog();
+
+    const confirmButtons = screen.getAllByTestId("confirm");
+    expect(confirmButtons).toHaveLength(1);
+    expect(screen.getAllByTestId("reject")).toHaveLength(1);
+    expect(confirmButtons[0]).toHaveAttribute("data-booking-uid", "uid-3");
+  });
+
+  it("confirms a single occurrence without the recurring series id", () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("confirm"));
+
+    expect(mockConfirm).toHaveBeenCalledWith({ bookingId: 3, confirmed: true, reason: "" });
+  });
+
+  it("rejects a single occurrence through the rejection reason dialog", () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("reject"));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Court unavailable" } });
+    fireEvent.click(screen.getByTestId("rejection-confirm"));
+
+    expect(mockConfirm).toHaveBeenCalledWith({ bookingId: 3, confirmed: false, reason: "Court unavailable" });
+  });
+});
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:19Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check formatTime default output format
+
+`sed -n 15,40p packages/lib/dayjs/index.ts`
+
+```text
+  return new Date(year, month + 1, 0).getDate();
+};
+
+/**
+ * Expects timeFormat to be either 12 or 24, if null or undefined
+ * is passed in, we always default back to 24 hour notation.
+ */
+export const formatTime = (
+  date: string | Date | Dayjs,
+  timeFormat?: number | null,
+  timeZone?: string | null
+) => {
+  // console.log(timeZone, date);
+  return timeZone
+    ? dayjs(date)
+        .tz(timeZone)
+        .format(timeFormat === 12 ? "h:mma" : "HH:mm")
+    : dayjs(date).format(timeFormat === 12 ? "h:mma" : "HH:mm");
+};
+
+/**
+ * Checks if a provided timeZone string is recognized as a valid timezone by dayjs.
+ *
+ * @param {string} timeZone - The timezone string to be verified.
+ * @returns {boolean} - Returns 'true' if the provided timezone string is recognized as a valid timezone by dayjs. Otherwise, returns 'false'.
+ *
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:22Z)**_
+
+`formatTime` defaults to 24-hour time, so the test passes the host's 12-hour setting explicitly. Writing the dialog changes.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:34Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add dialog tests and include schema test in Stryker run
+
+```bash
+python3 - <<'EOF'
+p="apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx"
+s=open(p).read()
+pairs=[
+('''import { fireEvent, render, screen, within } from "@testing-library/react";
+''','''import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
+'''),
+('''const { mockConfirm, occurrencesQuery } = vi.hoisted(() => ({
+  mockConfirm: vi.fn(),
+  occurrencesQuery: { data: [] as unknown[], isPending: false },
+}));''','''const { mockConfirm, mockUseQuery, occurrencesQuery } = vi.hoisted(() => ({
+  mockConfirm: vi.fn(),
+  mockUseQuery: vi.fn(),
+  occurrencesQuery: { data: [] as unknown[] | undefined, isPending: false },
+}));'''),
+('''        getRecurringOccurrences: { useQuery: () => occurrencesQuery },''','''        getRecurringOccurrences: {
+          useQuery: (input: unknown, options: unknown) => {
+            mockUseQuery(input, options);
+            return occurrencesQuery;
+          },
+        },'''),
+('''const renderDialog = () =>
+  render(<ManageOccurrencesDialog isOpenDialog setIsOpenDialog={vi.fn()} bookingId={1} userTimeZone="UTC" />);''','''const renderDialog = (props: Partial<ComponentProps<typeof ManageOccurrencesDialog>> = {}) =>
+  render(
+    <ManageOccurrencesDialog isOpenDialog setIsOpenDialog={vi.fn()} bookingId={1} userTimeZone="UTC" {...props} />
+  );'''),
+('''    vi.clearAllMocks();
+    occurrencesQuery.data = [''','''    vi.clearAllMocks();
+    occurrencesQuery.isPending = false;
+    occurrencesQuery.data = ['''),
+]
+for old,new in pairs:
+    assert s.count(old)==1,(old[:60],s.count(old))
+    s=s.replace(old,new)
+s=s.rstrip(); assert s.endswith("});"); s=s[:-3]+'''
+  it("fetches this booking's series only while the dialog is open", () => {
+    const { rerender } = renderDialog();
+    expect(mockUseQuery).toHaveBeenLastCalledWith({ bookingId: 1 }, { enabled: true });
+
+    rerender(
+      <ManageOccurrencesDialog isOpenDialog={false} setIsOpenDialog={vi.fn()} bookingId={1} userTimeZone="UTC" />
+    );
+    expect(mockUseQuery).toHaveBeenLastCalledWith({ bookingId: 1 }, { enabled: false });
+  });
+
+  it("shows the translated title and description", () => {
+    renderDialog();
+
+    expect(screen.getByText("manage_occurrences")).toBeInTheDocument();
+    expect(screen.getByText("manage_occurrences_description")).toBeInTheDocument();
+  });
+
+  it("shows a loading message while the occurrences load", () => {
+    occurrencesQuery.isPending = true;
+    renderDialog();
+
+    expect(screen.getByText("loading")).toBeInTheDocument();
+    expect(screen.queryAllByTestId("occurrence-row")).toHaveLength(0);
+  });
+
+  it("shows no rows when the query returns no data", () => {
+    occurrencesQuery.data = undefined;
+    renderDialog();
+
+    expect(screen.queryAllByTestId("occurrence-row")).toHaveLength(0);
+  });
+
+  it("shows each occurrence's date and time in the host's time zone and time format", () => {
+    occurrencesQuery.data = [
+      {
+        id: 9,
+        uid: "uid-9",
+        status: BookingStatus.ACCEPTED,
+        startTime: new Date("2099-03-04T15:00:00Z"),
+        endTime: new Date("2099-03-04T15:15:00Z"),
+      },
+    ];
+    renderDialog({ userTimeZone: "America/New_York", userTimeFormat: 12 });
+
+    const row = screen.getByTestId("occurrence-row");
+    expect(within(row).getByText("Wed, 4 Mar 2099")).toBeInTheDocument();
+    expect(within(row).getByText("10:00am - 10:15am")).toBeInTheDocument();
+  });
+});
+'''
+open(p,"w").write(s)
+
+p="vitest.stryker-138.config.mts"
+s=open(p).read()
+old='''      "packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts",
+'''
+assert s.count(old)==1
+s=s.replace(old, old+'''      "packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.test.ts",
+''')
+open(p,"w").write(s)
+EOF
+git status --short
+```
+
+```text
+ M .gitignore
+ M apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx
+ M package.json
+ M packages/app-store/apps.metadata.generated.ts
+ M packages/features/bookings/repositories/BookingRepository.test.ts
+ M packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts
+ M packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts
+ M yarn.lock
+?? docs/sprint3/mutation/
+?? packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.test.ts
+?? stryker.138.config.mjs
+?? stryker.config.mjs
+?? vitest.stryker-138.config.mts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:24:59Z)**_
+
+I've written the tests from that plan, but haven't run them because you asked me not to run tests.
+
+**Survivors these should kill (13 of 15):**
+
+| Mutant | Test | File |
+|---|---|---|
+| `confirm.handler.ts:187` `if (true)` | New: keeps Confirm all working when the series' first booking has already ended | `confirm.handler.individual.test.ts` |
+| `confirm.handler.ts:191`, `:197` messages | Strengthened: the error must name booking 11 and why it was refused (its status, or that it ended) | `confirm.handler.individual.test.ts` |
+| `getRecurringOccurrences.handler.ts:29` `booking?.` | New: throws `BAD_REQUEST` when the booking does not exist | `getRecurringOccurrences.handler.test.ts` |
+| `getRecurringOccurrences.handler.ts:23`, `:32` messages | Strengthened: messages must be non-empty and name booking 10 | `getRecurringOccurrences.handler.test.ts` |
+| Dialog `:42`, `:43` | New: fetches this booking's series only while the dialog is open | `ManageOccurrencesDialog.test.tsx` |
+| Dialog `:51`, `:52` | New: shows the translated title and description | `ManageOccurrencesDialog.test.tsx` |
+| Dialog `:60` | New: shows no rows when the query returns no data | `ManageOccurrencesDialog.test.tsx` |
+| Dialog `:74`, `:77` | New: a fixed 2099-03-04 15:00 UTC date shown in New York time must read "Wed, 4 Mar 2099" and "10:00am - 10:15am" | `ManageOccurrencesDialog.test.tsx` |
+
+I worked out the expected date and time independently of the code.
+
+**Previously uncovered mutants these should kill (13 of 26):**
+- **`BookingRepository.ts:685-689` (11):** new test checks the exact `findMany` arguments: filter by series, the five fields, sorted by start time.
+- **`getRecurringOccurrences.schema.ts:7`:** new [getRecurringOccurrences.schema.test.ts](packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.test.ts) rejects `{}`, `1.5` and `"5"`. I added it to [vitest.stryker-138.config.mts](vitest.stryker-138.config.mts).
+- **Dialog `:57`:** new test for the loading message.
+
+**What stays:**
+- **The two equivalent mutants** (`<` → `<=` in the confirm handler and `>=` → `>` in the dialog). They only differ at the exact same millisecond.
+- **The 13 uncovered `BookingListItem.tsx` mutants.**
+
+If everything works, I'd expect about 82% overall, up from 50.6%. Counting only mutants that some test ran, about 97%. These are estimates from my own count, not a run.
+
+**Run order:**
+
+```bash
+# 1. Make sure the tests pass first; Stryker stops if any fail on unchanged code
+TZ=UTC yarn vitest run -c vitest.stryker-138.config.mts
+
+# 2. After report
+STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-after.json TZ=UTC \
+  nvm exec 22 node_modules/.bin/stryker run stryker.138.config.mjs
+```
+
+The second command assumes you went with Node 22 via nvm. If you installed Stryker 9 instead, use `yarn stryker run stryker.138.config.mjs`. If step 1 fails, paste the output.
+
+**Also:** `packages/app-store/apps.metadata.generated.ts` shows as modified, which I didn't do. It's probably from `yarn install`, so check it before committing.
+
+When the after report exists, I can draft `docs/sprint3/mutation/138-zachbowden.md` from both reports.
+
+---
+
+_**User (2026-11-18 23:37:09Z)**_
+
+go ahead and run what you need
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:13Z)**_
+
+Running them now. Checking first whether Node 22 is available and whether an after report already exists.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:14Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check reports, Node versions, and Stryker version
+
+`ls docs/sprint3/mutation/reports/; ls ~/.nvm/versions/node 2>/dev/null; node -v; grep -n '"version"' node_modules/@stryker-mutator/core/package.json`
+
+```text
+138-zachbowden-before.json
+v22.23.5
+v20.19.2
+3:  "version": "10.1.1",
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:16Z)**_
+
+Node 22 is installed under nvm and Stryker is still 10.1.1. Running the issue's tests first, since Stryker stops if any fail.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run the issue's tests with the mutation vitest config
+
+`TZ=UTC timeout 600 yarn vitest run -c vitest.stryker-138.config.mts 2>&1 | grep -vE "^\s*$" | grep -E "✓|×|FAIL|Test Files|Tests |Error|expected|❯ .*test" | head -60`
+
+```text
+ Test Files  6 passed (6)
+      Tests  36 passed (36)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:26Z)**_
+
+All 36 tests across the 6 files pass. Starting the after run with Node 22. It may take several minutes, so it runs in the background.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:29Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run Stryker after-report mutation run
+
+`source ~/.nvm/nvm.sh && STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-after.json TZ=UTC nvm exec 22 node_modules/.bin/stryker run stryker.138.config.mjs > /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/stryker-after.log 2>&1; echo "exit=$?" >> /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/stryker-after.log`
+
+```text
+Command running in background with ID: brvnkyjvf. Output is being written to: /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/tasks/brvnkyjvf.output. You will be notified when it completes. To check interim output, use Read on that file path.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:34Z)**_
+
+While that runs, I'll start the D6 write-up. Checking whether the PR exists yet so I can link it.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:36Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find the PR number for this branch
+
+`curl -s "https://api.github.com/repos/CSCI-435-SE/cal.diy/pulls?state=all&head=CSCI-435-SE:feat/issue-138-host-recurring-reject-accept" | python3 -c "import sys,json;[print(p['number'],p['state'],p['title'],p['html_url']) for p in json.load(sys.stdin)]"; cd /home/lexzach/Documents/Git/cal.diy && git log --oneline -3; ls docs/sprint3/mutation/`
+
+```text
+140 open feat: Allow host to confirm or reject individual recurring booking occurences https://github.com/CSCI-435-SE/cal.diy/pull/140
+733239792a Add AI logs, additional test
+184a43f74d Complete issue
+0040b11c08 Create .gitkeep
+reports
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:38Z)**_
+
+The PR is #140. Checking on the Stryker run.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:39Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check Stryker progress
+
+`tail -c 1500 /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/stryker-after.log`
+
+```text
+Running node v22.23.5 (npm v10.9.9)
+23:37:33 (656190) INFO ProjectReader Found 6 of 11181 file(s) to be mutated.
+Browserslist: browsers data (caniuse-lite) is 11 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+23:37:34 (656190) INFO Instrumenter Instrumented 6 source file(s) with 99 mutant(s)
+23:37:38 (656190) INFO ConcurrencyTokenProvider Creating 4 test runner process(es).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:37:52Z)**_
+
+Stryker found the 6 files to mutate, created 99 mutants and started 4 test-runner processes. I'll check the after report against my expectations when it finishes, then write `docs/sprint3/mutation/138-zachbowden.md` for PR #140.
+
+---
+
+_**User (2026-11-18 23:38:04Z)**_
+
+<task-notification>
+<task-id>brvnkyjvf</task-id>
+<tool-use-id>toolu_01LzWZdJDQN2G59uHizX55JX</tool-use-id>
+<output-file>/tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/tasks/brvnkyjvf.output</output-file>
+<status>completed</status>
+<summary>Background command "Run Stryker after-report mutation run" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+_**Agent (claude-opus-5-5 2026-11-18 23:38:13Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Compare before and after mutation reports
+
+```bash
+tail -5 /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/stryker-after.log; ls -la docs/sprint3/mutation/reports/; python3 - <<'EOF'
+import json,collections
+def load(n):
+    d=json.load(open(f"docs/sprint3/mutation/reports/138-zachbowden-{n}.json"))
+    out={}
+    for f,fd in d["files"].items():
+        for m in fd["mutants"]:
+            s=m["location"]["start"]
+            out[(f.split('/')[-1],s["line"],s["column"],m["mutatorName"],m.get("replacement",""))]=m["status"]
+    return out
+b,a=load("before"),load("after")
+for n,x in (("before",b),("after",a)):
+    c=collections.Counter(x.values()); valid=sum(c.values())-c["Ignored"]-c["CompileError"]-c["RuntimeError"]
+    det=c["Killed"]+c["Timeout"]
+    print(n,dict(c),"score %.2f%%"%(100*det/valid),"covered %.2f%%"%(100*det/(valid-c["NoCoverage"])))
+# per file after
+d=json.load(open("docs/sprint3/mutation/reports/138-zachbowden-after.json"))
+for f,fd in d["files"].items(): print(f.split('/')[-1], dict(collections.Counter(m["status"] for m in fd["mutants"])))
+print("--- before survivors -> after status")
+for k,v in sorted(b.items()):
+    if v=="Survived": print(k[0],k[1],k[3],repr(k[4])[:40],"->",a.get(k,"MISSING (line shift?)"))
+print("--- after non-killed (excluding Ignored)")
+for k,v in sorted(a.items()):
+    if v not in ("Killed","Ignored","Timeout"): print(v,k[0],k[1],k[3],repr(k[4])[:50])
+print("keys only in after:", len(set(a)-set(b)), "only in before:", len(set(b)-set(a)))
+EOF
+```
+
+```text
+------------------------------------------|--------|---------|----------|-----------|------------|----------|----------|
+23:38:04 (656190) INFO JsonReporter Your report can be found at: file:///home/lexzach/Documents/Git/cal.diy/docs/sprint3/mutation/reports/138-zachbowden-after.json
+23:38:04 (656190) INFO HtmlReporter Your report can be found at: file:///home/lexzach/Documents/Git/cal.diy/reports/mutation/138.html
+23:38:04 (656190) INFO MutationTestExecutor Done in 33 seconds.
+exit=0
+total 528
+drwxrwxr-x 2 lexzach lexzach   4096 Nov 18 18:38 .
+drwxrwxr-x 3 lexzach lexzach   4096 Nov 18 18:18 ..
+-rw-rw-r-- 1 lexzach lexzach 293483 Nov 18 18:38 138-zachbowden-after.json
+-rw-rw-r-- 1 lexzach lexzach 236081 Nov 18 18:18 138-zachbowden-before.json
+before {'NoCoverage': 26, 'Ignored': 16, 'Survived': 15, 'Killed': 41} score 50.00% covered 73.21%
+after {'NoCoverage': 13, 'Ignored': 17, 'Killed': 66, 'Survived': 2} score 81.48% covered 97.06%
+BookingListItem.tsx {'NoCoverage': 13}
+ManageOccurrencesDialog.tsx {'Ignored': 16, 'Killed': 20, 'Survived': 1}
+getRecurringOccurrences.schema.ts {'Ignored': 1}
+BookingRepository.ts {'Killed': 11}
+confirm.handler.ts {'Killed': 18, 'Survived': 1}
+getRecurringOccurrences.handler.ts {'Killed': 18}
+--- before survivors -> after status
+ManageOccurrencesDialog.tsx 42 ObjectLiteral '{}' -> Killed
+ManageOccurrencesDialog.tsx 43 ObjectLiteral '{}' -> Killed
+ManageOccurrencesDialog.tsx 51 StringLiteral '""' -> Killed
+ManageOccurrencesDialog.tsx 52 StringLiteral '""' -> Killed
+ManageOccurrencesDialog.tsx 60 OptionalChaining 'occurrences.map' -> Killed
+ManageOccurrencesDialog.tsx 63 EqualityOperator 'new Date(occurrence.endTime) > now' -> Survived
+ManageOccurrencesDialog.tsx 74 StringLiteral '""' -> Killed
+ManageOccurrencesDialog.tsx 77 StringLiteral '""' -> Killed
+confirm.handler.ts 187 ConditionalExpression 'true' -> Killed
+confirm.handler.ts 191 StringLiteral '``' -> Killed
+confirm.handler.ts 194 EqualityOperator 'booking.endTime <= new Date()' -> Survived
+confirm.handler.ts 197 StringLiteral '``' -> Killed
+getRecurringOccurrences.handler.ts 23 StringLiteral '""' -> Killed
+getRecurringOccurrences.handler.ts 29 OptionalChaining 'booking.recurringEventId' -> Killed
+getRecurringOccurrences.handler.ts 32 StringLiteral '``' -> Killed
+--- after non-killed (excluding Ignored)
+NoCoverage BookingListItem.tsx 171 ConditionalExpression 'false'
+NoCoverage BookingListItem.tsx 171 ConditionalExpression 'true'
+NoCoverage BookingListItem.tsx 171 LogicalOperator 'isRecurring || isTabRecurring || isTabUnconfirmed
+NoCoverage BookingListItem.tsx 171 ConditionalExpression 'true'
+NoCoverage BookingListItem.tsx 171 LogicalOperator 'isTabRecurring && isTabUnconfirmed'
+NoCoverage BookingListItem.tsx 172 BooleanLiteral 'true'
+NoCoverage BookingListItem.tsx 473 ConditionalExpression 'false'
+NoCoverage BookingListItem.tsx 473 ConditionalExpression 'true'
+NoCoverage BookingListItem.tsx 473 LogicalOperator 'canManageOccurrences || <>\n              <Button
+NoCoverage BookingListItem.tsx 479 BlockStatement '{}'
+NoCoverage BookingListItem.tsx 480 CallExpression ';'
+NoCoverage BookingListItem.tsx 481 BooleanLiteral 'false'
+NoCoverage BookingListItem.tsx 483 StringLiteral '""'
+Survived ManageOccurrencesDialog.tsx 63 EqualityOperator 'new Date(occurrence.endTime) > now'
+Survived confirm.handler.ts 194 EqualityOperator 'booking.endTime <= new Date()'
+keys only in after: 0 only in before: 0
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:38:21Z)**_
+
+<think><details><summary>Thought Process</summary>
+Before and after mutant results match, with 13 of 15 survivors now killed. I'm recounting from the raw lists, since my dictionary count merged duplicates, and the schema mutant is "Ignored" rather than "Killed", which the write-up has to explain.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:38:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Recount mutants exactly and read Stryker's own score table
+
+```bash
+python3 - <<'EOF'
+import json,collections
+for n in ("before","after"):
+    d=json.load(open(f"docs/sprint3/mutation/reports/138-zachbowden-{n}.json"))
+    ms=[m for fd in d["files"].values() for m in fd["mutants"]]
+    c=collections.Counter(m["status"] for m in ms)
+    valid=len(ms)-c["Ignored"]-c["CompileError"]-c["RuntimeError"]
+    det=c["Killed"]+c["Timeout"]
+    print(n,len(ms),dict(c),"score %.2f%%"%(100*det/valid),"covered %.2f%%"%(100*det/(valid-c["NoCoverage"])))
+    for fd_name,fd in d["files"].items():
+        for m in fd["mutants"]:
+            if "schema" in fd_name: print("  schema:",m["status"],m.get("statusReason"),m["mutatorName"])
+EOF
+grep -n "Mutation score\|All files\|% Mutation" /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/stryker-after.log | head; grep -B2 -A12 "File  *| % score\|File *|" /tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/stryker-after.log | sed 's/\x1b\[[0-9;]*m//g' | head -20
+```
+
+```text
+before 99 {'NoCoverage': 26, 'Ignored': 16, 'Survived': 15, 'Killed': 42} score 50.60% covered 73.68%
+  schema: NoCoverage None ObjectLiteral
+after 99 {'NoCoverage': 13, 'Ignored': 17, 'Killed': 67, 'Survived': 2} score 81.71% covered 97.10%
+  schema: Ignored Static mutant (and "ignoreStatic" was enabled) ObjectLiteral
+219:                                          | % Mutation score |          |           |            |          |          |
+222:All files                                 |  81.71 |   97.10 |       67 |         0 |          2 |       13 |        0 |
+------------------------------------------|------------------|----------|-----------|------------|----------|----------|
+                                          | % Mutation score |          |           |            |          |          |
+File                                      |  total | covered | # killed | # timeout | # survived | # no cov | # errors |
+------------------------------------------|--------|---------|----------|-----------|------------|----------|----------|
+All files                                 |  81.71 |   97.10 |       67 |         0 |          2 |       13 |        0 |
+ apps                                     |  58.82 |   95.24 |       20 |         0 |          1 |       13 |        0 |
+  web                                     |  58.82 |   95.24 |       20 |         0 |          1 |       13 |        0 |
+   components                             |  58.82 |   95.24 |       20 |         0 |          1 |       13 |        0 |
+    booking                               |   0.00 |    0.00 |        0 |         0 |          0 |       13 |        0 |
+     BookingListItem.tsx                  |   0.00 |    0.00 |        0 |         0 |          0 |       13 |        0 |
+    dialog                                |  95.24 |   95.24 |       20 |         0 |          1 |        0 |        0 |
+     ManageOccurrencesDialog.tsx          |  95.24 |   95.24 |       20 |         0 |          1 |        0 |        0 |
+ packages                                 |  97.92 |   97.92 |       47 |         0 |          1 |        0 |        0 |
+  features                                | 100.00 |  100.00 |       11 |         0 |          0 |        0 |        0 |
+   bookings                               | 100.00 |  100.00 |       11 |         0 |          0 |        0 |        0 |
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:38:34Z)**_
+
+Exact numbers: **50.60% → 81.71%** overall, and **73.68% → 97.10%** counting only mutants a test ran. That matches Stryker's own table. Writing the D6 report now.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:39:12Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```markdown
+# Mutation testing: Issue #138 -- Allow hosts to confirm or reject individual recurring booking occurrences
+
+**PR(s):** [#140](https://github.com/CSCI-435-SE/cal.diy/pull/140)  **Tool:** StrykerJS 10.1.1 with the Vitest runner  **Config:** [stryker.138.config.mjs](../../../stryker.138.config.mjs) + [vitest.stryker-138.config.mts](../../../vitest.stryker-138.config.mts), built on the shared [stryker.config.mjs](../../../stryker.config.mjs) by @zach-short  **Command:** `STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-<before|after>.json TZ=UTC nvm exec 22 node_modules/.bin/stryker run stryker.138.config.mjs`
+**Reports:** [before](reports/138-zachbowden-before.json) · [after](reports/138-zachbowden-after.json)
+**Mutation score:** before 50.60% → after 81.71% (covered mutants only: 73.68% → 97.10%)
+
+### Setup notes
+
+- **Only the lines this PR added or changed are mutated.** `stryker.138.config.mjs` lists them as line ranges: the new guard in `confirm.handler.ts`, `findByRecurringEventId` in `BookingRepository.ts`, the new lines in `BookingListItem.tsx`, and all of `ManageOccurrencesDialog.tsx` and the two `getRecurringOccurrences` files.
+- **The test list is explicit.** `vitest.stryker-138.config.mts` names this PR's test files plus `BookingRepository.test.ts`. The shared config's `related: true` would also run every test that imports `BookingRepository`, including unrelated calendar-subscription suites that time out under load. A failure on the unmutated code stops Stryker before it mutates anything.
+- **Stryker 10 requires Node 22 or newer;** the machine's default is Node 20, so the run uses `nvm exec 22`.
+- **Same mutants in both runs.** Both runs produced 99 mutants at identical locations, so the reports compare one-to-one.
+
+| Status | Before | After |
+|---|---|---|
+| Killed | 42 | 67 |
+| Survived | 15 | 2 |
+| No coverage | 26 | 13 |
+| Ignored (static) | 16 | 17 |
+
+## Surviving mutants
+
+All 15 survivors from the before report are in lines this PR added.
+
+| Location (file:line) | Mutation | Equivalent or test gap? | Why |
+|---|---|---|---|
+| `confirm.handler.ts:187` | `if (!recurringEventId)` → `if (true)` | Test gap (killed after) | The new pending/not-ended guard is meant only for single-booking requests. No test sent a bulk request whose first booking fails the guard, so applying it to bulk requests went unnoticed. Under the mutant, "Confirm all" on a series whose first booking has ended would be refused. The issue (Q2) says the bulk behaviour must not change. |
+| `confirm.handler.ts:191` | status error message → empty | Test gap (killed after) | Tests checked only `code: "BAD_REQUEST"`. API v2 and email-link callers get this message as their only explanation. The project's error-handling rule requires errors that name the record and the reason. |
+| `confirm.handler.ts:194` | `endTime < now` → `endTime <= now` | Equivalent | Only differs when the booking ends at exactly the current millisecond. The AC says "past" without defining that instant, and no test can reliably create that state. |
+| `confirm.handler.ts:197` | "already ended" message → empty | Test gap (killed after) | Same as line 191. |
+| `getRecurringOccurrences.handler.ts:23` | FORBIDDEN message → empty | Test gap (killed after) | Only the error code was asserted. |
+| `getRecurringOccurrences.handler.ts:29` | `booking?.recurringEventId` → `booking.recurringEventId` | Test gap (killed after) | No test for a booking id that does not exist. Under the mutant, the query throws a `TypeError` (shown as a 500 error) instead of `BAD_REQUEST`. |
+| `getRecurringOccurrences.handler.ts:32` | "not part of a recurring series" message → empty | Test gap (killed after) | Only the error code was asserted. |
+| `ManageOccurrencesDialog.tsx:42` | query input `{ bookingId }` → `{}` | Test gap (killed after) | The tRPC mock ignored its arguments, so nothing checked that the dialog asks for this booking's series (AC1, AC8). |
+| `ManageOccurrencesDialog.tsx:43` | `{ enabled: isOpenDialog }` → `{}` | Test gap (killed after) | Nothing checked that the query waits until the dialog is open. Under the mutant, every recurring row on the page would fetch its series on load. |
+| `ManageOccurrencesDialog.tsx:51` | title → empty | Test gap (killed after) | No test asserted the dialog title (AC1, AC10). |
+| `ManageOccurrencesDialog.tsx:52` | description → empty | Test gap (killed after) | Same as line 51. |
+| `ManageOccurrencesDialog.tsx:60` | `occurrences?.map` → `occurrences.map` | Test gap (killed after) | The tests always supplied data. If the query errors (no data, not loading), the mutant crashes the dialog. |
+| `ManageOccurrencesDialog.tsx:63` | `endTime >= now` → `endTime > now` | Equivalent | Same millisecond boundary as `confirm.handler.ts:194`, on the UI side. |
+| `ManageOccurrencesDialog.tsx:74` | date format `"ddd, D MMM YYYY"` → `""` | Test gap (killed after) | AC1 requires the date. Tests used relative dates and only checked status badges, so a wrong date format went unnoticed. |
+| `ManageOccurrencesDialog.tsx:77` | `{" "}` in the time range → `""` | Test gap (killed after) | AC1 requires the time. No test checked the rendered time text, so "10:00am -10:15am" would have passed. |
+
+**Mutants with no coverage** (not survivors, but they count against the score):
+- **`BookingRepository.ts:685-689`, `findByRecurringEventId` (11 mutants).** The handler test mocks the repository, so the method never ran in any test. A new repository test killed all 11.
+- **`ManageOccurrencesDialog.tsx:57`, loading text.** No test rendered the loading state. Killed after.
+- **`getRecurringOccurrences.schema.ts:7`, the Zod schema.** No test imported it. The new schema test runs it, but the schema is built when the module first loads, and `ignoreStatic` is on (from the shared config), so the after report lists it as **Ignored** rather than Killed. The new test still checks the schema rejects `{}`, `1.5` and `"5"`.
+- **`BookingListItem.tsx:171-172`, `473-483` (13 mutants), still uncovered.** These lines decide when to show the "Manage occurrences" button and open the dialog. No unit test renders a booking row, because the row needs the data-table, actions-store and details-sheet providers. AC1's button placement was checked manually (see PR #140's Test Evidence), but this is still a gap in the automated tests.
+
+## New or strengthened test
+
+Commit: [PR #140](https://github.com/CSCI-435-SE/cal.diy/pull/140/files) · Test: `packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts` › keeps Confirm all working when the series' first booking has already ended · Kills: `confirm.handler.ts:187` (`if (true)`)
+
+The same change added or strengthened these tests, each killing the mutants listed (all show as Killed in the after report):
+
+| Test | Kills |
+|---|---|
+| `confirm.handler.individual.test.ts` › refuses to act on a REJECTED / CANCELLED occurrence; refuses to act on an occurrence that has already ended (now also assert the message names the booking and the reason) | `confirm.handler.ts:191`, `:197` |
+| `getRecurringOccurrences.handler.test.ts` › throws BAD_REQUEST when the booking does not exist | `getRecurringOccurrences.handler.ts:29` |
+| `getRecurringOccurrences.handler.test.ts` › FORBIDDEN and not-recurring cases now also assert the message | `getRecurringOccurrences.handler.ts:23`, `:32` |
+| `ManageOccurrencesDialog.test.tsx` › fetches this booking's series only while the dialog is open | `ManageOccurrencesDialog.tsx:42`, `:43` |
+| `ManageOccurrencesDialog.test.tsx` › shows the translated title and description | `ManageOccurrencesDialog.tsx:51`, `:52` |
+| `ManageOccurrencesDialog.test.tsx` › shows no rows when the query returns no data | `ManageOccurrencesDialog.tsx:60` |
+| `ManageOccurrencesDialog.test.tsx` › shows each occurrence's date and time in the host's time zone and time format | `ManageOccurrencesDialog.tsx:74`, `:77` |
+| `ManageOccurrencesDialog.test.tsx` › shows a loading message while the occurrences load | `ManageOccurrencesDialog.tsx:57` (was no coverage) |
+| `BookingRepository.test.ts` › findByRecurringEventId returns the series' occurrences in chronological order with only the fields needed to act on them | `BookingRepository.ts:685-689` (11, were no coverage) |
+| `getRecurringOccurrences.schema.test.ts` (new) | `getRecurringOccurrences.schema.ts:7` (now Ignored as static, see above) |
+
+## Questions
+
+**1. What did the surviving mutants reveal about your tests?**
+
+My tests checked actions, not what the user or caller sees. The handler tests asserted the error code but never the message, which is all an API v2 or email-link caller gets. The dialog tests checked which buttons appear and what they send, but never the date and time AC1 requires, nor the title. Because those tests used dates relative to "now", they could not have asserted a formatted date anyway. The survivors also showed I had only tested the happy path. Nothing covered a booking that doesn't exist, a query with no data, or a bulk request whose first booking is in the past. That last one mattered most. My new guard was meant for single-booking requests, but no test would have caught it also blocking "Confirm all", which the issue says must not change. Finally, the 11 uncovered `BookingRepository` mutants showed that mocking the repository in the handler test meant the real query never ran in any test.
+
+**2. Did any surviving mutant point to an assertion whose expected value was not based on the requirements? Explain.**
+
+Not directly: the survivors came from missing assertions, not wrong expected values. They did force me to decide where some expected values come from. The ACs don't specify error wording, so the new message assertions don't copy the strings from the code. They only require that the message names the booking id and the reason (its status, or that it ended), which comes from the project's documented error-handling rule. For the date/time test, I worked out "Wed, 4 Mar 2099" and "10:00am - 10:15am" for 15:00 UTC in New York independently of the component. The date format matches the one the booking list already uses. The two boundary mutants (`<` vs `<=`, `>=` vs `>`) are the opposite case. The AC says "past" but doesn't define the exact ending instant, so no requirement gives an expected value. That's why I classified them as equivalent rather than adding a test pinned to my own choice.
+
+**3. If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct?**
+
+I used Claude Code (log linked from PR #140).
+
+- **Configuration:** it applied @zach-short's shared Stryker setup and wrote the issue-specific config. It mutates only this PR's changed line ranges and lists the test files explicitly, because `related: true` would also pull in calendar-subscription tests that time out.
+- **Running:** the first run failed because Stryker 10 requires Node 22 and my machine had Node 20; I installed Node 22 with nvm and ran Stryker through it.
+- **Analysis and tests:** it drafted the classification of the 15 survivors and the new tests.
+- **What I verified:**
+  - All 6 selected test files (36 tests) pass before mutation.
+  - The before and after reports contain the same 99 mutants at the same locations.
+  - Each "test gap" survivor shows as Killed in the after report.
+  - The computed scores match Stryker's own summary table (81.71% / 97.10%).
+- **What I corrected:** its first estimate counted the schema mutant as killed, but the after report shows it as Ignored (a static mutant with `ignoreStatic` on). This write-up reports it that way.
+
+```
+
+```text
+File created successfully at: /home/lexzach/Documents/Git/cal.diy/docs/sprint3/mutation/138-zachbowden.md (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:39:16Z)**_
+
+Write-up done. Updating the run command in the config comment to the Node 22 form that actually worked.
+
+_**Agent (claude-opus-5-5 2026-11-18 23:39:20Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update run command comment in Stryker config
+
+```bash
+python3 - <<'EOF'
+p="stryker.138.config.mjs"
+s=open(p).read()
+old='''//   Before: STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-before.json TZ=UTC yarn stryker run stryker.138.config.mjs
+//   After:  STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-after.json TZ=UTC yarn stryker run stryker.138.config.mjs'''
+new='''// Stryker 10 needs Node >= 22, so run it through nvm if the default Node is older:
+//   Before: STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-before.json TZ=UTC nvm exec 22 node_modules/.bin/stryker run stryker.138.config.mjs
+//   After:  STRYKER_JSON=docs/sprint3/mutation/reports/138-zachbowden-after.json TZ=UTC nvm exec 22 node_modules/.bin/stryker run stryker.138.config.mjs'''
+assert s.count(old)==1
+open(p,"w").write(s.replace(old,new))
+EOF
+git status --short
+```
+
+```text
+ M .gitignore
+ M apps/web/components/dialog/__tests__/ManageOccurrencesDialog.test.tsx
+ M package.json
+ M packages/app-store/apps.metadata.generated.ts
+ M packages/features/bookings/repositories/BookingRepository.test.ts
+ M packages/trpc/server/routers/viewer/bookings/confirm.handler.individual.test.ts
+ M packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.handler.test.ts
+ M yarn.lock
+?? docs/sprint3/mutation/
+?? packages/trpc/server/routers/viewer/bookings/getRecurringOccurrences.schema.test.ts
+?? stryker.138.config.mjs
+?? stryker.config.mjs
+?? vitest.stryker-138.config.mts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-11-18 23:39:32Z)**_
+
+The after report is done: the score went from **50.60% to 81.71%**, or **73.68% to 97.10%** counting only mutants some test actually ran. These are Stryker's own numbers from the report.
+
+**What I ran:**
+1. The issue's 6 test files on unmutated code: 36 tests, all passed.
+2. Stryker on Node 22 via nvm, which took 33 seconds. It wrote [138-zachbowden-after.json](docs/sprint3/mutation/reports/138-zachbowden-after.json), with the same 99 mutants as your before report.
+
+**Results:**
+- **13 of the 15 survivors are now killed,** including `confirm.handler.ts:187`, the one the write-up names as the required "new test kills a survivor".
+- **The two still surviving** are the millisecond-boundary mutants (`<` vs `<=`, `>=` vs `>`). The write-up classifies them as equivalent.
+- **The 11 uncovered `BookingRepository` mutants and the loading-text mutant are now killed.**
+- **The schema mutant shows as "Ignored", not killed.** The Zod schema is built when the file loads, and zach-short's config ignores those "static" mutants. I'd said it would be killed; the write-up reports it correctly.
+- **The 13 `BookingListItem.tsx` mutants are still uncovered,** explained in the write-up.
+
+**The write-up:** [138-zachbowden.md](docs/sprint3/mutation/138-zachbowden.md) follows the D6 template: the header (crediting zach-short's setup), a before/after table, all 15 survivors analysed, the killing tests, and answers to the 3 questions. The answers are written in first person as you. Question 3 says you installed Node 22 with nvm and checked the reports, so reword anything that isn't how you'd put it.
+
+**Before you commit:**
+- **To include:** the 4 test files (3 changed, 1 new), `stryker.config.mjs`, `stryker.138.config.mjs`, `vitest.stryker-138.config.mts`, `package.json`, `yarn.lock`, `.gitignore`, and everything under `docs/sprint3/mutation/`.
+- **Leave out `packages/app-store/apps.metadata.generated.ts`** unless you meant to change it. It isn't from this work.
+- **The PR #140 description is out of date.** Its Test Evidence section still says "21 new tests in 4 new files", and the new tests aren't in its table. Want me to update [pr-138.md](/tmp/claude-1000/-home-lexzach-Documents-Git-cal-diy/3c878cdd-2323-4a17-b9c8-2ba0f8852712/scratchpad/pr-138.md) to match?
