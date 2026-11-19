@@ -14,9 +14,8 @@
 
 ## Blocked
 
-- Sub-issue 7 (account linking) waits on customer Q1 and Q8.
 - Sub-issue 1 waits on a yes for the `schema.prisma` change.
-- Sub-issue 9's password-login switch waits on customer Q4.
+- Nothing waits on the customer. All 13 questions were answered on #131 on 2026-11-12. Follow-ups F1 to F6 in `customer-questions.md` are not posted; the spec uses the team proposal for each.
 
 ## Sprint 3 slice (demo by 2026-11-19)
 
@@ -31,7 +30,7 @@ Sub-issues on the path and merge order:
 
 Demo script: start Keycloak; sign in as the instance admin; add the provider; Test connection; enable; sign out; click the button; sign in as the verified Keycloak user (new account, onboarding); sign out; sign in as the unverified user (error page).
 
-Moves to Sprint 4: sub-issues 7, 8, 9 (linking, settings page, removal with counts, password-login switch, Playwright test).
+Moves to Sprint 4: sub-issues 7, 8, 9 and 10 (linking and invites, settings page, removal with counts and the forgot-password test, the password-login switch from customer Q4, Playwright test, and the "accept this provider's MFA" setting from customer Q6). The customer placed Q4 and Q6 in Sprint 4 on 2026-11-12.
 
 Risk: sub-issue 5 is the largest and touches the 1,255-line `next-auth-options.ts`. Start it on day one after sub-issue 1 merges. Keep the change to that file to two delegation calls (top of `signIn`, top of `jwt`) and the `getOptions` argument.
 
