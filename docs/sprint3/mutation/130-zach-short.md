@@ -60,12 +60,14 @@ The expected values come from the requirements or from the code before #130, not
 
 **1. What did the surviving mutants reveal about your tests?**
 
-[NEEDS ZACH: your answer in your own words. A draft for you to confirm or change is in the chat.]
+My tests checked what the panel says but not how the day is laid out around it. They asserted the hours, the note and the redirect, so every mutant that changed the text died, while the mutants that changed the wrapper or the last panel's padding lived. The survivors also showed which cases I had never set up: two entries that overlap and end at the same time, an away run that crosses midnight UTC, and the time format toggle. The toggle had no coverage at all, because the only test that renders the booker mocks `AvailableTimeSlots`, so no test ever rendered the line this PR changed.
 
 **2. Did any surviving mutant point to an assertion whose expected value was not based on the requirements? Explain.**
 
-[NEEDS ZACH: your answer in your own words. A draft for you to confirm or change is in the chat.]
+Yes. The test "keeps the whole-day layout" rendered a whole-day entry, saved its layout, and then compared a second render with it. Both renders went through the code under test, so the expected value came from that code and not from how the booker behaved before #130. When the mutant removed the whole-day early return, both renders changed together and the test still passed. The new test takes its expected layout from `main` before the PR, where a whole-day day returns the panel alone with no slot list around it.
 
 **3. If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct?**
 
-[NEEDS ZACH: what you checked yourself. A list of what Claude Code did is in the chat.]
+I used Claude Code for all of the D6 work, and a Fable session wrote the first #130 tests in PR #153. Claude Code applied @zachbowden's shared configuration from PR #140, wrote the #130 config and test list, ran both reports, classified the eight survivors and wrote the new tests. It also found that its first before run had missed four changed lines, because Stryker reads a single line only as `file:218-218`, and it ran the before report again with the corrected ranges.
+
+I read the survivor table and agree with each classification, including the one equivalent mutant. I read the new tests and agree that their expected values come from the requirements or from the code before #130. I opened the before and after reports and confirmed the scores and that both runs have the same 75 mutants.
