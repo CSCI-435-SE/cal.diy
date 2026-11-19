@@ -3,9 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookingRepository } from "../repositories/BookingRepository";
 import { RunningLateService } from "./RunningLateService";
 
-const { emailConstructor, sendEmail } = vi.hoisted(() => ({
+const { emailConstructor, sendEmail, getTranslation, logError } = vi.hoisted(() => ({
   emailConstructor: vi.fn(),
   sendEmail: vi.fn(),
+  getTranslation: vi.fn(async (locale: string) => (key: string) => `${locale}:${key}`),
+  logError: vi.fn(),
+}));
+
+vi.mock("@calcom/lib/logger", () => ({
+  default: { getSubLogger: () => ({ error: logError }) },
 }));
 
 vi.mock("@calcom/emails/templates/attendee-running-late-email", () => ({
@@ -19,9 +25,7 @@ vi.mock("@calcom/emails/templates/attendee-running-late-email", () => ({
   },
 }));
 
-vi.mock("@calcom/i18n/server", () => ({
-  getTranslation: vi.fn(async (locale: string) => (key: string) => `${locale}:${key}`),
-}));
+vi.mock("@calcom/i18n/server", () => ({ getTranslation }));
 
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepository["findByIdIncludeUserAndAttendeeTimeZones"]>>
@@ -162,6 +166,9 @@ describe("RunningLateService", () => {
         timeZone: "Asia/Tokyo",
         locale: "ja",
       });
+      // The running_late_* email strings live in the "common" namespace; any other namespace renders raw keys
+      expect(getTranslation).toHaveBeenCalledWith("ja", "common");
+      expect(getTranslation).toHaveBeenCalledWith("en", "common");
       expect(ana.t("running_late")).toBe("ja:running_late");
       expect(ben.attendee.locale).toBe("en");
       expect(ben.attendee.timeZone).toBe("Europe/Berlin");
@@ -195,6 +202,19 @@ describe("RunningLateService", () => {
 
       await expect(service.sendNotice(sendInput)).resolves.toEqual({ sent: 1 });
       expect(sendEmail).toHaveBeenCalledTimes(2);
+      // Failures are swallowed so the host's request succeeds, which makes this log the only trace of them
+      expect(logError).toHaveBeenCalledTimes(1);
+      expect(logError).toHaveBeenCalledWith(
+        "Failed to send 1 running late email(s) for booking booking-uid",
+        { reasons: ["Error: SMTP down"] }
+      );
+    });
+
+    it("does not log an error when every email sends", async () => {
+      const { service } = setup(buildBooking());
+
+      await expect(service.sendNotice(sendInput)).resolves.toEqual({ sent: 1 });
+      expect(logError).not.toHaveBeenCalled();
     });
   });
 });
