@@ -176,6 +176,8 @@ describe("RunningLateService", () => {
         hostName: "Host",
         hostEmail: "host@example.com",
         eventTitle: "Intro call between Host and Ana",
+        // The original start (now + 30 min), not shifted by the delay: the email reports the delay, the booking keeps its time
+        startTime: new Date("2026-11-12T12:30:00Z"),
         delayMinutes: 10,
         message: "Previous call ran over",
       });
