@@ -870,8 +870,7 @@ export default function Success(props: PageProps) {
                       (!isCancellationMode ? (
                         <>
                           {/* Only show section if there's at least one actionable option */}
-                          {((!props.recurringBookings &&
-                            (!isBookingInPast || eventType.allowReschedulingPastBookings) &&
+                          {(((!isBookingInPast || eventType.allowReschedulingPastBookings) &&
                             canReschedule) ||
                             (!isBookingInPast && canCancel)) && (
                             <>
@@ -882,8 +881,7 @@ export default function Success(props: PageProps) {
                                 </span>
 
                                 <>
-                                  {!props.recurringBookings &&
-                                    (!isBookingInPast || eventType.allowReschedulingPastBookings) &&
+                                  {(!isBookingInPast || eventType.allowReschedulingPastBookings) &&
                                     canReschedule &&
                                     !isRescheduleDisabled && (
                                       <span className="text-default inline">

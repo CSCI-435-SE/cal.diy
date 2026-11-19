@@ -4,6 +4,7 @@ import { useBookerTime } from "@calcom/features/bookings/Booker/hooks/useBookerT
 import type { UseBookingFormReturnType } from "@calcom/features/bookings/Booker/hooks/useBookingForm";
 import { mapBookingToMutationInput, mapRecurringBookingToMutationInput } from "@calcom/features/bookings/lib";
 import type { BookingCreateBody } from "@calcom/features/bookings/lib/bookingCreateBodySchema";
+import { mapSeriesRescheduleToMutationInput } from "@calcom/features/bookings/lib/client/booking-event-form/booking-to-mutation-input-mapper";
 import type { BookerEvent } from "@calcom/features/bookings/types";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { showToast } from "@calcom/ui/components/toast";
@@ -51,6 +52,7 @@ export const useHandleBookEvent = ({
   const username = useBookerStoreContext((state) => state.username);
   const recurringEventCount = useBookerStoreContext((state) => state.recurringEventCount);
   const bookingData = useBookerStoreContext((state) => state.bookingData);
+  const rescheduleScope = useBookerStoreContext((state) => state.rescheduleScope);
   const seatedEventData = useBookerStoreContext((state) => state.seatedEventData);
   const orgSlug = useBookerStoreContext((state) => state.org);
   const teamMemberEmail = useBookerStoreContext((state) => state.teamMemberEmail);
@@ -113,7 +115,23 @@ export const useHandleBookEvent = ({
 
       const tracking = getUtmTrackingParameters(searchParams);
 
-      if (event.data?.recurringEvent?.freq != null && recurringEventCount && !rescheduleUid) {
+      const seriesOccurrences = bookingData?.seriesOccurrences ?? [];
+      const seriesRecurringEventId =
+        rescheduleUid && rescheduleScope === "following" && seriesOccurrences.length > 1
+          ? bookingData?.recurringEventId
+          : null;
+
+      if (seriesRecurringEventId) {
+        handleRecBooking(
+          mapSeriesRescheduleToMutationInput({
+            booking: bookingInput,
+            seriesOccurrences,
+            recurringEventId: seriesRecurringEventId,
+            tracking,
+          }),
+          callbacks
+        );
+      } else if (event.data?.recurringEvent?.freq != null && recurringEventCount && !rescheduleUid) {
         handleRecBooking(
           mapRecurringBookingToMutationInput(bookingInput, recurringEventCount, tracking),
           callbacks

@@ -9,6 +9,8 @@ import type { GetBookingType } from "../lib/get-booking";
 import type { BookerLayout, BookerState } from "./types";
 import { getQueryParam, removeQueryParam, updateQueryParam } from "./utils/query-param";
 
+export type RescheduleScope = "single" | "following";
+
 const _iso_3166_1_alpha_2_codes = [
   "ad",
   "ae",
@@ -394,6 +396,11 @@ export type BookerStore = {
   bookingUid: string | null;
   bookingData: GetBookingType | null;
   setBookingData: (bookingData: GetBookingType | null | undefined) => void;
+  /**
+   * When rescheduling an occurrence of a recurring series: move only it, or it and every later one.
+   */
+  rescheduleScope: RescheduleScope;
+  setRescheduleScope: (rescheduleScope: RescheduleScope) => void;
 
   /**
    * Method called by booker component to set initial data.
@@ -658,6 +665,8 @@ export const createBookerStore = () =>
     setRescheduleUid: (rescheduleUid: string | null) => {
       set({ rescheduleUid });
     },
+    rescheduleScope: "single",
+    setRescheduleScope: (rescheduleScope: RescheduleScope) => set({ rescheduleScope }),
     recurringEventCount: null,
     setRecurringEventCount: (recurringEventCount: number | null) => set({ recurringEventCount }),
     recurringEventCountQueryParam: Number(getQueryParam("recurringEventCount")) || null,

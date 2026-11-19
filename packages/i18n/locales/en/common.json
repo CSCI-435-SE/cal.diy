@@ -4861,5 +4861,8 @@
   "running_late_original_start": "Original start time",
   "running_late_expected_delay": "Expected delay",
   "running_late_message_from_host": "Message from host",
+  "this_occurrence": "This occurrence",
+  "this_and_all_following": "This and all following ({{count}} occurrences)",
+  "series_reschedule_conflict_error": "The new time isn't available on these dates: {{dates}}. Nothing was changed. Please pick another time.",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }

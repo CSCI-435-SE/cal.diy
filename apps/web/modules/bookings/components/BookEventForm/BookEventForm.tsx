@@ -14,6 +14,7 @@ import { Alert } from "@calcom/ui/components/alert";
 import { Button } from "@calcom/ui/components/button";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { Form } from "@calcom/ui/components/form";
+import { RadioField, RadioGroup } from "@calcom/ui/components/radio";
 import type { TFunction } from "i18next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -71,6 +72,8 @@ export const BookEventForm = ({
   const setFormValues = useBookerStoreContext((state) => state.setFormValues);
   const bookingData = useBookerStoreContext((state) => state.bookingData);
   const rescheduleUid = useBookerStoreContext((state) => state.rescheduleUid);
+  const rescheduleScope = useBookerStoreContext((state) => state.rescheduleScope);
+  const setRescheduleScope = useBookerStoreContext((state) => state.setRescheduleScope);
   const username = useBookerStoreContext((state) => state.username);
   const isPlatformBookerEmbed = useIsPlatformBookerEmbed();
   const { timeFormat, timezone } = useBookerTime();
@@ -108,6 +111,7 @@ export const BookEventForm = ({
   }
 
   const watchedCfToken = bookingForm.watch("cfToken");
+  const remainingSeriesOccurrences = rescheduleUid ? (bookingData?.seriesOccurrences?.length ?? 0) : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -132,6 +136,22 @@ export const BookEventForm = ({
           isPaidEvent={isPaidEvent}
           paymentCurrency={paymentCurrency}
         />
+        {remainingSeriesOccurrences > 1 && (
+          <RadioGroup
+            value={rescheduleScope}
+            onValueChange={(value: string) =>
+              setRescheduleScope(value === "following" ? "following" : "single")
+            }
+            className="stack-y-2 my-3"
+            data-testid="reschedule-scope">
+            <RadioField id="reschedule-scope-single" label={t("this_occurrence")} value="single" />
+            <RadioField
+              id="reschedule-scope-following"
+              label={t("this_and_all_following", { count: remainingSeriesOccurrences })}
+              value="following"
+            />
+          </RadioGroup>
+        )}
         {errors.hasFormErrors || errors.hasDataErrors ? (
           <div data-testid="booking-fail">
             <Alert
@@ -302,12 +322,27 @@ const getError = ({
     count = error.data.count;
   }
 
+  let dates = "";
+  if (error.message === ErrorCode.SeriesRescheduleConflict && Array.isArray(error.data?.conflictingDates)) {
+    dates = error.data.conflictingDates
+      .map((conflictingDate: string) => {
+        const formattedDate = formatEventFromTime({
+          date: conflictingDate,
+          timeFormat,
+          timeZone: timezone,
+          language,
+        });
+        return `${formattedDate.date} ${formattedDate.time}`;
+      })
+      .join(", ");
+  }
+
   const messageKey =
     error.message === ErrorCode.BookerLimitExceeded ? "booker_upcoming_limit_reached" : error.message;
 
   return error?.message ? (
     <>
-      {responseVercelIdHeader ?? ""} {t(messageKey, { date, count })}
+      {responseVercelIdHeader ?? ""} {t(messageKey, { date, count, dates })}
       {error.data?.traceId && (
         <div className="mt-2 text-xs text-subtle">
           <span className="font-medium">{t("trace_reference_id")}:</span>
