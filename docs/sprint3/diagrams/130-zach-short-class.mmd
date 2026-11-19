@@ -1,0 +1,162 @@
+classDiagram
+    direction LR
+
+    note "Legend<br>new: added by #130<br>modified: changed by #130<br>existing: found during impact analysis, unchanged<br>module: a file of exported functions, drawn as a class whose methods are those functions<br>component: a React function component<br>Inside a modified class, NEW or MOD after a member marks what #130 added or changed"
+
+    %% ---------- Availability (from #104, unchanged) ----------
+    class UserAvailabilityService {
+        <<existing>>
+        +_getUserAvailability(params, initialData) GetUserAvailabilityResult
+        +calculateOutOfOfficeRanges(outOfOfficeDays, availability, partialDayWindows) IOutOfOfficeData
+    }
+    note for UserAvailabilityService "Builds the away map from #104. A date record with windows copies the first window's<br>entry data to the top level, without start and end, so whole-day readers keep working."
+
+    class IOutOfOfficeData {
+        <<existing>>
+        +dateKey YYYY-MM-DD maps to IOutOfOfficeEntryData plus windows
+    }
+
+    class IOutOfOfficeEntryData {
+        <<existing>>
+        +fromUser IFromUser
+        +toUser IToUser
+        +reason string
+        +emoji string
+        +notes string
+        +showNotePublicly boolean
+    }
+
+    class IOutOfOfficeWindow {
+        <<existing>>
+        +start string ISO
+        +end string ISO
+    }
+    note for IOutOfOfficeWindow "UTC instants as ISO strings. Only a window has start and end,<br>which is how slots.ts tells a window from a whole-day record."
+
+    %% ---------- Slot engine ----------
+    class slots_ts["slots.ts"] {
+        <<module, modified>>
+        +getSlots(inviteeDate, frequency, dateRanges, eventLength, datesOutOfOffice, ...)
+        -buildSlotsWithDateRanges(...)  MOD
+        -findOutOfOfficeForSlot(dayData, windowsOfDay, slotStartMs, slotEndMs)  MOD
+        -parseOutOfOfficeWindows(datesOutOfOffice) Map
+    }
+    note for slots_ts "buildSlotsWithDateRanges copies the matching window's start and end onto each away slot<br>as outOfOfficeStart and outOfOfficeEnd, behind a 'start' in check. A whole-day record has no start,<br>so its slots get neither field. findOutOfOfficeForSlot now declares the window type it already returned."
+
+    class OutOfOfficeWindowMs {
+        <<modified>>
+        +startMs number
+        +endMs number
+        +data IOutOfOfficeWindow  MOD
+    }
+
+    class SlotInfo {
+        <<modified>>
+        +time string
+        +away boolean
+        +fromUser
+        +toUser
+        +reason string
+        +emoji string
+        +notes string  NEW
+        +outOfOfficeStart string  NEW
+        +outOfOfficeEnd string  NEW
+    }
+    note for SlotInfo "packages/features/calendars/lib/types.ts. The same three fields are added to<br>IGetAvailableSlots in useAvailableTimeSlots.ts, the declared return type of the schedule query."
+
+    class SlotsOutputService_2024_04_15 {
+        <<existing>>
+        +getOutputSlots(availableSlots, duration, eventTypeId, slotFormat, timeZone)
+    }
+    note for SlotsOutputService_2024_04_15 "API v2 2024-04-15 with no slotFormat and no timeZone returns slots unchanged,<br>so away slots there now carry the two optional fields. Additive, so they are not stripped.<br>API v2 2024-09-04 filters away slots out and does not change."
+
+    %% ---------- Booker (apps/web/modules/bookings) ----------
+    class AvailableTimeSlots {
+        <<component, modified>>
+        +slotsPerDay
+        +hideTimeFormatToggle boolean  MOD
+    }
+    note for AvailableTimeSlots "Was isOOODay = every slot away. Now dayPrintsNoTimes(slots), so a day covered by a<br>window still shows the 12-hour and 24-hour toggle, because its panel prints times."
+
+    class AvailableTimesHeader {
+        <<component, existing>>
+        +date Dayjs
+        +showTimeFormatToggle boolean
+    }
+
+    class AvailableTimes {
+        <<component, modified>>
+        +slots Slot[]
+        +inSamePanel(slot, other) boolean  NEW
+        +oooAllDay boolean  MOD
+        +render() items  MOD
+    }
+    note for AvailableTimes "inSamePanel: other is an away slot with the same outOfOfficeStart and outOfOfficeEnd.<br>All slots in one panel: the single whole-day panel, as before. Otherwise one OOOSlot at the<br>first slot of each run, and a new panel wherever the window changes, so touching entries give two panels."
+
+    class OOOSlot {
+        <<component, modified>>
+        +fromUser
+        +toUser
+        +reason
+        +emoji
+        +notes
+        +outOfOfficeStart string  NEW
+        +outOfOfficeEnd string  NEW
+        +awayWindow start and end strings  NEW
+    }
+    note for OOOSlot "Reads timeFormat and timezone from useBookerTime and the language from useLocale,<br>then calls formatAwayWindow only when both window fields are set."
+
+    class formatAwayWindow_ts["formatAwayWindow.ts"] {
+        <<module, new>>
+        +formatAwayWindow(startIso, endIso, timeZone, timeFormat, locale) start and end strings
+        +dayPrintsNoTimes(slots) boolean
+    }
+    note for formatAwayWindow_ts "Pure functions. Same date in the booker's zone: times only, in h:mma or HH:mm.<br>Different dates: each time gets its date from Intl.DateTimeFormat in the booker's locale."
+
+    class OutOfOfficeInSlots {
+        <<component, modified>>
+        +fromUser
+        +toUser
+        +date string
+        +notes
+        +awayWindow start and end strings  NEW
+        +onClick() router.push to toUser.username
+    }
+    note for OutOfOfficeInSlots "Prints the ooo_away_window string with awayWindow, for example Away 2:00pm to 3:00pm, under the is-OOO line.<br>A holiday panel and a whole-day entry get no awayWindow and print no hours."
+
+    class useBookerTime {
+        <<hook, existing>>
+        +timezone string
+        +timeFormat string
+    }
+
+    class Slot {
+        <<existing>>
+        +time string
+        +away boolean
+        +outOfOfficeStart string
+        +outOfOfficeEnd string
+    }
+    note for Slot "apps/web/modules/schedules/lib/types.ts, derived from the schedule query's output,<br>so it gains the two fields from IGetAvailableSlots."
+
+    %% ---------- Relationships ----------
+    UserAvailabilityService ..> IOutOfOfficeData : builds datesOutOfOffice
+    IOutOfOfficeData "1" *-- "0..*" IOutOfOfficeEntryData : one record per date
+    IOutOfOfficeData "1" *-- "0..*" IOutOfOfficeWindow : windows per date
+    IOutOfOfficeWindow --|> IOutOfOfficeEntryData : extends
+
+    slots_ts ..> IOutOfOfficeData : reads
+    slots_ts *-- OutOfOfficeWindowMs : builds per call
+    OutOfOfficeWindowMs --> IOutOfOfficeWindow : data
+    slots_ts ..> SlotInfo : produces away slots with window hours
+    SlotsOutputService_2024_04_15 ..> SlotInfo : returns unchanged
+
+    AvailableTimeSlots ..> formatAwayWindow_ts : dayPrintsNoTimes
+    AvailableTimeSlots *-- AvailableTimesHeader : one per day
+    AvailableTimeSlots *-- AvailableTimes : one per day
+    AvailableTimes --> "0..*" Slot : slots
+    Slot ..> SlotInfo : same fields over tRPC
+    AvailableTimes *-- OOOSlot : one per run of away slots with the same window
+    OOOSlot ..> useBookerTime : timezone, timeFormat
+    OOOSlot ..> formatAwayWindow_ts : formatAwayWindow
+    OOOSlot *-- OutOfOfficeInSlots : renders with awayWindow

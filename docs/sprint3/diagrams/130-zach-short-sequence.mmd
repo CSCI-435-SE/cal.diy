@@ -1,0 +1,74 @@
+sequenceDiagram
+    autonumber
+    actor Attendee
+    participant Booker as Booker.tsx and useSchedule
+    participant SlotsSvc as AvailableSlotsService (slots/util.ts)
+    participant UASvc as UserAvailabilityService
+    participant Slots as slots.ts
+    participant ATS as AvailableTimeSlots
+    participant AT as AvailableTimes
+    participant OOO as OOOSlot
+    participant Fmt as formatAwayWindow.ts
+    participant Panel as OutOfOfficeInSlots
+
+    Note over Attendee,Panel: Setup: a London host (BST, UTC+1) is away 2:00pm to 3:00pm for the doctor and 3:00pm to 4:00pm for travel on Oct 8, two entries that touch. In UTC that is 13:00Z to 14:00Z and 14:00Z to 15:00Z.
+
+    Attendee->>Booker: open the booking page, pick Oct 8, zone and 12-hour format selected
+    Booker->>SlotsSvc: trpc viewer.slots.getSchedule
+    SlotsSvc->>UASvc: getUsersAvailability(users, query, initialData.outOfOfficeDays)
+    Note over SlotsSvc,UASvc: Existing code from issue 104
+    UASvc-->>SlotsSvc: datesOutOfOffice["2026-10-08"] = {entry data, windows: [doctor 13:00Z to 14:00Z, travel 14:00Z to 15:00Z]}
+
+    SlotsSvc->>Slots: getSlots(dateRanges, eventLength, frequency, datesOutOfOffice, ...)
+    loop for each slot start in buildSlotsWithDateRanges
+        Slots->>Slots: findOutOfOfficeForSlot(dayData, windowsOfDay, slotStartMs, slotEndMs)
+        Note over Slots: Modified type only. Returns the matching IOutOfOfficeWindow, or the whole-day record
+        alt slot overlaps a window
+            Slots->>Slots: slot {time, away, entry data, outOfOfficeStart: window.start, outOfOfficeEnd: window.end}
+            Note over Slots: New. Copied only when the record has a start
+        else whole-day record
+            Slots->>Slots: slot {time, away, entry data}, no window fields
+        else not away
+            Slots->>Slots: slot {time}
+        end
+    end
+    Slots-->>SlotsSvc: slots, 13:00Z marked away for the doctor and 14:00Z for travel
+    SlotsSvc-->>Booker: slots grouped by date, with outOfOfficeStart and outOfOfficeEnd on away slots
+
+    Booker->>ATS: render with scheduleData.slots
+    ATS->>Fmt: dayPrintsNoTimes(slots)
+    Note over ATS,Fmt: New. True only when every slot is away and none has outOfOfficeStart
+    Fmt-->>ATS: false, so the header keeps the 12-hour and 24-hour toggle
+    ATS->>AT: render the slots of Oct 8
+
+    AT->>AT: oooAllDay = every slot inSamePanel(slots[0], slot)
+    Note over AT: Modified. False here, because the day has bookable slots
+    loop for each slot (merged with booked times)
+        alt slot not away
+            AT->>AT: SlotItem
+        else previous slot is in the same panel (same window)
+            AT->>AT: skip
+        else first slot of a run with this window
+            AT->>OOO: OOOSlot with this slot's entry data and window
+            Note over AT,OOO: Modified. The window decides where a panel ends, so the doctor and travel entries give two panels
+        end
+    end
+
+    loop for each OOOSlot (doctor, then travel)
+        OOO->>OOO: useBookerTime() gives timezone and timeFormat, useLocale() gives i18n.language
+        OOO->>Fmt: formatAwayWindow(outOfOfficeStart, outOfOfficeEnd, timezone, timeFormat, language)
+        Note over OOO,Fmt: New. Day.js converts each instant to the booker's zone. A date is added to each time only when the two instants fall on different dates there
+        Fmt-->>OOO: {start: "2:00pm", end: "3:00pm"} for a London attendee
+        OOO->>Panel: render with awayWindow, notes, toUser
+        Panel-->>Attendee: panel: emoji, "Host is OOO", "Away 2:00pm to 3:00pm", the public note, "Book Alex" redirect button
+        Note over OOO,Panel: Modified. One new line under the is-OOO line, from the ooo_away_window string
+    end
+
+    opt attendee changes the time format or the zone
+        Attendee->>Booker: toggle 12-hour or 24-hour, or pick another zone
+        Booker->>OOO: re-render with the new useBookerTime values
+        OOO->>Fmt: formatAwayWindow with the new zone or format
+        Fmt-->>OOO: for example {start: "14:00", end: "15:00"}
+        OOO->>Panel: render with the new awayWindow
+        Panel-->>Attendee: "Away 14:00 to 15:00"
+    end
