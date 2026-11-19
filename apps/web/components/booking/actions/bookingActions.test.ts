@@ -764,3 +764,87 @@ describe("Booking Actions", () => {
     });
   });
 });
+
+describe("cancel action with a minimum cancellation notice", () => {
+  const ORGANIZER_ID = 1;
+  const CO_HOST = { id: 2, email: "cohost@example.com" };
+  const ATTENDEE = { id: 99, email: "john@example.com" };
+
+  const contextWithNotice = ({
+    minutesUntilStart,
+    minimumCancellationNotice = 60,
+    loggedInUser = ATTENDEE,
+    isMinimumCancellationNoticeEnabled = true,
+  }: {
+    minutesUntilStart: number;
+    minimumCancellationNotice?: number | null;
+    loggedInUser?: { id: number; email: string };
+    isMinimumCancellationNoticeEnabled?: boolean;
+  }) => {
+    const base = createMockContext();
+    const startTime = new Date(Date.now() + minutesUntilStart * 60 * 1000);
+    return createMockContext({
+      isMinimumCancellationNoticeEnabled,
+      booking: {
+        ...base.booking,
+        startTime: startTime.toISOString(),
+        attendees: [...base.booking.attendees, { ...base.booking.attendees[0], id: 2, email: CO_HOST.email }],
+        eventType: {
+          ...base.booking.eventType,
+          minimumCancellationNotice,
+          hosts: [{ userId: CO_HOST.id, user: CO_HOST }],
+        },
+        loggedInUser: {
+          ...base.booking.loggedInUser,
+          userId: loggedInUser.id,
+          userEmail: loggedInUser.email,
+        },
+      } as BookingActionContext["booking"],
+    });
+  };
+
+  it("disables cancel for an attendee inside the window", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30 });
+
+    expect(isActionDisabled("cancel", context)).toBe(true);
+    expect(getCancelEventAction(context).disabled).toBe(true);
+  });
+
+  it("disables cancel for an attendee once the booking has started", () => {
+    expect(isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: -5 }))).toBe(true);
+  });
+
+  it("allows cancel for an attendee outside the window", () => {
+    expect(isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: 120 }))).toBe(false);
+  });
+
+  it("allows the organizer to cancel inside the window", () => {
+    const context = contextWithNotice({
+      minutesUntilStart: 30,
+      loggedInUser: { id: ORGANIZER_ID, email: "organizer@example.com" },
+    });
+
+    expect(isActionDisabled("cancel", context)).toBe(false);
+  });
+
+  it("allows a co-host attending the booking to cancel inside the window", () => {
+    expect(
+      isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: 30, loggedInUser: CO_HOST }))
+    ).toBe(false);
+  });
+
+  it("ignores the notice while the feature flag is off", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30, isMinimumCancellationNoticeEnabled: false });
+
+    expect(isActionDisabled("cancel", context)).toBe(false);
+  });
+
+  it("keeps cancel available when the event type has no notice", () => {
+    expect(
+      isActionDisabled(
+        "cancel",
+        contextWithNotice({ minutesUntilStart: 30, minimumCancellationNotice: null })
+      )
+    ).toBe(false);
+  });
+});

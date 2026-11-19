@@ -1,9 +1,34 @@
+import {
+  isUserBookingHost,
+  isWithinMinimumCancellationNotice,
+} from "@calcom/features/bookings/lib/minimumCancellationNotice";
 import { isWithinMinimumRescheduleNotice } from "@calcom/features/bookings/lib/reschedule/isWithinMinimumRescheduleNotice";
 import { BookingStatus, SchedulingType } from "@calcom/prisma/enums";
 import type { ActionType } from "@calcom/ui/components/table";
 
 import { buildBookAgainUrl } from "../../../modules/bookings/lib/buildBookAgainUrl";
 import type { BookingItemProps } from "../types";
+
+// Same host rule and window as the booking page and /api/cancel, so the list never offers a cancel the server rejects.
+function isAttendeeWithinMinimumCancellationNotice({
+  booking,
+  isMinimumCancellationNoticeEnabled,
+}: BookingActionContext): boolean {
+  if (!isMinimumCancellationNoticeEnabled) return false;
+
+  const isHost = isUserBookingHost({
+    userId: booking.loggedInUser?.userId,
+    bookingUserId: booking.user?.id ?? null,
+    attendeeEmails: booking.attendees.map((attendee) => attendee.email),
+    eventTypeHosts: (booking.eventType.hosts ?? []).flatMap((host) => (host.user ? [host.user] : [])),
+  });
+  if (isHost) return false;
+
+  return isWithinMinimumCancellationNotice({
+    startTime: booking.startTime,
+    minimumCancellationNotice: booking.eventType.minimumCancellationNotice,
+  });
+}
 
 export interface BookingActionContext {
   booking: BookingItemProps;
@@ -20,6 +45,7 @@ export interface BookingActionContext {
   isTabUnconfirmed: boolean;
   isDisabledCancelling: boolean;
   isDisabledRescheduling: boolean;
+  isMinimumCancellationNoticeEnabled?: boolean;
   isCalVideoLocation: boolean;
   showPendingPayment: boolean;
   isAttendee: boolean;
@@ -282,7 +308,13 @@ export function isActionDisabled(actionId: string, context: BookingActionContext
         isWithinMinimumNotice
       );
     case "cancel":
-      return isDisabledCancelling || isBookingInPast || isCancelled || isRejected;
+      return (
+        isDisabledCancelling ||
+        isBookingInPast ||
+        isCancelled ||
+        isRejected ||
+        isAttendeeWithinMinimumCancellationNotice(context)
+      );
     case "view_recordings":
       return !(isBookingInPast && booking.status === BookingStatus.ACCEPTED && context.isCalVideoLocation);
     case "meeting_session_details":

@@ -683,6 +683,43 @@ export class BookingRepository implements IBookingRepository {
     });
   }
 
+  async findFirstActiveRecurringBookingFromDate({
+    recurringEventId,
+    fromDate,
+  }: {
+    recurringEventId: string;
+    fromDate: Date;
+  }) {
+    return await this.prismaClient.booking.findFirst({
+      where: {
+        recurringEventId,
+        startTime: { gte: fromDate },
+        status: { in: [BookingStatus.ACCEPTED, BookingStatus.PENDING] },
+      },
+      select: { startTime: true },
+      orderBy: { startTime: "asc" },
+    });
+  }
+
+  async findByUidIncludeAttendeesAndEventTypeHosts({ bookingUid }: { bookingUid: string }) {
+    return await this.prismaClient.booking.findUnique({
+      where: { uid: bookingUid },
+      select: {
+        userId: true,
+        startTime: true,
+        recurringEventId: true,
+        attendees: { select: { email: true } },
+        eventType: {
+          select: {
+            minimumCancellationNotice: true,
+            hosts: { select: { user: { select: { id: true, email: true } } } },
+            users: { select: { id: true, email: true } },
+          },
+        },
+      },
+    });
+  }
+
   private async _findAllExistingBookingsForEventTypeBetween({
     eventTypeId,
     seatedEvent = false,

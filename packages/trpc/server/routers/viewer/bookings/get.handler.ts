@@ -531,6 +531,7 @@ export async function getBookings({
                 "EventType.disableRescheduling",
                 "EventType.requiresRescheduleReason",
                 "EventType.minimumRescheduleNotice",
+                "EventType.minimumCancellationNotice",
                 "EventType.teamId",
                 "EventType.parentId",
                 eb

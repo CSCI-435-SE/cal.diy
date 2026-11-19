@@ -52,6 +52,11 @@ const toggle = () => screen.getByTestId("minimum-cancellation-notice-toggle");
 const alwaysRadio = () => screen.getByRole("radio", { name: "Always allow cancellations" });
 const noticeRadio = () => screen.getByRole("radio", { name: /Only when at least/ });
 const minutesInput = () => screen.getByTestId("minimum-cancellation-notice-input") as HTMLInputElement;
+const unitSelect = () => screen.getByLabelText("Minimum cancellation notice unit");
+const chooseUnit = (label: "Minutes" | "Hours") => {
+  fireEvent.keyDown(unitSelect(), { key: "ArrowDown" });
+  fireEvent.click(screen.getByRole("option", { name: label }));
+};
 
 const renderExpanded = (initialValue: number | null = null) => {
   const onChange = vi.fn();
@@ -139,12 +144,60 @@ describe("MinimumCancellationNoticeController", () => {
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
   });
 
-  it("opens on the notice option when a notice is already set", () => {
+  it("opens on the notice option, showing a whole-hour notice in hours", () => {
     render(<ControllerHarness initialValue={1440} onChange={vi.fn()} />);
 
     expect(toggle()).toHaveAttribute("aria-checked", "true");
     expect(noticeRadio()).toHaveAttribute("aria-checked", "true");
-    expect(minutesInput().value).toBe("1440");
+    expect(minutesInput().value).toBe("24");
+    expect(screen.getByText("Hours")).toBeInTheDocument();
+  });
+
+  it("keeps a notice that is not a whole number of hours in minutes", () => {
+    render(<ControllerHarness initialValue={90} onChange={vi.fn()} />);
+
+    expect(minutesInput().value).toBe("90");
+    expect(screen.getByText("Minutes")).toBeInTheDocument();
+  });
+
+  it("starts new notices in minutes", () => {
+    renderExpanded();
+
+    expect(screen.getByText("Minutes")).toBeInTheDocument();
+  });
+
+  it("reports hours as minutes", () => {
+    const onChange = renderExpanded();
+    chooseUnit("Hours");
+
+    fireEvent.change(minutesInput(), { target: { value: "24" } });
+
+    expect(onChange).toHaveBeenLastCalledWith(1440);
+    expect(noticeRadio()).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("recalculates the notice when the unit changes", () => {
+    const onChange = renderExpanded();
+    fireEvent.change(minutesInput(), { target: { value: "2" } });
+    expect(onChange).toHaveBeenLastCalledWith(2);
+
+    chooseUnit("Hours");
+    expect(onChange).toHaveBeenLastCalledWith(120);
+
+    chooseUnit("Minutes");
+    expect(onChange).toHaveBeenLastCalledWith(2);
+  });
+
+  it("restores the last notice in its unit after choosing 'Always allow'", () => {
+    const onChange = renderExpanded();
+    chooseUnit("Hours");
+    fireEvent.change(minutesInput(), { target: { value: "3" } });
+
+    fireEvent.click(alwaysRadio());
+    expect(onChange).toHaveBeenLastCalledWith(null);
+
+    fireEvent.click(noticeRadio());
+    expect(onChange).toHaveBeenLastCalledWith(180);
   });
 });
 
@@ -153,11 +206,13 @@ let form: UseFormReturn<FormValues>;
 function SettingHarness({
   flags,
   disabledCancelling = false,
+  minimumCancellationNotice = null,
 }: {
   flags: Flags;
   disabledCancelling?: boolean;
+  minimumCancellationNotice?: number | null;
 }) {
-  const methods = useForm<FormValues>({ defaultValues: { disabledCancelling } });
+  const methods = useForm<FormValues>({ defaultValues: { disabledCancelling, minimumCancellationNotice } });
   form = methods;
   return (
     <FeatureProvider value={flags}>
@@ -189,13 +244,52 @@ describe("MinimumCancellationNoticeSetting", () => {
     expect(screen.queryByTestId("minimum-cancellation-notice-toggle")).not.toBeInTheDocument();
   });
 
-  it("does not write the notice into the event type form, so saving can't send it before the backend exists", () => {
+  it("loads the saved notice from the event type form", () => {
+    render(
+      <SettingHarness flags={{ "minimum-cancellation-notice": true }} minimumCancellationNotice={1440} />
+    );
+
+    expect(toggle()).toHaveAttribute("aria-checked", "true");
+    expect(noticeRadio()).toHaveAttribute("aria-checked", "true");
+    expect(minutesInput().value).toBe("24");
+  });
+
+  it("writes the notice into the event type form as a change to save", () => {
     render(<SettingHarness flags={{ "minimum-cancellation-notice": true }} />);
 
     fireEvent.click(toggle());
-    fireEvent.change(minutesInput(), { target: { value: "1440" } });
+    chooseUnit("Hours");
+    fireEvent.change(minutesInput(), { target: { value: "24" } });
 
-    expect(noticeRadio()).toHaveAttribute("aria-checked", "true");
-    expect(form.getValues()).not.toHaveProperty("minimumCancellationNotice");
+    expect(form.getValues("minimumCancellationNotice")).toBe(1440);
+    expect(form.getFieldState("minimumCancellationNotice").isDirty).toBe(true);
+  });
+
+  it("clears the saved notice when switched off", () => {
+    render(
+      <SettingHarness flags={{ "minimum-cancellation-notice": true }} minimumCancellationNotice={1440} />
+    );
+
+    fireEvent.click(toggle());
+
+    expect(form.getValues("minimumCancellationNotice")).toBeNull();
+    expect(form.getFieldState("minimumCancellationNotice").isDirty).toBe(true);
+  });
+
+  it("clears the saved notice when 'Always allow' is chosen", () => {
+    render(<SettingHarness flags={{ "minimum-cancellation-notice": true }} minimumCancellationNotice={60} />);
+
+    fireEvent.click(alwaysRadio());
+
+    expect(form.getValues("minimumCancellationNotice")).toBeNull();
+  });
+
+  it("does not change the form when only switched on", () => {
+    render(<SettingHarness flags={{ "minimum-cancellation-notice": true }} />);
+
+    fireEvent.click(toggle());
+
+    expect(form.getValues("minimumCancellationNotice")).toBeNull();
+    expect(form.getFieldState("minimumCancellationNotice").isDirty).toBe(false);
   });
 });

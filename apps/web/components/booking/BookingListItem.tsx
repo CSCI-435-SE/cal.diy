@@ -9,6 +9,7 @@ import dayjs from "@calcom/dayjs";
 // TODO: Use browser locale, implement Intl in Dayjs maybe?
 import "@calcom/dayjs/locales";
 import { formatTime } from "@calcom/lib/dayjs";
+import { useFlagMap } from "@calcom/features/flags/context/provider";
 import { useCopy } from "@calcom/lib/hooks/useCopy";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { useGetTheme } from "@calcom/lib/hooks/useTheme";
@@ -128,6 +129,7 @@ const ConditionalLink = ({
 };
 
 function BookingListItem(booking: BookingItemProps) {
+  const flags = useFlagMap();
   const parsedBooking = buildParsedBooking(booking);
   const itemRef = useRef<HTMLDivElement>(null);
 
@@ -216,6 +218,7 @@ function BookingListItem(booking: BookingItemProps) {
     isTabUnconfirmed,
     isDisabledCancelling,
     isDisabledRescheduling,
+    isMinimumCancellationNoticeEnabled: !!flags["minimum-cancellation-notice"],
     isCalVideoLocation:
       !booking.location ||
       booking.location === "integrations:daily" ||

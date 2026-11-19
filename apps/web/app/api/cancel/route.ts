@@ -1,8 +1,16 @@
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
+import {
+  getMinimumCancellationNoticeErrorMessage,
+  getMinimumCancellationNoticeViolation,
+  MINIMUM_CANCELLATION_NOTICE_ERROR_CODE,
+} from "@calcom/features/bookings/lib/minimumCancellationNotice";
+import { BookingRepository } from "@calcom/features/bookings/repositories/BookingRepository";
+import { FeaturesRepository } from "@calcom/features/flags/features.repository";
 import tasker from "@calcom/features/tasker";
 import { checkRateLimitAndThrowError } from "@calcom/lib/checkRateLimitAndThrowError";
 import getIP from "@calcom/lib/getIP";
 import { piiHasher } from "@calcom/lib/server/PiiHasher";
+import prisma from "@calcom/prisma";
 import { bookingCancelWithCsrfSchema } from "@calcom/prisma/zod-utils";
 import { validateCsrfToken } from "@calcom/web/lib/validateCsrfToken";
 import { buildLegacyRequest } from "@lib/buildLegacyCtx";
@@ -45,6 +53,29 @@ async function handler(req: NextRequest) {
     rateLimitingType: "core",
     identifier,
   });
+
+  // Checked here rather than in handleCancelBooking: that runs after the soft-cancel delay, by which time
+  // the attendee was already told the cancellation succeeded and the window has shifted by the delay.
+  // The flag is the off switch for the whole feature, so saved notices are ignored while it is off.
+  const featuresRepository = new FeaturesRepository(prisma);
+  if (await featuresRepository.checkIfFeatureIsEnabledGlobally("minimum-cancellation-notice")) {
+    const noticeViolation = await getMinimumCancellationNoticeViolation({
+      bookingRepository: new BookingRepository(prisma),
+      bookingUid: bookingData.uid,
+      userId: session?.user?.id,
+      allRemainingBookings: bookingData.allRemainingBookings,
+    });
+    if (noticeViolation) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: MINIMUM_CANCELLATION_NOTICE_ERROR_CODE,
+          message: getMinimumCancellationNoticeErrorMessage(noticeViolation.minimumCancellationNotice),
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   // Strip integer id to ensure lookup is always by uid; csrfToken is single-use and shouldn't be persisted
   const { id: _id, csrfToken: _csrfToken, ...safeBookingData } = bookingData;

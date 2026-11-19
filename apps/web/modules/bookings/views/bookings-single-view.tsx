@@ -24,6 +24,10 @@ import {
 import { Price } from "@calcom/features/bookings/components/event-meta/Price";
 import { getCalendarLinks, CalendarLinkType } from "@calcom/features/bookings/lib/getCalendarLinks";
 import { RATING_OPTIONS, validateRating } from "@calcom/features/bookings/lib/rating";
+import {
+  getEarliestUpcomingStartTime,
+  isWithinMinimumCancellationNotice,
+} from "@calcom/features/bookings/lib/minimumCancellationNotice";
 import { isWithinMinimumRescheduleNotice as isWithinMinimumRescheduleNoticeUtil } from "@calcom/features/bookings/lib/reschedule/isWithinMinimumRescheduleNotice";
 import type { nameObjectSchema } from "@calcom/features/eventtypes/lib/eventNaming";
 import { getEventName } from "@calcom/features/eventtypes/lib/eventNaming";
@@ -410,6 +414,18 @@ export default function Success(props: PageProps) {
         eventType?.minimumRescheduleNotice ?? null
       );
   const isRescheduleDisabled = !canReschedule || isWithinMinimumRescheduleNotice;
+
+  // "Cancel all remaining" cancels every upcoming occurrence, so the earliest one decides, matching /api/cancel.
+  let cancellationStartTime: Date | null | undefined = bookingInfo?.startTime;
+  if (allRemainingBookings && props.recurringBookings) {
+    cancellationStartTime = getEarliestUpcomingStartTime(props.recurringBookings) ?? cancellationStartTime;
+  }
+  const isWithinMinimumCancellationNoticeWindow =
+    !isHost &&
+    isWithinMinimumCancellationNotice({
+      startTime: cancellationStartTime,
+      minimumCancellationNotice: eventType?.minimumCancellationNotice,
+    });
   const paymentStatusMessage = usePaymentStatus({
     bookingStatus: bookingInfo.status,
     startTime: bookingInfo.startTime,
@@ -867,7 +883,7 @@ export default function Success(props: PageProps) {
                       isReschedulable &&
                       !isRerouting &&
                       canCancelOrReschedule &&
-                      (!isCancellationMode ? (
+                      (!isCancellationMode || isWithinMinimumCancellationNoticeWindow ? (
                         <>
                           {/* Only show section if there's at least one actionable option */}
                           {((!props.recurringBookings &&
@@ -897,13 +913,13 @@ export default function Success(props: PageProps) {
                                           data-testid="reschedule-link">
                                           {t("reschedule")}
                                         </Link>
-                                        {!isBookingInPast && canCancel && (
+                                        {!isBookingInPast && canCancel && !isWithinMinimumCancellationNoticeWindow && (
                                           <span className="mx-2">{t("or_lowercase")}</span>
                                         )}
                                       </span>
                                     )}
 
-                                  {!isBookingInPast && canCancel && (
+                                  {!isBookingInPast && canCancel && !isWithinMinimumCancellationNoticeWindow && (
                                     <button
                                       data-testid="cancel"
                                       className={classNames(
@@ -913,6 +929,13 @@ export default function Success(props: PageProps) {
                                       onClick={() => setIsCancellationMode(true)}>
                                       {t("cancel")}
                                     </button>
+                                  )}
+                                  {!isBookingInPast && canCancel && isWithinMinimumCancellationNoticeWindow && (
+                                    <p
+                                      className="mt-2 text-default text-sm"
+                                      data-testid="minimum-cancellation-notice-message">
+                                      {t("cancellation_unavailable_minimum_notice")}
+                                    </p>
                                   )}
                                 </>
                               </div>
