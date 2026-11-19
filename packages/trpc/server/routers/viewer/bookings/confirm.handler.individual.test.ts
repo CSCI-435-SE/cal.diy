@@ -52,8 +52,8 @@ import { confirmHandler } from "./confirm.handler";
 
 const future = (hours: number) => new Date(Date.now() + hours * 3600_000);
 
-function mockBooking(overrides: Record<string, unknown> = {}) {
-  prismaMock.booking.findUniqueOrThrow.mockResolvedValue({
+function bookingFixture(overrides: Record<string, unknown> = {}) {
+  return {
     id: 11,
     uid: "occurrence-2",
     title: "Tennis",
@@ -78,7 +78,11 @@ function mockBooking(overrides: Record<string, unknown> = {}) {
     smsReminderNumber: null,
     assignmentReason: [],
     ...overrides,
-  });
+  };
+}
+
+function mockBooking(overrides: Record<string, unknown> = {}) {
+  prismaMock.booking.findUniqueOrThrow.mockResolvedValue(bookingFixture(overrides));
 }
 
 const ctx = {
@@ -180,6 +184,10 @@ describe("confirmHandler - individual recurring occurrences", () => {
   it("keeps Confirm all passing the series id to the bulk confirmation flow", async () => {
     mockBooking();
     prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+    prismaMock.booking.findMany.mockResolvedValue([
+      { id: 11, status: BookingStatus.PENDING, endTime: future(25) },
+      { id: 12, status: BookingStatus.PENDING, endTime: future(49) },
+    ]);
 
     const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
 
@@ -191,11 +199,43 @@ describe("confirmHandler - individual recurring occurrences", () => {
   it("keeps Confirm all working when the series' first booking has already ended", async () => {
     mockBooking({ startTime: future(-3), endTime: future(-2) });
     prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+    prismaMock.booking.findMany.mockResolvedValue([
+      { id: 11, status: BookingStatus.PENDING, endTime: future(-2) },
+      { id: 12, status: BookingStatus.PENDING, endTime: future(49) },
+    ]);
 
     const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
 
     expect(res.status).toBe(BookingStatus.ACCEPTED);
     expect(handleConfirmationMock.mock.calls[0][0]).toMatchObject({ bookingId: 11, recurringEventId: "rec" });
+  });
+
+  it("confirms the remaining dates one by one when some dates were already handled individually", async () => {
+    const series = [
+      { id: 9, status: BookingStatus.PENDING, startTime: future(-26), endTime: future(-25) },
+      { id: 10, status: BookingStatus.ACCEPTED, startTime: future(24), endTime: future(25) },
+      { id: 11, status: BookingStatus.PENDING, startTime: future(48), endTime: future(49) },
+      { id: 12, status: BookingStatus.REJECTED, startTime: future(72), endTime: future(73) },
+      { id: 13, status: BookingStatus.PENDING, startTime: future(96), endTime: future(97) },
+    ];
+    prismaMock.booking.findUniqueOrThrow.mockImplementation(({ where }: { where: { id: number } }) => {
+      const occurrence = series.find(({ id }) => id === where.id);
+      return Promise.resolve(bookingFixture(occurrence));
+    });
+    prismaMock.booking.findFirst.mockResolvedValue({ id: 11 });
+    prismaMock.booking.findMany.mockResolvedValue(series);
+
+    const res = await confirmHandler({ ctx, input: { bookingId: 11, confirmed: true, recurringEventId: "rec" } });
+
+    expect(res.status).toBe(BookingStatus.ACCEPTED);
+    const confirmations = handleConfirmationMock.mock.calls.map(([args]) => args);
+    expect(confirmations.map(({ bookingId }) => bookingId)).toEqual([11, 13]);
+    for (const confirmation of confirmations) {
+      const occurrence = series.find(({ id }) => id === confirmation.bookingId);
+      expect(confirmation.recurringEventId).toBeUndefined();
+      expect(confirmation.evt.recurringEvent).toBeUndefined();
+      expect(confirmation.evt.startTime).toBe(occurrence?.startTime.toISOString());
+    }
   });
 
   it("keeps bulk reject limited to pending occurrences of the series", async () => {

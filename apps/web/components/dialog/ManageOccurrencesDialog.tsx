@@ -6,13 +6,12 @@ import { BookingStatus } from "@calcom/prisma/enums";
 import { trpc } from "@calcom/trpc/react";
 import { Badge } from "@calcom/ui/components/badge";
 import { DialogClose, DialogContent, DialogFooter } from "@calcom/ui/components/dialog";
-import type { Dispatch, SetStateAction } from "react";
 import { AcceptBookingButton } from "../booking/AcceptBookingButton";
 import { RejectBookingButton } from "../booking/RejectBookingButton";
 
 interface ManageOccurrencesDialogProps {
   isOpenDialog: boolean;
-  setIsOpenDialog: Dispatch<SetStateAction<boolean>>;
+  setIsOpenDialog: (open: boolean) => void;
   bookingId: number;
   userTimeZone?: string;
   userTimeFormat?: number | null;

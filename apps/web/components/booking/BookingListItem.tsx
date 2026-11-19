@@ -39,8 +39,8 @@ import { Tooltip } from "@calcom/ui/components/tooltip";
 import assignmentReasonBadgeTitleMap from "@lib/booking/assignmentReasonBadgeTitleMap";
 import { buildBookingLink } from "../../modules/bookings/lib/buildBookingLink";
 import { useBookingDetailsSheetStore } from "../../modules/bookings/store/bookingDetailsSheetStore";
+import { useManageOccurrencesStore } from "../../modules/bookings/store/manageOccurrencesStore";
 import type { BookingAttendee } from "../../modules/bookings/types";
-import { ManageOccurrencesDialog } from "../dialog/ManageOccurrencesDialog";
 import { WrongAssignmentDialog } from "../dialog/WrongAssignmentDialog";
 import { AcceptBookingButton } from "./AcceptBookingButton";
 import { BookingActionsDropdown } from "./actions/BookingActionsDropdown";
@@ -169,7 +169,7 @@ function BookingListItem(booking: BookingItemProps) {
   const isTabRecurring = booking.listingStatus === "recurring";
   const isTabUnconfirmed = booking.listingStatus === "unconfirmed";
   const canManageOccurrences = isRecurring && (isTabRecurring || isTabUnconfirmed);
-  const [isManageOccurrencesOpen, setIsManageOccurrencesOpen] = useState(false);
+  const openManageOccurrences = useManageOccurrencesStore((state) => state.setBookingId);
 
   const userSeat = booking.seatsReferences.find((seat) => !!userEmail && seat.attendee?.email === userEmail);
 
@@ -471,25 +471,16 @@ function BookingListItem(booking: BookingItemProps) {
         </div>
         <div className="flex flex-col flex-wrap items-end justify-end gap-2 py-4 pl-4 text-right text-sm font-medium ltr:pr-4 rtl:pl-4 sm:flex-shrink-0 sm:flex-row sm:flex-nowrap sm:items-start sm:pl-0">
           {canManageOccurrences && (
-            <>
-              <Button
-                color="secondary"
-                className="whitespace-nowrap"
-                data-testid="manage-occurrences"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsManageOccurrencesOpen(true);
-                }}>
-                {t("manage_occurrences")}
-              </Button>
-              <ManageOccurrencesDialog
-                isOpenDialog={isManageOccurrencesOpen}
-                setIsOpenDialog={setIsManageOccurrencesOpen}
-                bookingId={booking.id}
-                userTimeZone={userTimeZone}
-                userTimeFormat={userTimeFormat}
-              />
-            </>
+            <Button
+              color="secondary"
+              className="whitespace-nowrap"
+              data-testid="manage-occurrences"
+              onClick={(e) => {
+                e.stopPropagation();
+                openManageOccurrences(booking.id);
+              }}>
+              {t("manage_occurrences")}
+            </Button>
           )}
           {shouldShowPendingActions(actionContext) && (
             <div className="flex space-x-2 rtl:space-x-reverse">

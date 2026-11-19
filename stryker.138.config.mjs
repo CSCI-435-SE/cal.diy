@@ -15,7 +15,7 @@ export default {
     "packages/features/bookings/repositories/BookingRepository.ts:685-692",
     "apps/web/components/dialog/ManageOccurrencesDialog.tsx",
     "apps/web/components/booking/BookingListItem.tsx:171-172",
-    "apps/web/components/booking/BookingListItem.tsx:473-493",
+    "apps/web/components/booking/BookingListItem.tsx:473-484",
   ],
   vitest: {
     configFile: "vitest.stryker-138.config.mts",

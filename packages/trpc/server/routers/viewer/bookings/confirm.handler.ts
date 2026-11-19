@@ -8,6 +8,7 @@ import { getCalEventResponses } from "@calcom/features/bookings/lib/getCalEventR
 import { handleConfirmation } from "@calcom/features/bookings/lib/handleConfirmation";
 import { handleWebhookTrigger } from "@calcom/features/bookings/lib/handleWebhookTrigger";
 import { processPaymentRefund } from "@calcom/features/bookings/lib/payment/processPaymentRefund";
+import { BookingRepository } from "@calcom/features/bookings/repositories/BookingRepository";
 import { BookingAccessService } from "@calcom/features/bookings/services/BookingAccessService";
 import {
   type EventTypeBrandingData,
@@ -338,6 +339,20 @@ export const confirmHandler = async ({ ctx, input }: ConfirmOptions) => {
       });
     }
   }
+  if (confirmed && recurringEventId) {
+    const occurrences = await new BookingRepository(prisma).findByRecurringEventId({ recurringEventId });
+    // One recurring calendar event can only describe an unbroken run of dates. Once some dates were
+    // confirmed, rejected or cancelled on their own, confirm each remaining date as its own booking.
+    if (occurrences.some((occurrence) => occurrence.status !== BookingStatus.PENDING)) {
+      const now = new Date();
+      for (const occurrence of occurrences) {
+        if (occurrence.status !== BookingStatus.PENDING || occurrence.endTime < now) continue;
+        await confirmHandler({ ctx, input: { ...input, bookingId: occurrence.id, recurringEventId: undefined } });
+      }
+      return { message: "Booking confirmed", status: BookingStatus.ACCEPTED };
+    }
+  }
+
   const traceContext = {
     ...ctx.traceContext,
     bookingUid: booking.uid || "unknown",
