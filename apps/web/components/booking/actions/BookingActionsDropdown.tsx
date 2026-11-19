@@ -26,6 +26,7 @@ import { ReassignDialog } from "@components/dialog/ReassignDialog";
 import { RejectionReasonDialog } from "@components/dialog/RejectionReasonDialog";
 import { ReportBookingDialog } from "@components/dialog/ReportBookingDialog";
 import { RescheduleDialog } from "@components/dialog/RescheduleDialog";
+import { RunningLateDialog } from "@components/dialog/RunningLateDialog";
 import { WrongAssignmentDialog } from "@components/dialog/WrongAssignmentDialog";
 import { useState } from "react";
 import type { z } from "zod";
@@ -39,6 +40,7 @@ import {
   getEditEventActions,
   getPendingActions,
   getReportAction,
+  getRunningLateAction,
   shouldShowEditActions,
   shouldShowPendingActions,
 } from "./bookingActions";
@@ -124,6 +126,10 @@ export function BookingActionsDropdown({
   );
   const isCancelDialogOpen = useBookingActionsStoreContext((state) => state.isCancelDialogOpen);
   const setIsCancelDialogOpen = useBookingActionsStoreContext((state) => state.setIsCancelDialogOpen);
+  const isOpenRunningLateDialog = useBookingActionsStoreContext((state) => state.isOpenRunningLateDialog);
+  const setIsOpenRunningLateDialog = useBookingActionsStoreContext(
+    (state) => state.setIsOpenRunningLateDialog
+  );
 
   const cardCharged = booking?.payment[0]?.success;
 
@@ -316,6 +322,11 @@ export function BookingActionsDropdown({
       (action.id === "view_recordings" && !booking.isRecorded),
   })) as ActionType[];
 
+  const baseRunningLateAction = getRunningLateAction(actionContext);
+  const runningLateAction = baseRunningLateAction
+    ? { ...baseRunningLateAction, onClick: () => setIsOpenRunningLateDialog(true) }
+    : null;
+
   const reportAction = getReportAction(actionContext);
   const reportActionWithHandler = {
     ...reportAction,
@@ -433,6 +444,11 @@ export function BookingActionsDropdown({
         setIsOpenDialog={setIsOpenAddGuestsDialog}
         bookingId={booking.id}
       />
+      <RunningLateDialog
+        isOpenDialog={isOpenRunningLateDialog}
+        setIsOpenDialog={setIsOpenRunningLateDialog}
+        bookingId={booking.id}
+      />
       <ReportBookingDialog
         isOpenDialog={isOpenReportDialog}
         setIsOpenDialog={setIsOpenReportDialog}
@@ -510,6 +526,7 @@ export function BookingActionsDropdown({
     const isCancelAvailable = !cancelEventAction.disabled;
 
     return (
+      !!runningLateAction ||
       hasAvailablePendingAction ||
       hasAvailableEditAction ||
       hasAvailableAfterAction ||
@@ -580,6 +597,24 @@ export function BookingActionsDropdown({
                     </DropdownItem>
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+              </>
+            )}
+            {runningLateAction && (
+              <>
+                <DropdownMenuItem className="rounded-lg" key={runningLateAction.id}>
+                  <DropdownItem
+                    type="button"
+                    StartIcon={runningLateAction.icon}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      runningLateAction.onClick();
+                    }}
+                    data-booking-uid={runningLateAction.bookingUid}
+                    data-testid={runningLateAction.id}>
+                    {runningLateAction.label}
+                  </DropdownItem>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </>
             )}
