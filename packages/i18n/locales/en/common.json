@@ -4853,5 +4853,6 @@
   "auth_error_oidc_account_exists": "An account with this email already exists. Sign in with the method you used before.",
   "auth_error_unknown_provider": "This sign-in method is not available. Try another sign-in method.",
   "single_sign_on": "single sign-on",
+  "continue_with_provider": "Continue with {{providerName}}",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }

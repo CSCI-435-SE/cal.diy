@@ -7,6 +7,8 @@ import { IS_GOOGLE_LOGIN_ENABLED } from "@server/lib/constants";
 import { jwtVerify } from "jose";
 import type { GetServerSidePropsContext } from "next";
 import { getCsrfToken } from "next-auth/react";
+import type { OidcProviderForLogin } from "~/auth/lib/oidcLoginButtons";
+import { toOidcLoginButtons } from "~/auth/lib/oidcLoginButtons";
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const { req, query } = context;
@@ -84,11 +86,15 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       },
     };
   }
+  // Empty until #136 merges; then this becomes getOidcProviderRepository().findEnabled().
+  const enabledOidcProviders: OidcProviderForLogin[] = [];
+
   return {
     props: {
       csrfToken: await getCsrfToken(context),
       isGoogleLoginEnabled: IS_GOOGLE_LOGIN_ENABLED,
       isOutlookLoginEnabled: false,
+      oidcProviders: toOidcLoginButtons(enabledOidcProviders),
       totpEmail,
     },
   };
