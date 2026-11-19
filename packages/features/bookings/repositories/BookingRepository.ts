@@ -75,7 +75,6 @@ export type ManagedEventCancellationResult = {
   status: BookingStatus;
 };
 
-
 type TeamBookingsParamsBase = {
   user: { id: number; email: string };
   teamId: number;
@@ -679,6 +678,14 @@ export class BookingRepository implements IBookingRepository {
         status: { in: [BookingStatus.ACCEPTED, BookingStatus.PENDING] },
       },
       select: { id: true, uid: true },
+      orderBy: { startTime: "asc" },
+    });
+  }
+
+  async findByRecurringEventId({ recurringEventId }: { recurringEventId: string }) {
+    return await this.prismaClient.booking.findMany({
+      where: { recurringEventId },
+      select: { id: true, uid: true, startTime: true, endTime: true, status: true },
       orderBy: { startTime: "asc" },
     });
   }

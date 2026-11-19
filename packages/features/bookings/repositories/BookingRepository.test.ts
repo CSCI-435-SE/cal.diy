@@ -6,6 +6,7 @@ describe("BookingRepository", () => {
   let repository: BookingRepository;
   let mockPrismaClient: {
     $queryRaw: ReturnType<typeof vi.fn>;
+    booking: { findMany: ReturnType<typeof vi.fn> };
   };
 
   beforeEach(() => {
@@ -13,6 +14,7 @@ describe("BookingRepository", () => {
 
     mockPrismaClient = {
       $queryRaw: vi.fn(),
+      booking: { findMany: vi.fn() },
     };
 
     repository = new BookingRepository(mockPrismaClient as unknown as PrismaClient);
@@ -56,6 +58,22 @@ describe("BookingRepository", () => {
 
       expect(result).toBe(90);
       expect(mockPrismaClient.$queryRaw).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("findByRecurringEventId", () => {
+    it("returns the series' occurrences in chronological order with only the fields needed to act on them", async () => {
+      const occurrences = [{ id: 1 }, { id: 2 }];
+      mockPrismaClient.booking.findMany.mockResolvedValue(occurrences);
+
+      const result = await repository.findByRecurringEventId({ recurringEventId: "rec" });
+
+      expect(result).toBe(occurrences);
+      expect(mockPrismaClient.booking.findMany).toHaveBeenCalledWith({
+        where: { recurringEventId: "rec" },
+        select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+        orderBy: { startTime: "asc" },
+      });
     });
   });
 });
