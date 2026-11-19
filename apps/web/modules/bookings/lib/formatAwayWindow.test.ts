@@ -39,7 +39,13 @@ describe("formatAwayWindow", () => {
 
     it("shows the minutes of the window, not a rounded slot time", () => {
       expect(
-        formatAwayWindow("2026-10-08T14:10:00.000Z", "2026-10-08T14:50:00.000Z", "UTC", TWENTY_FOUR_HOUR, "en")
+        formatAwayWindow(
+          "2026-10-08T14:10:00.000Z",
+          "2026-10-08T14:50:00.000Z",
+          "UTC",
+          TWENTY_FOUR_HOUR,
+          "en"
+        )
       ).toEqual({ start: "14:10", end: "14:50" });
     });
 
@@ -99,7 +105,13 @@ describe("formatAwayWindow", () => {
   describe("a window that starts and ends on different dates in the attendee's zone", () => {
     it("adds the date to both times for an entry that spans several days", () => {
       expect(
-        formatAwayWindow("2026-10-08T14:00:00.000Z", "2026-10-10T10:00:00.000Z", "UTC", TWENTY_FOUR_HOUR, "en")
+        formatAwayWindow(
+          "2026-10-08T14:00:00.000Z",
+          "2026-10-10T10:00:00.000Z",
+          "UTC",
+          TWENTY_FOUR_HOUR,
+          "en"
+        )
       ).toEqual({ start: "Oct 8, 14:00", end: "Oct 10, 10:00" });
     });
 
@@ -166,13 +178,25 @@ describe("formatAwayWindow", () => {
     it("adds the date when the window ends exactly at the attendee's midnight", () => {
       // Midnight is the first instant of the next date, so the two dates differ.
       expect(
-        formatAwayWindow("2026-10-08T20:00:00.000Z", "2026-10-09T00:00:00.000Z", "UTC", TWENTY_FOUR_HOUR, "en")
+        formatAwayWindow(
+          "2026-10-08T20:00:00.000Z",
+          "2026-10-09T00:00:00.000Z",
+          "UTC",
+          TWENTY_FOUR_HOUR,
+          "en"
+        )
       ).toEqual({ start: "Oct 8, 20:00", end: "Oct 9, 00:00" });
     });
 
     it("adds the date across a month and a year", () => {
       expect(
-        formatAwayWindow("2026-12-31T23:00:00.000Z", "2027-01-01T01:00:00.000Z", "UTC", TWENTY_FOUR_HOUR, "en")
+        formatAwayWindow(
+          "2026-12-31T23:00:00.000Z",
+          "2027-01-01T01:00:00.000Z",
+          "UTC",
+          TWENTY_FOUR_HOUR,
+          "en"
+        )
       ).toEqual({ start: "Dec 31, 23:00", end: "Jan 1, 01:00" });
     });
   });

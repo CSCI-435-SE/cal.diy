@@ -65,7 +65,9 @@ const windowOf = (start: string, end: string) => ({
 
 // Marks the slot that starts at `hour` UTC as away for the given entry.
 const awayAt = (slots: Slot[], hour: number, awayData: Partial<Slot>): Slot[] =>
-  slots.map((slot) => (Number(slot.time.slice(11, 13)) === hour ? { ...slot, away: true, ...awayData } : slot));
+  slots.map((slot) =>
+    Number(slot.time.slice(11, 13)) === hour ? { ...slot, away: true, ...awayData } : slot
+  );
 
 const panelOf = (text: string) => {
   const panel = screen.getByText(text).closest<HTMLElement>(".border-dashed");

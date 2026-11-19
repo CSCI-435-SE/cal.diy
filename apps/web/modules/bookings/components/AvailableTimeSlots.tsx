@@ -18,6 +18,7 @@ import { useSlotsForAvailableDates } from "@calcom/web/modules/schedules/hooks/u
 import { useCallback, useMemo, useRef } from "react";
 import type { Slot } from "~/schedules/lib/types";
 import type { IUseBookingLoadingStates } from "../hooks/useBookings";
+import { dayPrintsNoTimes } from "../lib/formatAwayWindow";
 
 type AvailableTimeSlotsProps = {
   extraDays?: number;
@@ -202,8 +203,9 @@ export const AvailableTimeSlots = ({
         ) : (
           slotsPerDay.length > 0 &&
           slotsPerDay.map((slots) => {
-            // A partial-day entry can leave the first slot away while the rest of the day is bookable
-            const isOOODay = slots.slots.length > 0 && slots.slots.every((slot) => slot.away);
+            // A partial-day entry can leave the first slot away while the rest of the day is bookable, and a
+            // window that covers the day still prints its hours, so both keep the 12-hour and 24-hour toggle.
+            const hideTimeFormatToggle = dayPrintsNoTimes(slots.slots);
             return (
               <AvailableTimesHeader
                 customClassNames={{
@@ -213,7 +215,7 @@ export const AvailableTimeSlots = ({
                 }}
                 key={slots.date}
                 date={dayjs(slots.date)}
-                showTimeFormatToggle={!isColumnView && !isOOODay}
+                showTimeFormatToggle={!isColumnView && !hideTimeFormatToggle}
                 availableMonth={
                   dayjs(selectedDate).format("MM") !== dayjs(slots.date).format("MM")
                     ? dayjs(slots.date).format("MMM")

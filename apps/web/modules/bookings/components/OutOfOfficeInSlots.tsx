@@ -68,7 +68,7 @@ export const OutOfOfficeInSlots = (props: IOutOfOfficeInSlotsProps) => {
               </p>
 
               {awayWindow && (
-                <p className="text-subtle text-center text-sm">{t("ooo_away_window", awayWindow)}</p>
+                <p className="text-center text-sm text-subtle">{t("ooo_away_window", awayWindow)}</p>
               )}
 
               {notes && showNotePublicly && (
