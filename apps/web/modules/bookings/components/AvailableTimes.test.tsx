@@ -161,8 +161,66 @@ describe("AvailableTimes with a partial-day out-of-office window", () => {
     expect(screen.queryAllByTestId("time")).toHaveLength(0);
   });
 
+  // Before #130 a whole-day day returned the panel alone, with no slot list around it. The expected layout
+  // comes from that code, not from a second render through the code under test.
+  it("renders a whole-day entry as the panel alone, without the slot list around it", () => {
+    const { container } = renderDay(dayWith([9, 10, 11, 12, 13, 14, 15, 16]));
+
+    expect(container.childElementCount).toBe(1);
+    expect(container.firstElementChild).toBe(panelOf("ooo_user_is_ooo:Host").parentElement);
+  });
+
+  // The out-of-office form does not stop a user from saving two entries that overlap, so two touching runs can
+  // share an end. Each entry still gets its own panel and hours.
+  it("renders two panels when two overlapping entries end at the same time", () => {
+    const slots = dayWith([]).map((slot) => {
+      const hour = Number(slot.time.slice(11, 13));
+      if (hour >= 9 && hour <= 12) return { ...slot, away: true, ...host, ...windowOf("09:00", "15:00") };
+      if (hour >= 13 && hour <= 14) return { ...slot, away: true, ...host, ...windowOf("13:00", "15:00") };
+      return slot;
+    });
+    renderDay(slots);
+
+    expect(screen.getAllByText("ooo_user_is_ooo:Host")).toHaveLength(2);
+    expect(isBefore(panelOf("Away 09:00 to 15:00"), panelOf("Away 13:00 to 15:00"))).toBe(true);
+  });
+
+  it("renders every slot and no panel on a day without an away entry", () => {
+    renderDay(dayWith([]));
+
+    expect(screen.getAllByTestId("time")).toHaveLength(8);
+    expect(screen.queryByText("ooo_user_is_ooo:Host")).toBeNull();
+  });
+
+  // The last panel of the day drops its bottom padding (from #104), and #130 must not change that.
+  it("drops the bottom padding of the last panel of the day, and only there", () => {
+    const end = renderDay(dayWith([15, 16]));
+    expect(panelOf("ooo_user_is_ooo:Host").parentElement?.classList.contains("pb-0")).toBe(true);
+    end.unmount();
+
+    renderDay(dayWith([14, 15]));
+    expect(panelOf("ooo_user_is_ooo:Host").parentElement?.classList.contains("pb-0")).toBe(false);
+  });
+
   it("offers the redirect user's booking page on the same date", () => {
     renderDay(dayWith([14, 15], { ...host, toUser: { id: 2, username: "alex", displayName: "Alex" } }));
+
+    fireEvent.click(screen.getByText("ooo_slots_book_with:Alex"));
+
+    expect(push).toHaveBeenCalledWith("/alex?date=2026-10-08");
+  });
+
+  it("offers the redirect on the day the run starts when the run crosses midnight UTC", () => {
+    // A New York attendee's 8 October runs from 04:00Z on 8 October to 04:00Z on 9 October, so one day column
+    // can hold slots on two UTC dates. The away run starts on 8 October, the day the attendee is looking at.
+    const away = { away: true, ...host, toUser: { id: 2, username: "alex", displayName: "Alex" } };
+    renderDay([
+      { time: "2026-10-08T21:00:00.000Z" },
+      { time: "2026-10-08T22:00:00.000Z", ...away },
+      { time: "2026-10-08T23:00:00.000Z", ...away },
+      { time: "2026-10-09T00:00:00.000Z", ...away },
+      { time: "2026-10-09T01:00:00.000Z" },
+    ]);
 
     fireEvent.click(screen.getByText("ooo_slots_book_with:Alex"));
 
