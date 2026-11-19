@@ -1,6 +1,6 @@
 # Sprint 3 mid-sprint check-in: zach-short
 
-**Code PR:** TODO: link the #130 PR here before Nov 12, 11:59 PM (it must be open and ready for review, or merged).
+**Code PR:** [#153](https://github.com/CSCI-435-SE/cal.diy/pull/153), feat: show the hours of a partial-day out-of-office window (#130). It opened on Nov 19, after the Nov 12 check-in date, and is ready for review.
 
 ## What have you implemented so far, and what remains?
 
