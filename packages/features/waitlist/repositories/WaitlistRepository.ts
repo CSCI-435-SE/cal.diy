@@ -87,12 +87,11 @@ export class WaitlistRepository {
     });
   }
 
-  async isOfferedForTime(data: { eventTypeId: number; time: Date }): Promise<boolean> {
-    const entry = await this.prismaClient.waitlistEntry.findFirst({
+  async findOfferedForTime(data: { eventTypeId: number; time: Date }) {
+    return this.prismaClient.waitlistEntry.findMany({
       where: { eventTypeId: data.eventTypeId, status: WaitlistStatus.OFFERED, offerStart: data.time },
-      select: { id: true },
+      select: { email: true, offerExpiresAt: true },
     });
-    return !!entry;
   }
 
   /** Returns false when the entry was no longer in `fromStatus`, so concurrent transitions can't both win. */
@@ -118,6 +117,7 @@ export class WaitlistRepository {
         title: true,
         slug: true,
         length: true,
+        seatsPerTimeSlot: true,
         team: { select: { slug: true } },
         owner: { select: { username: true } },
         users: { select: { username: true }, take: 1 },
@@ -132,6 +132,7 @@ export class WaitlistRepository {
     start: Date;
     end: Date;
     releaseAt: Date;
+    isSeat: boolean;
   }) {
     await this.prismaClient.selectedSlots.create({
       data: {
@@ -141,6 +142,7 @@ export class WaitlistRepository {
         slotUtcStartDate: data.start,
         slotUtcEndDate: data.end,
         releaseAt: data.releaseAt,
+        isSeat: data.isSeat,
       },
     });
   }
@@ -161,6 +163,19 @@ export class WaitlistRepository {
       orderBy: { startTime: "asc" },
     });
     return bookings.map((b) => b.startTime);
+  }
+
+  async findActiveBookingAttendeeCounts(data: { eventTypeId: number; from: Date; to: Date }) {
+    const bookings = await this.prismaClient.booking.findMany({
+      where: {
+        eventTypeId: data.eventTypeId,
+        startTime: { gte: data.from, lt: data.to },
+        status: { in: [BookingStatus.ACCEPTED, BookingStatus.PENDING] },
+      },
+      select: { startTime: true, _count: { select: { attendees: true } } },
+      orderBy: { startTime: "asc" },
+    });
+    return bookings.map((b) => ({ startTime: b.startTime, attendees: b._count.attendees }));
   }
 
   async findActiveBookingAttendeeEmailsAt(data: { eventTypeId: number; startTime: Date }) {

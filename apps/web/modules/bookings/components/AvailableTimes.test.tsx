@@ -128,6 +128,45 @@ describe("AvailableTimes with a partial-day out-of-office window", () => {
     expect(screen.getByText("waitlist_join_time")).toBeTruthy();
   });
 
+  it("swaps a full seated time for its waitlist button and keeps times with open seats", () => {
+    render(
+      <AvailableTimes
+        slots={[
+          { time: "2026-10-08T10:00:00.000Z", attendees: 2 },
+          { time: "2026-10-08T11:00:00.000Z", attendees: 1 },
+        ]}
+        seatsPerTimeSlot={2}
+        date="2026-10-08"
+        bookedTimes={["2026-10-08T10:00:00.000Z"]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(screen.getByText("waitlist_join_time")).toBeTruthy();
+    expect(screen.getAllByTestId("time").map((button) => button.dataset.time)).toEqual([
+      "2026-10-08T11:00:00.000Z",
+    ]);
+    expect(screen.queryByText("waitlist_join_day")).toBeNull();
+  });
+
+  it("offers the day waitlist when every seated time is full", () => {
+    render(
+      <AvailableTimes
+        slots={[{ time: "2026-10-08T10:00:00.000Z", attendees: 2 }]}
+        seatsPerTimeSlot={2}
+        date="2026-10-08"
+        bookedTimes={["2026-10-08T10:00:00.000Z"]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(screen.getByText("waitlist_join_day")).toBeTruthy();
+    expect(screen.getByText("waitlist_join_time")).toBeTruthy();
+    expect(screen.queryAllByTestId("time")).toHaveLength(0);
+  });
+
   it("renders only the panel when every slot is away, as a whole-day entry does", () => {
     renderDay(dayWith([9, 10, 11, 12, 13, 14, 15, 16]));
 

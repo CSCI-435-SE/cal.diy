@@ -64,6 +64,28 @@ type PlatformParams = {
 
 export type BookingToDelete = Awaited<ReturnType<typeof getBookingToDelete>>;
 
+async function queueWaitlistOffers(
+  bookingToDelete: BookingToDelete,
+  freedBookings: { startTime: Date; endTime: Date }[]
+) {
+  const eventTypeId = bookingToDelete.eventTypeId;
+  if (!eventTypeId) return;
+  try {
+    await Promise.all(
+      freedBookings.map((booking) =>
+        tasker.create("offerWaitlistSpot", {
+          eventTypeId,
+          hostUserId: bookingToDelete.userId,
+          start: booking.startTime.toISOString(),
+          end: booking.endTime.toISOString(),
+        })
+      )
+    );
+  } catch (error) {
+    log.error("Error queueing waitlist offers", safeStringify({ error }));
+  }
+}
+
 export type CancelBookingInput = {
   userId?: number;
   userUuid?: string;
@@ -315,7 +337,8 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
     dataForWebhooks,
     bookingToDelete?.eventType?.metadata as EventTypeMetadata
   );
-  if (result)
+  if (result) {
+    await queueWaitlistOffers(bookingToDelete, [bookingToDelete]);
     return {
       success: true,
       onlyRemovedAttendee: true,
@@ -324,6 +347,7 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
       message: "Attendee successfully removed.",
       isPlatformManagedUserBooking: bookingToDelete.user.isPlatformManaged,
     } satisfies HandleCancelBookingResponse;
+  }
 
   const promises = webhooks.map((webhook) =>
     sendPayload(webhook.secret, eventTrigger, new Date().toISOString(), webhook, {
@@ -428,24 +452,7 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
     }
   }
 
-  const hostUserId = bookingToDelete.userId;
-  const waitlistEventTypeId = bookingToDelete.eventTypeId;
-  if (waitlistEventTypeId) {
-    try {
-      await Promise.all(
-        updatedBookings.map((booking) =>
-          tasker.create("offerWaitlistSpot", {
-            eventTypeId: waitlistEventTypeId,
-            hostUserId,
-            start: booking.startTime.toISOString(),
-            end: booking.endTime.toISOString(),
-          })
-        )
-      );
-    } catch (error) {
-      log.error("Error queueing waitlist offers", safeStringify({ error }));
-    }
-  }
+  await queueWaitlistOffers(bookingToDelete, updatedBookings);
 
   /** TODO: Remove this without breaking functionality */
   if (bookingToDelete.location === DailyLocationType) {
