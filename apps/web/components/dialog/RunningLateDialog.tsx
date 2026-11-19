@@ -36,10 +36,10 @@ export const RunningLateDialog = ({ isOpenDialog, setIsOpenDialog, bookingId }: 
 
   const { mutate: sendRunningLate, isPending } = trpc.viewer.bookings.runningLate.useMutation({
     onSuccess(data) {
-      if (data.sent === 0) {
+      if (data.recipientCount === 0) {
         showToast(t("running_late_no_recipients"), "warning");
       } else {
-        showToast(t("running_late_sent_toast", { count: data.sent }), "success");
+        showToast(t("running_late_sent_toast"), "success");
       }
       reset();
       setIsOpenDialog(false);

@@ -30,7 +30,7 @@ export class RunningLateService {
     delayMinutes,
     message,
     now = new Date(),
-  }: SendRunningLateNoticeInput): Promise<{ sent: number }> {
+  }: SendRunningLateNoticeInput): Promise<{ recipientCount: number }> {
     const booking = await this.deps.bookingRepository.findByIdIncludeUserAndAttendeeTimeZones(bookingId);
 
     if (!booking) {
@@ -61,7 +61,7 @@ export class RunningLateService {
       return true;
     });
 
-    if (recipients.length === 0) return { sent: 0 };
+    if (recipients.length === 0) return { recipientCount: 0 };
 
     const eventTitle = booking.title;
     const trimmedMessage = message?.trim() || undefined;
@@ -83,6 +83,9 @@ export class RunningLateService {
       })
     );
 
+    // BaseEmail.sendEmail logs and swallows transport (SMTP) errors and always resolves, so only
+    // failures before the send (translation, building the email) reach this point. We therefore
+    // can't know how many emails were delivered and only report how many attendees we tried.
     const failures = results.filter((result) => result.status === "rejected");
     if (failures.length > 0) {
       log.error(`Failed to send ${failures.length} running late email(s) for booking ${booking.uid}`, {
@@ -90,6 +93,6 @@ export class RunningLateService {
       });
     }
 
-    return { sent: results.length - failures.length };
+    return { recipientCount: recipients.length };
   }
 }

@@ -129,7 +129,7 @@ describe("RunningLateService", () => {
 
       const result = await service.sendNotice(sendInput);
 
-      expect(result).toEqual({ sent: 2 });
+      expect(result).toEqual({ recipientCount: 2 });
       const recipients = emailConstructor.mock.calls.map(([data]) => data.attendee.email);
       expect(recipients).toEqual(["ana@example.com", "cohost@example.com"]);
     });
@@ -141,7 +141,7 @@ describe("RunningLateService", () => {
         })
       );
 
-      await expect(service.sendNotice(sendInput)).resolves.toEqual({ sent: 0 });
+      await expect(service.sendNotice(sendInput)).resolves.toEqual({ recipientCount: 0 });
       expect(sendEmail).not.toHaveBeenCalled();
     });
   });
@@ -191,8 +191,10 @@ describe("RunningLateService", () => {
       expect(emailConstructor.mock.calls[0][0].message).toBeUndefined();
     });
 
-    it("keeps sending to other attendees when one email fails", async () => {
-      sendEmail.mockRejectedValueOnce(new Error("SMTP down")).mockResolvedValue(undefined);
+    it("keeps sending to other attendees when building one email fails", async () => {
+      // BaseEmail.sendEmail never rejects on SMTP errors, so a failure here can only come from
+      // the steps before sending, such as loading the attendee's translations
+      getTranslation.mockRejectedValueOnce(new Error("translations unavailable"));
       const { service } = setup(
         buildBooking({
           attendees: [
@@ -202,20 +204,21 @@ describe("RunningLateService", () => {
         })
       );
 
-      await expect(service.sendNotice(sendInput)).resolves.toEqual({ sent: 1 });
-      expect(sendEmail).toHaveBeenCalledTimes(2);
+      await expect(service.sendNotice(sendInput)).resolves.toEqual({ recipientCount: 2 });
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      expect(emailConstructor.mock.calls[0][0].attendee.email).toBe("ben@example.com");
       // Failures are swallowed so the host's request succeeds, which makes this log the only trace of them
       expect(logError).toHaveBeenCalledTimes(1);
       expect(logError).toHaveBeenCalledWith(
         "Failed to send 1 running late email(s) for booking booking-uid",
-        { reasons: ["Error: SMTP down"] }
+        { reasons: ["Error: translations unavailable"] }
       );
     });
 
     it("does not log an error when every email sends", async () => {
       const { service } = setup(buildBooking());
 
-      await expect(service.sendNotice(sendInput)).resolves.toEqual({ sent: 1 });
+      await expect(service.sendNotice(sendInput)).resolves.toEqual({ recipientCount: 1 });
       expect(logError).not.toHaveBeenCalled();
     });
   });

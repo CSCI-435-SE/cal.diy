@@ -3,6 +3,7 @@
 **PR(s):** [#144](https://github.com/CSCI-435-SE/cal.diy/pull/144)  **Tool:** StrykerJS 10.1.1 with the Vitest runner  **Config:** [stryker.137.config.mjs](../../../stryker.137.config.mjs) + [vitest.stryker-137.config.mts](../../../vitest.stryker-137.config.mts), built on the shared [stryker.config.mjs](../../../stryker.config.mjs) by @zach-short and following the per-issue layout of `stryker.138.config.mjs` by @lexzach  **Command:** `STRYKER_JSON=docs/sprint3/mutation/reports/137-kojoshuay-<before|after>.json TZ=UTC nvm exec 22 node_modules/.bin/stryker run stryker.137.config.mjs`
 **Reports:** [before](reports/137-kojoshuay-before.json) · [after](reports/137-kojoshuay-after.json)
 **Mutation score:** before 89.22% → after 98.04%
+**Note:** line numbers below refer to commit `974a231`. After review, `sendNotice` returns `recipientCount` instead of `sent`, so a few lines moved.
 
 
 ## Surviving mutants
@@ -14,7 +15,7 @@ All 11 survivors from the before report are in lines this PR added.
 | `RunningLateService.ts:64` | `if (recipients.length === 0) return { sent: 0 }` → `if (false)` | Equivalent | Without the early return, `Promise.allSettled([])` resolves to `[]`, no email is built, nothing is logged, and the method still returns `{ sent: 0 }`. The behavior is the same; the early return only skips work. |
 | `RunningLateService.ts:72` | `getTranslation(locale, "common")` → `getTranslation(locale, "")` | Test gap (killed after) | The `running_late_*` email strings are in the `common` namespace. With any other namespace the attendee's email would show raw keys. The test's `getTranslation` mock ignored its second argument, so nothing checked the namespace. |
 | `RunningLateService.ts:87` | `if (failures.length > 0)` → `if (true)` | Test gap (killed after) | Would log an error after every successful send. No test checked that a clean send logs nothing. |
-| `RunningLateService.ts:87` | `if (failures.length > 0)` → `if (false)` | Test gap (killed after) | Failed emails would go unlogged. The method swallows failures so the host's request still succeeds, so this log is the only record that an attendee was not notified. No test checked it. |
+| `RunningLateService.ts:87` | `if (failures.length > 0)` → `if (false)` | Test gap (killed after) | Emails that fail before sending (loading translations or building the email) would go unlogged. The method swallows these failures so the host's request still succeeds, so this log is the only record of them. SMTP failures never reach it: `BaseEmail.sendEmail` logs and swallows those itself. No test checked it. |
 | `RunningLateService.ts:87` | `failures.length > 0` → `failures.length <= 0` | Test gap (killed after) | Logs only when nothing failed: the opposite of the intent. Same missing assertions as the two rows above. |
 | `RunningLateService.ts:87` | `failures.length > 0` → `failures.length >= 0` | Test gap (killed after) | Always logs, like `if (true)`. |
 | `RunningLateService.ts:87` | `if` body → `{}` | Test gap (killed after) | Removes the log entirely, like `if (false)`. |
@@ -33,7 +34,7 @@ Commit: [PR #144](https://github.com/CSCI-435-SE/cal.diy/pull/144/files) · Test
 
 The suriving mutants revealed that my tests checked what the code returned, but there was a gap in testing dependencies. There were two main blind spots in RunningLateService.test.ts:
 
-1) sendNotice is the backend service method in RunningLateService that is run when the host clicks the Running Late button on a booking. It sends an email to each attendee of the event, records deliver errors in server logs, and return the number of emails that were succesfully sent. In my original code, the tests checked that sendNotice returned the message about how many successful emails were sent, but the tests did not check the server log errors. This means that if someone tried to break or delete the log later there would be no warning from the tests. 
+1) sendNotice is the backend service method in RunningLateService that is run when the host clicks the Running Late button on a booking. It sends an email to each attendee of the event, logs errors from building an email (SMTP errors are logged by the shared email class instead), and at the time returned the number of emails it counted as sent. In my original code, the tests checked that sendNotice returned that count, but the tests did not check the server log errors. This means that if someone tried to break or delete the log later there would be no warning from the tests. 
 
 2) The convention in this Cal codebase to translate text is to use the getTranslation function. This function nees two arguements: local (the attendee's langauge) and "common" (the namespace of what translation file to load). To test this, a mock helper was created so the test does not nee to load the real translation file from the disk. However, the fake function only accpeted the locale parameter and did not accept the namespace parameter. The gap is that the test was too forigving. The test passes on whatever namespace is, even if it is broken. 
 
