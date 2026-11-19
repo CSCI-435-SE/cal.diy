@@ -3294,6 +3294,7 @@
   "ooo_empty_title": "Create an OOO",
   "ooo_empty_description": "Communicate to your bookers when you're not available to take bookings. They can still book you upon your return or you can forward them to a team member.",
   "ooo_user_is_ooo": "{{displayName}} is OOO",
+  "ooo_away_window": "Away {{start}} to {{end}}",
   "ooo_slots_returning": "<0>{{displayName}}</0> can take their meetings while they are away.",
   "ooo_slots_book_with": "Book {{displayName}}",
   "ooo_select_reason": "Select reason",
