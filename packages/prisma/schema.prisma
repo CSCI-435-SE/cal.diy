@@ -369,6 +369,7 @@ enum IdentityProvider {
   GOOGLE
   SAML
   AZUREAD
+  OIDC
 }
 
 model DestinationCalendar {
@@ -1258,6 +1259,28 @@ model Account {
   @@unique([provider, providerAccountId])
   @@index([userId])
   @@index([type])
+}
+
+// An OIDC identity provider that an admin added at run time (#131).
+// A user is linked to a provider by an Account row with provider "oidc-<id>".
+model OidcProvider {
+  id                    String   @id @default(cuid())
+  displayName           String
+  issuer                String
+  clientId              String
+  // Ciphertext only. The admin service encrypts the secret before it reaches the repository.
+  clientSecretEncrypted String
+  scopes                String   @default("openid email profile")
+  allowSignup           Boolean  @default(false)
+  allowedDomains        String[] @default([])
+  enabled               Boolean  @default(false)
+  position              Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
+  // Plain user id of the last editor. Not a relation, so the User model does not change.
+  updatedById           Int?
+
+  @@unique([issuer, clientId])
 }
 
 model Session {
