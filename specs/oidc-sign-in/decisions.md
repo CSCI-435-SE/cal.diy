@@ -1,6 +1,6 @@
 # OIDC Sign-In Decisions
 
-Status of each ADR: **Proposed** (team picks, spec review confirms), **Customer** (the customer decides; we propose), or **Owner** (Zachary or the team decides before the PR that needs it).
+Status of each ADR: **Proposed** (team picks, spec review confirms), **Customer** (the customer decides; we propose), or **Owner** (Zachary or the team decides before the PR that needs it). The customer answered every question on #131 on 2026-11-12 (`customer-questions.md`); no ADR still waits on the customer.
 
 ## ADR-001: How providers reach NextAuth without a restart
 
@@ -47,7 +47,7 @@ Option 1. New OIDC users get `identityProvider = OIDC` and `identityProviderId =
 
 - `getIdentityProvider` maps the `oidc-` prefix to `OIDC`.
 - Removing a provider means deleting its `Account` rows (criterion 37).
-- `requiresTwoFactorSetup` treats `OIDC` as non-`CAL`, so OIDC users are exempt from site-wide 2FA unless the customer says otherwise (Q6).
+- `requiresTwoFactorSetup` treats `OIDC` as non-`CAL`, so OIDC users are exempt from site-wide 2FA today. The customer answer to Q6 (2026-11-12) changes this in Sprint 4: OIDC users get Cal.diy 2FA unless the provider's MFA is accepted and shown in `amr` (criteria 44–47, ADR-010).
 
 ## ADR-003: Provider id in URLs and `Account.provider`
 
@@ -64,7 +64,7 @@ Option 1.
 
 ## ADR-004: What happens when an OIDC email matches an existing account
 
-Status: **Customer** (Q1). We propose; we do not pick. This path gets a narrow Deep (Fable 5.1) review before implementation.
+Status: **Customer, decided 2026-11-12** (Q1). The customer picked option 3 with option 2 as the fallback. This path gets a narrow Deep (Fable 5.1) review before implementation.
 
 ### Context
 
@@ -80,10 +80,17 @@ Any provider an admin adds can assert any email, including the email of the inst
 
 Option 3 with option 2 as the fallback, and no auto-link for `ADMIN` accounts. Sprint 3 ships option 2 only (reject), because it is safe under every answer and the Sprint 3 demo needs only new accounts.
 
+### Decision
+
+Customer answer, 2026-11-12: "auto-link only when the email is verified and the admin marked the provider as owning that domain. Otherwise reject and let the user link it from settings. Never auto-link admin accounts." That is option 3 with option 2 as the fallback, as proposed. Sprint 3 keeps option 2 for every match (criterion 27). Sprint 4 adds the auto-link (criterion 27a, sub-issue 7). The owned-domain list is a separate field from the sign-up "allowed email domains" (ADR-011).
+
+Invited users (customer Q8) are a separate rule: a verified login with the invited email accepts the invite (criterion 29). It does not need the owned-domain list, because the admin or team chose that exact email.
+
 ### Consequences
 
 - The OIDC branch must never fall through to L1012, L1021, L1051 or `autoMergeIdentities()`. A test per branch (criterion 28).
-- Linking from settings (sub-issue 6) is needed for existing users under options 2 and 3.
+- Linking from settings (sub-issue 8) is needed for existing users whose domain is not on the owned list, and for every `ADMIN` account.
+- The provider needs an owned-domains column (criterion 3a), which #136 does not have yet.
 
 ## ADR-005: Where the OIDC logic sits in `signIn` and `jwt`
 
@@ -139,7 +146,7 @@ Option 1. If the ID token has no `email`, the login fails with `missing-email` (
 
 ## ADR-008: Test identity provider
 
-Status: **Owner** (where the compose service lives).
+Status: **Owner** (where the compose service lives). The customer accepted Keycloak as the only reference provider on 2026-11-12 (Q12) and asked that the setup be documented so that anyone on the team can run the tests. #151 proposes option 1 with the files in `specs/oidc-sign-in/test-idp/`; #151 has no assignee yet.
 
 ### Options Considered
 
@@ -163,4 +170,46 @@ Status: Proposed.
 
 ### Decision
 
-Option 1, plus disable (criterion 38) as the reversible choice the page offers first.
+Option 1, plus disable (criterion 38) as the reversible choice the page offers first. The customer agreed on 2026-11-12 (Q5) and added two points: admins can disable a provider in place of deleting it (criterion 36a), and the team must prove with a test that "Forgot password" works for users who were created through OIDC and have no password (criterion 37a).
+
+## ADR-010: What counts as a second factor in the `amr` claim
+
+Status: Proposed. Follows the customer answer to Q6 (2026-11-12). Sprint 4. The customer may want to confirm the rule (follow-up F4 in `customer-questions.md`).
+
+### Context
+
+The customer wants a per-provider setting "accept this provider's MFA". When it is on and the ID token's `amr` claim shows a second factor, Cal.diy skips its own 2FA; when `amr` is missing or shows only a password, Cal.diy 2FA applies (criteria 44–47). `amr` is an optional array of strings. RFC 8176 registers values such as `pwd`, `pin`, `kba` (knowledge), `otp`, `sms`, `tel`, `hwk`, `swk`, `sc` (possession), `fpt`, `face`, `iris`, `retina`, `vbm` (inherence) and `mfa`. Providers send different subsets, and some send none unless configured. Keycloak's `amr` output must be checked against the realm in #151 before code.
+
+### Options Considered
+
+1. **`mfa`, or two or more different registered values of which at least one is not a knowledge factor.** Example: `["pwd", "otp"]` counts; `["pwd"]` and `["pwd", "kba"]` do not; `["hwk"]` alone does not. Unknown values are ignored. Pros: follows RFC 8176; works for providers that list each method and for providers that send only `mfa`. Cons: a single passkey (`["hwk"]`) does not count, so those users still get Cal.diy 2FA.
+2. **Only the exact value `mfa`.** Pros: simplest rule and test. Cons: many providers list the methods and never send `mfa`, so the setting would do nothing for them.
+3. **Any value other than `pwd`.** Pros: passkeys count. Cons: a single `otp` or `sms` login with no password is still one factor, and an unknown value would count, which is the wrong direction for a security check.
+4. **Use the `acr` claim instead.** Pros: some providers express assurance levels there. Cons: `acr` values are provider-specific strings, so the admin would have to type the expected value; the customer named `amr`.
+
+### Proposal
+
+Option 1. The parser is a pure function with its own unit tests (criterion 47), and mutation testing suits it.
+
+### Consequences
+
+- The provider needs an `acceptProviderMfa` column (criterion 3a). #136 does not have it; it is a follow-up for #136 or a Sprint 4 migration.
+- `requiresTwoFactorSetup` and the TOTP step in `signIn` need the provider's setting and the `amr` value, so the OIDC branch (ADR-005) passes them through.
+
+## ADR-011: One domain list or two
+
+Status: Proposed. Follows the customer answers to Q1 and Q2 (2026-11-12).
+
+### Context
+
+Q2 gives each provider an optional "allowed email domains" list for new accounts. Q1 auto-links an existing account only when "the admin marked the provider as owning that domain". The first spec used one list for both. The two lists mean different things: an admin may allow sign-up from a domain that the provider does not own (for example a Keycloak that federates personal accounts), and auto-linking on such a domain is the takeover path ADR-004 exists to prevent.
+
+### Options Considered
+
+1. **Two lists: "allowed email domains" (sign-up) and "domains this provider owns" (auto-link).** Pros: an admin can open sign-up without vouching for ownership; the auto-link list stays short and explicit; an empty owned list means no auto-link. Cons: one more field and column; the form must explain the difference.
+2. **One list for both.** Pros: one field. Cons: every domain allowed for sign-up also auto-links, so widening sign-up silently widens takeover risk.
+3. **One list plus a per-provider switch "this provider owns all allowed domains".** Pros: one list. Cons: all or nothing; an admin who owns one domain and allows another for sign-up cannot express it.
+
+### Proposal
+
+Option 1. The owned list defaults to empty, so no provider auto-links until an admin fills it. The column (`ownedDomains`) is a follow-up for #136 or a Sprint 4 migration.
