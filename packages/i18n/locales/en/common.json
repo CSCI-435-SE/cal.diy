@@ -4847,6 +4847,8 @@
   "running_late_send": "Notify attendees",
   "running_late_sent_toast": "Running late notice sent to your attendees",
   "running_late_no_recipients": "There are no attendees to notify for this booking",
+  "running_late_rate_limited": "You just sent a running late notice for this booking. Please wait a few minutes before sending another.",
+  "running_late_not_allowed": "You can't send a running late notice for this booking right now.",
   "running_late_subject": "{{hostName}} is running late for {{eventTitle}}",
   "running_late_email_title": "{{hostName}} is running late",
   "running_late_original_start": "Original start time",

@@ -24,6 +24,20 @@ interface FormValues {
   message: string;
 }
 
+// The service's error messages are English-only, so map the error code to a translated message
+function getRunningLateErrorKey(code: string | undefined): string {
+  switch (code) {
+    case "TOO_MANY_REQUESTS":
+      return "running_late_rate_limited";
+    case "FORBIDDEN":
+    case "BAD_REQUEST":
+    case "NOT_FOUND":
+      return "running_late_not_allowed";
+    default:
+      return "unexpected_error_try_again";
+  }
+}
+
 export const RunningLateDialog = ({ isOpenDialog, setIsOpenDialog, bookingId }: IRunningLateDialog) => {
   const { t } = useLocale();
 
@@ -45,7 +59,7 @@ export const RunningLateDialog = ({ isOpenDialog, setIsOpenDialog, bookingId }: 
       setIsOpenDialog(false);
     },
     onError(error) {
-      showToast(error.message || t("unexpected_error_try_again"), "error");
+      showToast(t(getRunningLateErrorKey(error.data?.code)), "error");
     },
   });
 
