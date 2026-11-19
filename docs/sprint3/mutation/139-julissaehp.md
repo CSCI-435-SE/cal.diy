@@ -7,18 +7,23 @@
 `TZ=UTC STRYKER_JSON=docs/sprint3/mutation/reports/139-julissaehp-<before|after>.json "$LOCALAPPDATA/Author Software/nvm/installs/v22.23.5/node.exe" node_modules/@stryker-mutator/core/bin/stryker.js run stryker.139.config.mjs`
 **Reports:** [before](reports/139-julissaehp-before.json) · [after](reports/139-julissaehp-after.json)
 **Mutation score:** before 65.16% → after 79.03% (covered mutants only: 87.45% → 92.45%)
+**Note:** line numbers below refer to commit `8222569`, the after run. Merging `main` later (#144) moved four of the
+mutated ranges across two files without changing their code: `bookingActions.ts` 12–32 → 13–33 and 311–317 → 338–344, and
+`BookingActionsDropdown.tsx` 72 → 74 and 240 → 246.
 
 ### Setup notes
 
 - **Only the executable lines #139 added or changed are mutated: 313 mutants in 18 files.**
   - This covers both PRs: #142's settings UI, and the backend PR's persistence, enforcement, booking page and bookings list.
   - Imports produce no mutants, so they are left out, as are type-only lines, the `null` default in `defaultEvents.ts` and the test builder.
+  - `schema.prisma`, `migration.sql` and `common.json` are also left out: Stryker can only mutate JavaScript and TypeScript.
   - `BookingListItem.tsx` and `BookingActionsDropdown.tsx` are in scope but produced 0 mutants. That's why the reports list 16 files.
 - **The test list is explicit.**
   - The before run used the 8 test files written for #139 (175 tests).
   - The after run adds `BookingRepository.test.ts`, which holds the new repository tests, for 9 files and 191 tests. #140 also listed that file.
   - The mutated code did not change between the runs. Both reports contain the same 313 mutants at identical locations, checked by comparing file, position, mutator and replacement.
 - **Stryker 10 requires Node 22 or newer**, and this machine's default is Node 20. Node 22 is called by its full path because this nvm has no `exec`.
+  The command runs Stryker's `bin/stryker.js` directly, because `node_modules/.bin/stryker` is a shell shim that would start under the default Node 20.
 - **`ignoreStatic` is on** (from the shared config). Values built when a module first loads are reported as Ignored in both runs: `MS_PER_MINUTE` and the error-code string in `minimumCancellationNotice.ts`, and the tRPC input schema.
 - **The before run used merge commit `b3be818`, and the after run used `8222569`.** Only test files and the Vitest test list changed in between.
 - **Credits:**
@@ -133,6 +138,8 @@ Yes.
 **3. If you used AI to configure the tool, analyze survivors, or write tests, what did it produce and what did you verify or correct?**
 
 I used Claude Code (log in `ai-logs/sprint3/julissaehp/`, linked from the PR).
+
+- **Setup:** Claude read the team's Stryker PRs (#135 and #153 by @zach-short, #140 by @zachbowden) and reused their shared setup instead of writing a new one. It found that Stryker 10 needs Node 22 while this machine's default is Node 20, and that this nvm has no `exec`. It installed Node 22 alongside Node 20 and ran Stryker through Node 22's full path. It also confirmed that the shared Stryker files matched #140 exactly and that installing the dependencies left `yarn.lock` unchanged.
 
 - **Configuration:** Claude extended the #142 configuration to include the backend's changed lines and updated the line ranges after merging `main`.
 
