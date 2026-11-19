@@ -810,6 +810,27 @@ describe("cancel action with a minimum cancellation notice", () => {
     expect(getCancelEventAction(context).disabled).toBe(true);
   });
 
+  // The list query returns `user: null` when the organizer's account no longer exists; the reschedule rule
+  // already handles that, and the attendee is still inside the window.
+  it("still disables cancel for an attendee when the organizer's account no longer exists", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30 });
+    const bookingWithoutOrganizer = { ...context.booking, user: null } as BookingActionContext["booking"];
+
+    expect(isActionDisabled("cancel", { ...context, booking: bookingWithoutOrganizer })).toBe(true);
+  });
+
+  // The list query returns `user: null` for a host whose user record is missing; the row must still work out
+  // the attendee's restriction instead of failing on that entry.
+  it("keeps blocking an attendee when a host entry has no user record", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30 });
+    const booking = {
+      ...context.booking,
+      eventType: { ...context.booking.eventType, hosts: [{ userId: CO_HOST.id, user: null }] },
+    } as BookingActionContext["booking"];
+
+    expect(isActionDisabled("cancel", { ...context, booking })).toBe(true);
+  });
+
   it("disables cancel for an attendee once the booking has started", () => {
     expect(isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: -5 }))).toBe(true);
   });

@@ -15,6 +15,7 @@ export default {
       "apps/web/app/api/cancel/__tests__/route.test.ts",
       "apps/web/components/booking/__tests__/CancelBooking.minimumCancellationNotice.test.tsx",
       "apps/web/components/booking/actions/bookingActions.test.ts",
+      "packages/features/bookings/repositories/BookingRepository.test.ts",
     ],
   },
 };

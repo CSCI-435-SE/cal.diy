@@ -199,6 +199,30 @@ describe("MinimumCancellationNoticeController", () => {
     fireEvent.click(noticeRadio());
     expect(onChange).toHaveBeenLastCalledWith(180);
   });
+
+  // A saved 0 means no restriction (the server ignores it), so it must look and behave like an unset notice,
+  // including starting a new notice from the 60-minute default.
+  it("treats a saved notice of 0 as no notice", () => {
+    const onChange = vi.fn();
+    render(<ControllerHarness initialValue={0} onChange={onChange} />);
+
+    expect(toggle()).toHaveAttribute("aria-checked", "false");
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle());
+    expect(alwaysRadio()).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(noticeRadio());
+    expect(onChange).toHaveBeenLastCalledWith(60);
+    expect(minutesInput().value).toBe("60");
+    expect(screen.getByText("Minutes")).toBeInTheDocument();
+  });
+
+  it("gives the amount field an accessible name", () => {
+    renderExpanded();
+
+    expect(screen.getByRole("spinbutton", { name: "Minimum cancellation notice" })).toBe(minutesInput());
+  });
 });
 
 let form: UseFormReturn<FormValues>;

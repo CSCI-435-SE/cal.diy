@@ -96,6 +96,22 @@ describe("isWithinMinimumCancellationNotice", () => {
     ).toBe(false);
   });
 
+  // Without a notice, attendees keep today's behavior, and handleCancelBooking accepts cancellations until the
+  // booking ends, so a meeting that has already started must stay cancellable.
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["0", 0],
+  ])("keeps a booking that has already started cancellable when the notice is %s", (_label, notice) => {
+    expect(
+      isWithinMinimumCancellationNotice({
+        startTime: minutesFromNow(-10),
+        minimumCancellationNotice: notice,
+        now: NOW,
+      })
+    ).toBe(false);
+  });
+
   it("defaults now to the current time", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -141,6 +157,14 @@ describe("isUserBookingHost", () => {
 
   it.each([null, undefined])("does not treat a visitor without a session (%s) as host", (userId) => {
     expect(isUserBookingHost({ ...base, userId })).toBe(false);
+  });
+
+  // Only a signed-in host is exempt, so a missing organizer must not let an anonymous visitor match it.
+  it.each([
+    null,
+    undefined,
+  ])("does not treat a visitor without a session (%s) as host when the booking has no organizer", (userId) => {
+    expect(isUserBookingHost({ ...base, bookingUserId: null, userId })).toBe(false);
   });
 });
 
