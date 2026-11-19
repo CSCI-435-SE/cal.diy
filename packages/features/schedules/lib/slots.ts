@@ -3,13 +3,14 @@ import dayjs from "@calcom/dayjs";
 import type {
   IFromUser,
   IOutOfOfficeData,
+  IOutOfOfficeWindow,
   IToUser,
 } from "@calcom/features/availability/lib/getUserAvailability";
 import type { DateRange } from "@calcom/features/schedules/lib/date-ranges";
 import { getTimeZone } from "@calcom/lib/dayjs";
 import { withReporting } from "@calcom/lib/sentryWrapper";
 
-type OutOfOfficeWindowMs = { startMs: number; endMs: number; data: IOutOfOfficeData[string] };
+type OutOfOfficeWindowMs = { startMs: number; endMs: number; data: IOutOfOfficeWindow };
 
 // A whole-day entry marks every slot on its date. A partial-day entry marks only the slots that overlap one of
 // its windows, so a slot that straddles the leave or return time is away too: a booking there is rejected.
@@ -18,7 +19,7 @@ function findOutOfOfficeForSlot(
   windowsOfDay: OutOfOfficeWindowMs[] | undefined,
   slotStartMs: number,
   slotEndMs: number
-): IOutOfOfficeData[string] | undefined {
+): IOutOfOfficeData[string] | IOutOfOfficeWindow | undefined {
   if (!dayData) return undefined;
   if (!windowsOfDay) return dayData;
   return windowsOfDay.find((window) => slotStartMs < window.endMs && slotEndMs > window.startMs)?.data;
@@ -238,6 +239,8 @@ function buildSlotsWithDateRanges({
         emoji?: string;
         notes?: string | null;
         showNotePublicly?: boolean;
+        outOfOfficeStart?: string;
+        outOfOfficeEnd?: string;
       } = {
         time: slotStartTime,
       };
@@ -254,6 +257,11 @@ function buildSlotsWithDateRanges({
           ...(emoji && { emoji }),
           ...(notes && showNotePublicly && { notes }),
           ...(showNotePublicly !== undefined && { showNotePublicly }),
+          // Only a window has hours. A whole-day record has no `start`, so its slots get neither field.
+          ...("start" in dateOutOfOfficeExists && {
+            outOfOfficeStart: dateOutOfOfficeExists.start,
+            outOfOfficeEnd: dateOutOfOfficeExists.end,
+          }),
         };
       }
 

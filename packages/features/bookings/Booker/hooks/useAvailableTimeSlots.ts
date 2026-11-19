@@ -16,7 +16,10 @@ export interface IGetAvailableSlots {
       toUser?: IToUser | undefined;
       reason?: string | undefined;
       emoji?: string | undefined;
+      notes?: string | null | undefined;
       showNotePublicly?: boolean | undefined;
+      outOfOfficeStart?: string | undefined;
+      outOfOfficeEnd?: string | undefined;
     }[]
   >;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

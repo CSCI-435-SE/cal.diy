@@ -1312,6 +1312,91 @@ describe("partial-day out-of-office windows", () => {
     expect(slots.every((slot) => slot.away)).toBe(true);
   });
 
+  it("carries the window's own start and end, not the slot's, on the slot a window marks", () => {
+    const slots = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-08T14:10:00.000Z", end: "2026-10-08T14:50:00.000Z" }),
+    });
+
+    expect(awayTimes(slots)).toEqual(["2026-10-08T14:00:00.000Z"]);
+    expect(slots[5]).toMatchObject({
+      away: true,
+      outOfOfficeStart: "2026-10-08T14:10:00.000Z",
+      outOfOfficeEnd: "2026-10-08T14:50:00.000Z",
+    });
+    expect(slots[4]).not.toHaveProperty("outOfOfficeStart");
+    expect(slots[4]).not.toHaveProperty("outOfOfficeEnd");
+  });
+
+  it("gives each of two back-to-back windows its own start and end", () => {
+    const travel = { ...host, reason: "Travel", emoji: "✈️" };
+    const slots = slotsFor({
+      "2026-10-08": windowsOn(
+        { start: "2026-10-08T14:00:00.000Z", end: "2026-10-08T15:00:00.000Z" },
+        { start: "2026-10-08T15:00:00.000Z", end: "2026-10-08T16:00:00.000Z", data: travel }
+      ),
+    });
+
+    expect(awayTimes(slots)).toEqual(["2026-10-08T14:00:00.000Z", "2026-10-08T15:00:00.000Z"]);
+    expect(slots[5]).toMatchObject({
+      reason: "Doctor",
+      outOfOfficeStart: "2026-10-08T14:00:00.000Z",
+      outOfOfficeEnd: "2026-10-08T15:00:00.000Z",
+    });
+    expect(slots[6]).toMatchObject({
+      reason: "Travel",
+      outOfOfficeStart: "2026-10-08T15:00:00.000Z",
+      outOfOfficeEnd: "2026-10-08T16:00:00.000Z",
+    });
+  });
+
+  it("gives each window its own start and end when the gap between them is shorter than one slot", () => {
+    const travel = { ...host, reason: "Travel", emoji: "✈️" };
+    const slots = slotsFor({
+      "2026-10-08": windowsOn(
+        { start: "2026-10-08T14:00:00.000Z", end: "2026-10-08T14:50:00.000Z" },
+        { start: "2026-10-08T15:10:00.000Z", end: "2026-10-08T16:00:00.000Z", data: travel }
+      ),
+    });
+
+    expect(awayTimes(slots)).toEqual(["2026-10-08T14:00:00.000Z", "2026-10-08T15:00:00.000Z"]);
+    expect(slots[5]).toMatchObject({
+      reason: "Doctor",
+      outOfOfficeStart: "2026-10-08T14:00:00.000Z",
+      outOfOfficeEnd: "2026-10-08T14:50:00.000Z",
+    });
+    expect(slots[6]).toMatchObject({
+      reason: "Travel",
+      outOfOfficeStart: "2026-10-08T15:10:00.000Z",
+      outOfOfficeEnd: "2026-10-08T16:00:00.000Z",
+    });
+  });
+
+  it("carries the full start and end of an entry that spans several days on each day's slots", () => {
+    const slots = slotsFor({
+      "2026-10-08": windowsOn({ start: "2026-10-07T14:00:00.000Z", end: "2026-10-09T10:00:00.000Z" }),
+    });
+
+    expect(slots).toHaveLength(8);
+    for (const slot of slots) {
+      expect(slot).toMatchObject({
+        away: true,
+        outOfOfficeStart: "2026-10-07T14:00:00.000Z",
+        outOfOfficeEnd: "2026-10-09T10:00:00.000Z",
+      });
+    }
+  });
+
+  it("puts no start or end on the slots of a whole-day entry", () => {
+    const slots = slotsFor({ "2026-10-08": host });
+
+    expect(slots).toHaveLength(8);
+    for (const slot of slots) {
+      expect(slot.away).toBe(true);
+      expect(slot).not.toHaveProperty("outOfOfficeStart");
+      expect(slot).not.toHaveProperty("outOfOfficeEnd");
+    }
+  });
+
   it("marks the right slots for a window on the spring DST change day in America/New_York", () => {
     vi.setSystemTime(dayjs.utc("2026-03-01T00:00:00Z").toDate());
     const timeZone = "America/New_York";
