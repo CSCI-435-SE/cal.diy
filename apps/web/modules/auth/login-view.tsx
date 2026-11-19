@@ -9,6 +9,8 @@ import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { Alert } from "@calcom/ui/components/alert";
 import { Icon } from "@calcom/ui/components/icon";
 import { LastUsed, useLastUsed } from "@calcom/web/modules/auth/hooks/useLastUsed";
+import { getLoginErrorMessage } from "@calcom/web/modules/auth/lib/authErrorMessages";
+import { getOidcSignInProviderId } from "@calcom/web/modules/auth/lib/oidcLoginButtons";
 import AddToHomescreen from "@components/AddToHomescreen";
 import BackupCode from "@components/auth/BackupCode";
 import TwoFactor from "@components/auth/TwoFactor";
@@ -105,6 +107,7 @@ export default function Login({
   csrfToken,
   isGoogleLoginEnabled,
   isOutlookLoginEnabled,
+  oidcProviders,
   totpEmail,
 }: PageProps) {
   const searchParams = useCompatSearchParams();
@@ -125,6 +128,10 @@ export default function Login({
   const [twoFactorRequired, setTwoFactorRequired] = useState(!!totpEmail || false);
   const [twoFactorLostAccess, setTwoFactorLostAccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // NextAuth redirects failed OAuth/OIDC sign-ins back here with ?error=<code>.
+  const [signInErrorCode, setSignInErrorCode] = useState<string | null>(
+    () => searchParams?.get("error") ?? null
+  );
   const [lastUsed, setLastUsed] = useLastUsed();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -152,6 +159,7 @@ export default function Login({
 
   const onSubmit = async (values: LoginValues) => {
     setErrorMessage(null);
+    setSignInErrorCode(null);
     // telemetry.event(telemetryEventTypes.login, collectPageParameters());
     const res = await signIn<"credentials">("credentials", {
       ...values,
@@ -170,7 +178,10 @@ export default function Login({
     else setErrorMessage(errorMessages[res.error] || t("something_went_wrong"));
   };
 
-  const showSocialLogin = isGoogleLoginEnabled || isOutlookLoginEnabled;
+  const displayedErrorMessage =
+    errorMessage ?? getLoginErrorMessage((key, options) => t(key, options), signInErrorCode);
+
+  const showSocialLogin = isGoogleLoginEnabled || isOutlookLoginEnabled || oidcProviders.length > 0;
   const showSignupLink =
     process.env.NEXT_PUBLIC_DISABLE_SIGNUP !== "true" && searchParams?.get("register") !== "false";
 
@@ -230,6 +241,27 @@ export default function Login({
                       {lastUsed === "microsoft" && <LastUsed />}
                     </Button>
                   )}
+                  {oidcProviders.map((provider) => {
+                    const providerId = getOidcSignInProviderId(provider.id);
+                    return (
+                      <Button
+                        key={provider.id}
+                        variant="outline"
+                        className="w-full py-1"
+                        disabled={formState.isSubmitting}
+                        data-testid={`oidc-${provider.id}`}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          setLastUsed(providerId);
+                          await signIn(providerId, {
+                            callbackUrl,
+                          });
+                        }}>
+                        <span>{t("continue_with_provider", { providerName: provider.displayName })}</span>
+                        {lastUsed === providerId && <LastUsed />}
+                      </Button>
+                    );
+                  })}
                 </div>
 
                 {/* Divider */}
@@ -306,7 +338,9 @@ export default function Login({
               )}
 
               {/* Error Message */}
-              {errorMessage && <Alert severity="error" title={errorMessage} className="mt-4" />}
+              {displayedErrorMessage && (
+                <Alert severity="error" title={displayedErrorMessage} className="mt-4" />
+              )}
 
               {/* Submit Button */}
               <Button
