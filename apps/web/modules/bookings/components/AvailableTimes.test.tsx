@@ -39,8 +39,10 @@ vi.mock("@calcom/lib/hooks/useLocale", () => ({
   }),
 }));
 
-// The server sends `notes` on an away slot and the panel reads it, but SlotInfo (calendars/lib/types.ts) does not list it.
-type Slot = Slots[string][number] & { notes?: string | null };
+// The server sends `notes` on an away slot and `attendees` on a seated slot, and the component reads both, but
+// SlotInfo (calendars/lib/types.ts) lists neither.
+type Slot = Slots[string][number] & { notes?: string | null; attendees?: number };
+const seatedSlot = (time: string, attendees: number): Slot => ({ time, attendees });
 
 const host = { fromUser: { id: 1, displayName: "Host" }, emoji: "🩺", showNotePublicly: false };
 
@@ -132,8 +134,8 @@ describe("AvailableTimes with a partial-day out-of-office window", () => {
     render(
       <AvailableTimes
         slots={[
-          { time: "2026-10-08T10:00:00.000Z", attendees: 2 },
-          { time: "2026-10-08T11:00:00.000Z", attendees: 1 },
+          seatedSlot("2026-10-08T10:00:00.000Z", 2),
+          seatedSlot("2026-10-08T11:00:00.000Z", 1),
         ]}
         seatsPerTimeSlot={2}
         date="2026-10-08"
@@ -150,10 +152,67 @@ describe("AvailableTimes with a partial-day out-of-office window", () => {
     expect(screen.queryByText("waitlist_join_day")).toBeNull();
   });
 
+  it("keeps a full seated time that can't be waitlisted as a 'booking full' slot", () => {
+    // 10:00 is full but not reported as booked (e.g. less than 6 hours away), so it gets no waitlist option
+    render(
+      <AvailableTimes
+        slots={[
+          seatedSlot("2026-10-08T10:00:00.000Z", 2),
+          seatedSlot("2026-10-08T11:00:00.000Z", 2),
+        ]}
+        seatsPerTimeSlot={2}
+        date="2026-10-08"
+        bookedTimes={["2026-10-08T11:00:00.000Z"]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(screen.getAllByTestId("time").map((button) => button.dataset.time)).toEqual([
+      "2026-10-08T10:00:00.000Z",
+    ]);
+    expect(screen.getByText("booking_full")).toBeTruthy();
+    expect(screen.getAllByText("waitlist_join_time")).toHaveLength(1);
+  });
+
+  it("adds no waitlist button for a booked time that is still open", () => {
+    render(
+      <AvailableTimes
+        slots={[{ time: "2026-10-08T10:00:00.000Z" }]}
+        date="2026-10-08"
+        bookedTimes={["2026-10-08T10:00:00.000Z"]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(screen.queryByText("waitlist_join_time")).toBeNull();
+    expect(screen.getAllByTestId("time")).toHaveLength(1);
+  });
+
+  it("places a full seated time's waitlist button where that time falls in the day", () => {
+    render(
+      <AvailableTimes
+        slots={[
+          seatedSlot("2026-10-08T09:00:00.000Z", 0),
+          seatedSlot("2026-10-08T10:00:00.000Z", 2),
+          seatedSlot("2026-10-08T11:00:00.000Z", 1),
+        ]}
+        seatsPerTimeSlot={2}
+        date="2026-10-08"
+        bookedTimes={["2026-10-08T10:00:00.000Z"]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(hoursAround(screen.getByText("waitlist_join_time"))).toEqual({ before: [9], after: [11] });
+  });
+
   it("offers the day waitlist when every seated time is full", () => {
     render(
       <AvailableTimes
-        slots={[{ time: "2026-10-08T10:00:00.000Z", attendees: 2 }]}
+        slots={[seatedSlot("2026-10-08T10:00:00.000Z", 2)]}
         seatsPerTimeSlot={2}
         date="2026-10-08"
         bookedTimes={["2026-10-08T10:00:00.000Z"]}

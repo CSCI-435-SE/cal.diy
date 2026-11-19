@@ -68,21 +68,21 @@ async function queueWaitlistOffers(
   bookingToDelete: BookingToDelete,
   freedBookings: { startTime: Date; endTime: Date }[]
 ) {
-  const eventTypeId = bookingToDelete.eventTypeId;
-  if (!eventTypeId) return;
+  const { eventTypeId, userId: hostUserId } = bookingToDelete;
+  if (!eventTypeId || !hostUserId) return;
   try {
     await Promise.all(
       freedBookings.map((booking) =>
         tasker.create("offerWaitlistSpot", {
           eventTypeId,
-          hostUserId: bookingToDelete.userId,
+          hostUserId,
           start: booking.startTime.toISOString(),
           end: booking.endTime.toISOString(),
         })
       )
     );
   } catch (error) {
-    log.error("Error queueing waitlist offers", safeStringify({ error }));
+    log.error("Error queueing waitlist offers", safeStringify(error));
   }
 }
 

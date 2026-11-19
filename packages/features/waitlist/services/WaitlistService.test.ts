@@ -15,6 +15,9 @@ function makeFakeRepo() {
   const bookedTimes: Date[] = [];
   const attendeeCounts: { startTime: Date; attendees: number }[] = [];
   let seatsPerTimeSlot: number | null = null;
+  let eventTypeDeleted = false;
+  // Bookings at one specific time; any other time falls back to `bookedEmails`
+  const bookedAt = new Map<number, string[] | null>();
   let seq = 0;
   const repo = {
     findWaitingByEmailAndDay: async (q: {
@@ -69,7 +72,7 @@ function makeFakeRepo() {
       return true;
     },
     findEventTypeForWaitlist: async (id: number) =>
-      id === 1
+      id === 1 && !eventTypeDeleted
         ? {
             id: 1,
             title: "Intro call",
@@ -87,7 +90,10 @@ function makeFakeRepo() {
     deleteSlotHolds: async (uid: string) => {
       for (let i = holds.length - 1; i >= 0; i--) if (holds[i].uid === uid) holds.splice(i, 1);
     },
-    findActiveBookingAttendeeEmailsAt: async () => bookedEmails,
+    findActiveBookingAttendeeEmailsAt: async (q: { startTime?: Date }) => {
+      const time = q.startTime?.getTime();
+      return time !== undefined && bookedAt.has(time) ? (bookedAt.get(time) ?? null) : bookedEmails;
+    },
     findOfferedForTime: async (q: { eventTypeId: number; time: Date }) =>
       rows.filter(
         (r) =>
@@ -111,6 +117,12 @@ function makeFakeRepo() {
     },
     setSeats: (seats: number | null) => {
       seatsPerTimeSlot = seats;
+    },
+    setBookedAt: (time: Date, emails: string[] | null) => {
+      bookedAt.set(time.getTime(), emails);
+    },
+    deleteEventType: () => {
+      eventTypeDeleted = true;
     },
   };
 }
@@ -325,6 +337,36 @@ describe("WaitlistService", () => {
     expect(url.searchParams.get("slot")).toBe(freedSlot().start.toISOString());
   });
 
+  it("offers a slot starting exactly 6 hours from now, since only closer slots are excluded", async () => {
+    await join("a@x.com", "2026-11-01");
+    expect(await service.offerSpot(slot(6))).toEqual([1]);
+  });
+
+  it("does not offer a slot of an event type that no longer exists", async () => {
+    await join("a@x.com");
+    expect(await service.offerSpot({ ...freedSlot(), eventTypeId: 2 })).toEqual([]);
+    expect(fake.rows[0].status).toBe(WaitlistStatus.WAITING);
+  });
+
+  it("reports no booked times for an unknown event type instead of failing", async () => {
+    await expect(
+      service.getBookedTimes({ eventTypeId: 2, from: new Date(NOW), to: new Date(NOW + 48 * HOUR) })
+    ).resolves.toEqual([]);
+  });
+
+  it("expires an offer whose event type was deleted during the hold, without offering it again", async () => {
+    await join("first@x.com");
+    await join("second@x.com");
+    await service.offerSpot(freedSlot());
+    fake.deleteEventType();
+
+    await expireAfterWindow(1);
+
+    expect(fake.rows[0].status).toBe(WaitlistStatus.EXPIRED);
+    expect(fake.rows[1].status).toBe(WaitlistStatus.WAITING);
+    expect(fake.holds).toEqual([]);
+  });
+
   describe("seated events", () => {
     beforeEach(() => fake.setSeats(3));
 
@@ -357,6 +399,35 @@ describe("WaitlistService", () => {
 
       fake.setBooked(["a@x.com", "b@x.com", "d@x.com"]);
       await expect(joinAt("c@x.com", 46)).resolves.toMatchObject({ status: WaitlistStatus.WAITING });
+    });
+
+    it("judges a time full by the bookings at that time, not at other times", async () => {
+      fake.setBooked([]);
+      fake.setBookedAt(slot(46).start, ["a@x.com", "b@x.com", "d@x.com"]);
+      await expect(joinAt("c@x.com", 46)).resolves.toMatchObject({ status: WaitlistStatus.WAITING });
+    });
+
+    it("rejects joining a seated time that has no bookings yet", async () => {
+      fake.setBooked(null);
+      await expect(joinAt("c@x.com", 46)).rejects.toThrow("seats available");
+    });
+
+    it("offers nothing when the freed time is full, even if other times have open seats", async () => {
+      await join("first@x.com");
+      fake.setBooked([]);
+      fake.setBookedAt(freedSlot().start, ["a@x.com", "b@x.com", "c@x.com"]);
+      expect(await service.offerSpot(freedSlot())).toEqual([]);
+    });
+
+    it("offers every seat when the whole seated booking was cancelled", async () => {
+      fake.setSeats(2);
+      await join("first@x.com");
+      await join("second@x.com");
+      await join("third@x.com");
+      fake.setBooked(null);
+
+      expect(await service.offerSpot(freedSlot())).toEqual([1, 2]);
+      expect(fake.rows[2].status).toBe(WaitlistStatus.WAITING);
     });
 
     it("offers a freed seat while other attendees stay booked, holding exactly one seat", async () => {
@@ -446,13 +517,14 @@ describe("WaitlistService", () => {
       expect(fake.holds.map((h) => h.uid)).toEqual(["uid-2"]);
     });
 
-    it("releases the claimant's hold after they book the offered time only", async () => {
+    it("releases the claimant's hold only after they book the offered time of the offered event", async () => {
       await join("first@x.com");
       fake.setBooked(["a@x.com", "b@x.com"]);
       await service.offerSpot(freedSlot());
 
       await service.releaseHoldAfterBooking({ uid: "uid-1", eventTypeId: 1, start: slot(47).start });
       await service.releaseHoldAfterBooking({ uid: "uid-x", eventTypeId: 1, start: freedSlot().start });
+      await service.releaseHoldAfterBooking({ uid: "uid-1", eventTypeId: 2, start: freedSlot().start });
       expect(fake.holds).toHaveLength(1);
 
       await service.releaseHoldAfterBooking({ uid: "uid-1", eventTypeId: 1, start: freedSlot().start });

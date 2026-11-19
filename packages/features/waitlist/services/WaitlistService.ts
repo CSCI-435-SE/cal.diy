@@ -102,7 +102,7 @@ export class WaitlistService {
     for (const { startTime, attendees } of await repo.findActiveBookingAttendeeCounts(range)) {
       attendeesByTime.set(startTime.getTime(), (attendeesByTime.get(startTime.getTime()) ?? 0) + attendees);
     }
-    return [...attendeesByTime]
+    return Array.from(attendeesByTime)
       .filter(([, attendees]) => attendees >= seats)
       .map(([time]) => new Date(time));
   }

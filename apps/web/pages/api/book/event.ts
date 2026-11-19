@@ -71,7 +71,7 @@ async function handler(req: NextApiRequest & { userId?: number; traceContext: Tr
         eventTypeId: Number(req.body.eventTypeId),
         start: new Date(req.body.start),
       })
-      .catch((error) => log.error("Error releasing waitlist hold", safeStringify({ error })));
+      .catch((error) => log.error("Error releasing waitlist hold", safeStringify(error)));
   }
 
   return booking;
