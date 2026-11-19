@@ -55,6 +55,15 @@ export class WaitlistService {
 
     const eventType = await this.deps.waitlistRepo.findEventTypeForWaitlist(input.eventTypeId);
     if (!eventType) throw ErrorWithCode.Factory.NotFound(`Event type ${input.eventTypeId} not found`);
+    if (slotStart && eventType.seatsPerTimeSlot) {
+      const bookedEmails = await this.deps.waitlistRepo.findActiveBookingAttendeeEmailsAt({
+        eventTypeId: input.eventTypeId,
+        startTime: slotStart,
+      });
+      if ((bookedEmails?.length ?? 0) < eventType.seatsPerTimeSlot) {
+        throw ErrorWithCode.Factory.BadRequest("This time still has seats available");
+      }
+    }
 
     const email = input.email.toLowerCase();
     const existing = await this.deps.waitlistRepo.findWaitingByEmailAndDay({
@@ -76,75 +85,105 @@ export class WaitlistService {
     });
   }
 
-  /** Start times of this event type's bookings that could still be waitlisted (more than 6 hours away). */
+  /**
+   * Start times of this event type's bookings that could still be waitlisted (more than 6 hours away).
+   * For seated events, only times with every seat booked.
+   */
   async getBookedTimes(input: { eventTypeId: number; from: Date; to: Date }): Promise<Date[]> {
     const earliest = new Date(this.now() + WAITLIST_CLAIM_WINDOW_MS);
     const from = input.from > earliest ? input.from : earliest;
     if (from >= input.to) return [];
-    return this.deps.waitlistRepo.findActiveBookingStartTimes({
-      eventTypeId: input.eventTypeId,
-      from,
-      to: input.to,
-    });
+    const range = { eventTypeId: input.eventTypeId, from, to: input.to };
+    const repo = this.deps.waitlistRepo;
+    const seats = (await repo.findEventTypeForWaitlist(input.eventTypeId))?.seatsPerTimeSlot;
+    if (!seats) return repo.findActiveBookingStartTimes(range);
+
+    const attendeesByTime = new Map<number, number>();
+    for (const { startTime, attendees } of await repo.findActiveBookingAttendeeCounts(range)) {
+      attendeesByTime.set(startTime.getTime(), (attendeesByTime.get(startTime.getTime()) ?? 0) + attendees);
+    }
+    return Array.from(attendeesByTime)
+      .filter(([, attendees]) => attendees >= seats)
+      .map(([time]) => new Date(time));
   }
 
-  /** Offers a freed slot to the longest-waiting person for that day and holds it for them. */
-  async offerSpot(slot: FreedSlot): Promise<number | null> {
+  /**
+   * Seats at `time` not taken by a booking or a live offer. A non-seated event is one seat, taken by any booking.
+   * Offers whose waitlister already booked are counted only as bookings.
+   */
+  private async countOpenSeats(eventTypeId: number, time: Date, seatsPerTimeSlot: number | null) {
+    const repo = this.deps.waitlistRepo;
+    const bookedEmails = await repo.findActiveBookingAttendeeEmailsAt({ eventTypeId, startTime: time });
+    const booked = new Set(bookedEmails ?? []);
+    const bookedSeats = seatsPerTimeSlot ? (bookedEmails?.length ?? 0) : bookedEmails ? 1 : 0;
+    const offers = await repo.findOfferedForTime({ eventTypeId, time });
+    const now = this.now();
+    const liveOffers = offers.filter(
+      (offer) =>
+        !!offer.offerExpiresAt &&
+        offer.offerExpiresAt.getTime() > now &&
+        !booked.has(offer.email.toLowerCase())
+    ).length;
+    return { open: (seatsPerTimeSlot ?? 1) - bookedSeats - liveOffers, booked };
+  }
+
+  /** Offers each open seat of a freed slot to the longest-waiting people for it and holds one seat per offer. */
+  async offerSpot(slot: FreedSlot): Promise<number[]> {
     const now = this.now();
     // A slot starting within the claim window can't be held for the full 6 hours, so it isn't offered
-    if (slot.start.getTime() - now < WAITLIST_CLAIM_WINDOW_MS) return null;
+    if (slot.start.getTime() - now < WAITLIST_CLAIM_WINDOW_MS) return [];
 
     const repo = this.deps.waitlistRepo;
-    if (
-      await repo.findActiveBookingAttendeeEmailsAt({ eventTypeId: slot.eventTypeId, startTime: slot.start })
-    ) {
-      return null;
-    }
-    // Also re-checked after losing a race below, so concurrent runs for one slot can't offer it twice
-    if (await repo.isOfferedForTime({ eventTypeId: slot.eventTypeId, time: slot.start })) return null;
+    const eventType = await repo.findEventTypeForWaitlist(slot.eventTypeId);
+    if (!eventType) return [];
+    const seatsPerTimeSlot = eventType.seatsPerTimeSlot;
 
-    const entry = await repo.findOldestWaitingForTime({ eventTypeId: slot.eventTypeId, time: slot.start });
-    if (!entry) return null;
+    const offered: number[] = [];
+    // Recounted every round, so concurrent runs for one slot can't offer more seats than are open
+    while ((await this.countOpenSeats(slot.eventTypeId, slot.start, seatsPerTimeSlot)).open > 0) {
+      const entry = await repo.findOldestWaitingForTime({ eventTypeId: slot.eventTypeId, time: slot.start });
+      if (!entry) break;
 
-    const offerExpiresAt = new Date(now + WAITLIST_CLAIM_WINDOW_MS);
-    const won = await repo.transition(entry.id, WaitlistStatus.WAITING, WaitlistStatus.OFFERED, {
-      hostUserId: slot.hostUserId,
-      offerStart: slot.start,
-      offerEnd: slot.end,
-      offerExpiresAt,
-    });
-    // Another offer grabbed this entry concurrently; give the slot to the next person instead
-    if (!won) return this.offerSpot(slot);
-
-    try {
-      await repo.createSlotHold({
-        uid: entry.uid,
-        eventTypeId: slot.eventTypeId,
-        userId: slot.hostUserId,
-        start: slot.start,
-        end: slot.end,
-        releaseAt: offerExpiresAt,
-      });
-      await this.deps.scheduleOfferExpiry(entry.id, offerExpiresAt);
-
-      const eventType = await repo.findEventTypeForWaitlist(slot.eventTypeId);
-      await this.deps.sendOfferEmail({
-        name: entry.name,
-        email: entry.email,
-        timeZone: entry.timeZone,
-        eventTitle: eventType?.title ?? "",
+      const offerExpiresAt = new Date(now + WAITLIST_CLAIM_WINDOW_MS);
+      const won = await repo.transition(entry.id, WaitlistStatus.WAITING, WaitlistStatus.OFFERED, {
+        hostUserId: slot.hostUserId,
         offerStart: slot.start,
+        offerEnd: slot.end,
         offerExpiresAt,
-        claimUrl: `${this.deps.webappUrl}/api/waitlist/claim?uid=${entry.uid}`,
-        leaveUrl: `${this.deps.webappUrl}/api/waitlist/leave?uid=${entry.uid}`,
       });
-    } catch (error) {
-      // Undo the offer so the task's retry offers the slot to this same person instead of the next one
-      await repo.deleteSlotHolds(entry.uid);
-      await repo.transition(entry.id, WaitlistStatus.OFFERED, WaitlistStatus.WAITING, null);
-      throw error;
+      // Another offer grabbed this entry concurrently; give the seat to the next person instead
+      if (!won) continue;
+
+      try {
+        await repo.createSlotHold({
+          uid: entry.uid,
+          eventTypeId: slot.eventTypeId,
+          userId: slot.hostUserId,
+          start: slot.start,
+          end: slot.end,
+          releaseAt: offerExpiresAt,
+          isSeat: !!seatsPerTimeSlot,
+        });
+        await this.deps.scheduleOfferExpiry(entry.id, offerExpiresAt);
+        await this.deps.sendOfferEmail({
+          name: entry.name,
+          email: entry.email,
+          timeZone: entry.timeZone,
+          eventTitle: eventType.title,
+          offerStart: slot.start,
+          offerExpiresAt,
+          claimUrl: `${this.deps.webappUrl}/api/waitlist/claim?uid=${entry.uid}`,
+          leaveUrl: `${this.deps.webappUrl}/api/waitlist/leave?uid=${entry.uid}`,
+        });
+      } catch (error) {
+        // Undo the offer so the task's retry offers the seat to this same person instead of the next one
+        await repo.deleteSlotHolds(entry.uid);
+        await repo.transition(entry.id, WaitlistStatus.OFFERED, WaitlistStatus.WAITING, null);
+        throw error;
+      }
+      offered.push(entry.id);
     }
-    return entry.id;
+    return offered;
   }
 
   async expireOffer(entryId: number) {
@@ -155,25 +194,38 @@ export class WaitlistService {
     if (entry.offerExpiresAt && entry.offerExpiresAt.getTime() > this.now()) return;
 
     await repo.deleteSlotHolds(entry.uid);
-    const bookedEmails = await repo.findActiveBookingAttendeeEmailsAt({
-      eventTypeId: entry.eventTypeId,
-      startTime: entry.offerStart,
-    });
-    if (bookedEmails) {
-      // Someone else booked during the hold: the waitlister keeps their place for the day
-      const claimed = bookedEmails.includes(entry.email.toLowerCase());
-      await repo.transition(
-        entry.id,
-        WaitlistStatus.OFFERED,
-        claimed ? WaitlistStatus.CLAIMED : WaitlistStatus.WAITING,
-        claimed ? undefined : null
-      );
+    const eventType = await repo.findEventTypeForWaitlist(entry.eventTypeId);
+    const { open, booked } = await this.countOpenSeats(
+      entry.eventTypeId,
+      entry.offerStart,
+      eventType?.seatsPerTimeSlot ?? null
+    );
+    if (booked.has(entry.email.toLowerCase())) {
+      await repo.transition(entry.id, WaitlistStatus.OFFERED, WaitlistStatus.CLAIMED);
+      return;
+    }
+    if (open <= 0) {
+      // Someone else took the seat during the hold: the waitlister keeps their place
+      await repo.transition(entry.id, WaitlistStatus.OFFERED, WaitlistStatus.WAITING, null);
       return;
     }
 
     if (await repo.transition(entry.id, WaitlistStatus.OFFERED, WaitlistStatus.EXPIRED)) {
       await this.offerToNext(entry);
     }
+  }
+
+  /** Frees the hold of the offer the booker claimed via `uid`, so the booked seat isn't counted twice. */
+  async releaseHoldAfterBooking(input: { uid: string; eventTypeId: number; start: Date }) {
+    const entry = await this.deps.waitlistRepo.findByUid(input.uid);
+    if (
+      entry?.status !== WaitlistStatus.OFFERED ||
+      entry.eventTypeId !== input.eventTypeId ||
+      entry.offerStart?.getTime() !== input.start.getTime()
+    ) {
+      return;
+    }
+    await this.deps.waitlistRepo.deleteSlotHolds(entry.uid);
   }
 
   /** Returns false if the entry is unknown or already finished. */
