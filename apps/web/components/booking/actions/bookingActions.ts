@@ -1,4 +1,5 @@
 import { isWithinMinimumRescheduleNotice } from "@calcom/features/bookings/lib/reschedule/isWithinMinimumRescheduleNotice";
+import { isWithinRunningLateWindow } from "@calcom/features/bookings/lib/runningLate";
 import { BookingStatus, SchedulingType } from "@calcom/prisma/enums";
 import type { ActionType } from "@calcom/ui/components/table";
 
@@ -178,6 +179,32 @@ export function getReportAction(context: BookingActionContext): ActionType {
     icon: "flag",
     color: "destructive",
     disabled: !!booking.report,
+  };
+}
+
+export function getRunningLateAction(
+  context: BookingActionContext,
+  now: Date = new Date()
+): ActionType | null {
+  const { booking, isConfirmed, t } = context;
+
+  // Hidden rather than disabled: attendees and out-of-window bookings shouldn't see the option at all
+  const isOrganizer = !!booking.user?.id && booking.loggedInUser?.userId === booking.user.id;
+  if (!isOrganizer || !isConfirmed) return null;
+
+  const isInWindow = isWithinRunningLateWindow({
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    now,
+  });
+  if (!isInWindow) return null;
+
+  return {
+    id: "running_late",
+    label: t("running_late"),
+    icon: "clock",
+    disabled: false,
+    bookingUid: booking.uid,
   };
 }
 
