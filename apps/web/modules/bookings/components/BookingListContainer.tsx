@@ -28,6 +28,7 @@ import {
 import type { BookingListingStatus, BookingsGetOutput, RowData } from "../types";
 import { BookingDetailsSheet } from "./BookingDetailsSheet";
 import { BookingList } from "./BookingList";
+import { ManageOccurrencesDialogHost } from "./ManageOccurrencesDialogHost";
 import { ViewToggleButton } from "./ViewToggleButton";
 
 interface FilterButtonProps {
@@ -216,6 +217,8 @@ function BookingListInner({
           hasError={hasError}
         />
       </div>
+
+      <ManageOccurrencesDialogHost userTimeZone={user?.timeZone} userTimeFormat={user?.timeFormat} />
 
       {bookingsV3Enabled && (
         <BookingDetailsSheet
