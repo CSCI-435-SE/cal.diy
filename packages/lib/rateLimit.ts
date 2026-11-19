@@ -16,7 +16,8 @@ export type RateLimitHelper = {
     | "ai"
     | "sms"
     | "smsMonth"
-    | "instantMeeting";
+    | "instantMeeting"
+    | "runningLate";
   identifier: string;
   opts?: LimitOptions;
   /**
@@ -69,6 +70,15 @@ export function rateLimiter() {
       namespace: "instantMeeting",
       limit: 1,
       duration: "10m",
+      timeout,
+      onError,
+    }),
+    // Each running late notice emails every attendee, so cap repeats per host and booking
+    runningLate: new Ratelimit({
+      rootKey: UNKEY_ROOT_KEY,
+      namespace: "runningLate",
+      limit: 1,
+      duration: "5m",
       timeout,
       onError,
     }),
