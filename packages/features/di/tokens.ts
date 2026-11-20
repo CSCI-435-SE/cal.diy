@@ -1,3 +1,4 @@
+import { OIDC_DI_TOKENS } from "@calcom/features/auth/oidc/di/tokens";
 import { BOOKING_DI_TOKENS } from "@calcom/features/bookings/di/tokens";
 import { EVENT_TYPE_DI_TOKENS } from "@calcom/features/eventtypes/di/tokens";
 import { FEATURE_OPT_IN_DI_TOKENS } from "@calcom/features/feature-opt-in/di/tokens";
@@ -75,4 +76,5 @@ export const DI_TOKENS = {
   ...TRANSLATION_DI_TOKENS,
   ...WEBHOOK_TOKENS,
   ...EVENT_TYPE_DI_TOKENS,
+  ...OIDC_DI_TOKENS,
 };
