@@ -1,3 +1,4 @@
+import type { User } from "next-auth";
 import type { OAuthConfig } from "next-auth/providers/oauth";
 import { getOidcNextAuthProviderId } from "./oidcProviderId";
 
@@ -37,7 +38,11 @@ export function buildOidcProvider(config: OidcProviderConfig): OAuthConfig<OidcP
     checks: ["pkce", "state"],
     profile(profile) {
       return {
-        id: profile.sub,
+        // next-auth uses this id as the provider account id (profile.id.toString() in
+        // next-auth/core/lib/oauth/callback.js), so it must be the OIDC sub, a string. The app's
+        // next-auth augmentation (packages/types/next-auth.d.ts) types User.id as the numeric Cal.diy
+        // user id, which does not describe a provider profile.
+        id: profile.sub as unknown as User["id"],
         name: profile.name ?? null,
         email: profile.email ?? null,
         image: profile.picture ?? null,

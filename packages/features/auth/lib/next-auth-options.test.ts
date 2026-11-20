@@ -1436,3 +1436,84 @@ describe("requiresTwoFactorSetup in the token and session callbacks", () => {
     expect(session.user.requiresTwoFactorSetup).toBe(true);
   });
 });
+
+describe("OIDC providers (#164)", () => {
+  type Options = ReturnType<typeof import("./next-auth-options").getOptions>;
+  type SignInParams = Parameters<NonNullable<NonNullable<Options["callbacks"]>["signIn"]>>[0];
+  let getOptions: typeof import("./next-auth-options").getOptions;
+
+  const baseArgs = { getDubId: () => undefined, getTrackingData: () => ({}) };
+  const oidcProvider = {
+    id: "oidc-clx123abc",
+    name: "Acme SSO",
+    type: "oauth" as const,
+    profile: () => ({ id: "kc-user-1" }),
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockGetIdentityProvider.mockImplementation((provider: string) => (provider === "google" ? "GOOGLE" : null));
+
+    const prismaModule = await import("@calcom/prisma");
+    Object.assign(prismaModule.default.user, {
+      findFirst: mockPrismaUserFindFirst,
+      create: mockPrismaUserCreate,
+      update: mockPrismaUserUpdate,
+    });
+    mockPrismaUserFindFirst.mockResolvedValue({
+      id: 1,
+      email: "admin@example.com",
+      role: UserPermissionRole.ADMIN,
+      identityProvider: IdentityProvider.CAL,
+    });
+
+    getOptions = (await import("./next-auth-options")).getOptions;
+  });
+
+  const runSignIn = (provider: string) =>
+    getOptions(baseArgs).callbacks!.signIn!({
+      user: { id: "kc-user-1", name: "Alex Doe", email: "admin@example.com", emailVerified: new Date() },
+      account: { provider, type: "oauth", providerAccountId: "kc-user-1" },
+      profile: { sub: "kc-user-1", email: "admin@example.com", email_verified: true },
+    } as SignInParams);
+
+  it("rejects every oidc-* sign-in with unknown-provider before any lookup or write", async () => {
+    const result = await runSignIn("oidc-clx123abc");
+
+    expect(result).toBe("/auth/error?error=unknown-provider");
+    expect(mockGetIdentityProvider).not.toHaveBeenCalled();
+    expect(mockPrismaUserFindFirst).not.toHaveBeenCalled();
+    expect(mockPrismaUserCreate).not.toHaveBeenCalled();
+    expect(mockPrismaUserUpdate).not.toHaveBeenCalled();
+    expect(mockLinkAccount).not.toHaveBeenCalled();
+  });
+
+  it("still sends other OAuth providers through the existing identity provider lookup", async () => {
+    await runSignIn("google");
+
+    expect(mockGetIdentityProvider).toHaveBeenCalledWith("google");
+  });
+
+  it("keeps the built-in providers unchanged when no dynamic providers are passed", () => {
+    const withoutArg = getOptions(baseArgs).providers;
+    const withEmpty = getOptions({ ...baseArgs, dynamicProviders: [] }).providers;
+
+    expect(withEmpty).toEqual(withoutArg);
+    expect(withoutArg.some((provider) => provider?.id?.startsWith("oidc-"))).toBe(false);
+  });
+
+  it("adds dynamic providers after the built-in ones", () => {
+    const builtIn = getOptions(baseArgs).providers;
+    const providers = getOptions({ ...baseArgs, dynamicProviders: [oidcProvider] }).providers;
+
+    expect(providers).toHaveLength(builtIn.length + 1);
+    expect(providers.slice(0, builtIn.length)).toEqual(builtIn);
+    expect(providers[providers.length - 1]).toBe(oidcProvider);
+  });
+
+  it("does not keep dynamic providers between calls", () => {
+    getOptions({ ...baseArgs, dynamicProviders: [oidcProvider] });
+
+    expect(getOptions(baseArgs).providers).not.toContain(oidcProvider);
+  });
+});
