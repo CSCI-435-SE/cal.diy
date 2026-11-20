@@ -15,6 +15,8 @@ interface IOutOfOfficeInSlotsProps {
   reason?: string;
   notes?: string | null;
   showNotePublicly?: boolean;
+  /** The hours of a partial-day entry, already in the booker's time zone and format. A whole-day entry has none. */
+  awayWindow?: { start: string; end: string };
   borderDashed?: boolean;
   className?: string;
 }
@@ -31,6 +33,7 @@ export const OutOfOfficeInSlots = (props: IOutOfOfficeInSlotsProps) => {
     className,
     notes,
     showNotePublicly,
+    awayWindow,
   } = props;
   const searchParams = useCompatSearchParams();
 
@@ -63,6 +66,10 @@ export const OutOfOfficeInSlots = (props: IOutOfOfficeInSlotsProps) => {
               <p className="mt-2 text-base font-bold">
                 {t("ooo_user_is_ooo", { displayName: fromUser?.displayName })}
               </p>
+
+              {awayWindow && (
+                <p className="text-center text-sm text-subtle">{t("ooo_away_window", awayWindow)}</p>
+              )}
 
               {notes && showNotePublicly && (
                 <p className="text-subtle mt-2 max-h-[120px] overflow-y-auto break-words px-2 text-center text-sm italic">

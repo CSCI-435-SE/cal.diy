@@ -8,7 +8,11 @@ export type SlotInfo = {
   toUser?: IToUser;
   reason?: string;
   emoji?: string;
+  notes?: string | null;
   showNotePublicly?: boolean;
+  /** ISO start of the partial-day out-of-office window that marks this slot. A whole-day entry has none. */
+  outOfOfficeStart?: string;
+  outOfOfficeEnd?: string;
 };
 
 export type Slots = Record<string, SlotInfo[]>;

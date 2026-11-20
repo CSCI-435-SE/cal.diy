@@ -20,6 +20,7 @@ import { AnimatePresence, m } from "framer-motion";
 import { type ReactNode, useMemo } from "react";
 import type { Slot } from "~/schedules/lib/types";
 import type { IUseBookingLoadingStates } from "../hooks/useBookings";
+import { formatAwayWindow } from "../lib/formatAwayWindow";
 import { JoinWaitlistButton } from "./JoinWaitlistButton";
 import { OutOfOfficeInSlots } from "./OutOfOfficeInSlots";
 import { SeatsAvailabilityText } from "./SeatsAvailabilityText";
@@ -271,7 +272,15 @@ export const AvailableTimes = ({
   const { t } = useLocale();
   const { timeFormat, timezone } = useBookerTime();
 
-  const oooAllDay = slots.length > 0 && slots.every((slot) => slot.away);
+  // Two entries can touch, so a run of away slots is one panel only while the window stays the same. Slots of
+  // a whole-day entry have no window, so they all compare equal.
+  const inSamePanel = (slot: Slot, other: Slot | string | undefined) =>
+    typeof other === "object" &&
+    !!other.away &&
+    other.outOfOfficeStart === slot.outOfOfficeStart &&
+    other.outOfOfficeEnd === slot.outOfOfficeEnd;
+
+  const oooAllDay = slots.length > 0 && slots.every((slot) => inSamePanel(slots[0], slot));
   if (oooAllDay) {
     return <OOOSlot {...slots[0]} />;
   }
@@ -279,7 +288,6 @@ export const AvailableTimes = ({
   // A partial-day entry leaves a run of away slots in the middle of the day. One panel stands in for each run,
   // at the first away slot, so the panel sits between the slots before and after the window.
   const merged = mergeByTime(slots, date ? bookedTimes : [], props.seatsPerTimeSlot);
-  const isAway = (item: Slot | string | undefined) => typeof item === "object" && !!item.away;
   const isDayFull = slots.every((slot) => isSeatedSlotFull(slot, props.seatsPerTimeSlot));
   const items: ReactNode[] = [];
   for (let index = 0; index < merged.length; index++) {
@@ -299,9 +307,9 @@ export const AvailableTimes = ({
       items.push(<SlotItem key={slot.time} slot={slot} {...props} />);
       continue;
     }
-    if (isAway(merged[index - 1])) continue;
+    if (inSamePanel(slot, merged[index - 1])) continue;
     let runEnd = index;
-    while (isAway(merged[runEnd + 1])) runEnd++;
+    while (inSamePanel(slot, merged[runEnd + 1])) runEnd++;
     items.push(
       <OOOSlot key={`ooo-${slot.time}`} {...slot} className={runEnd === merged.length - 1 ? "pb-0" : ""} />
     );
@@ -359,15 +367,24 @@ interface IOOOSlotProps {
   emoji?: string;
   notes?: string | null;
   showNotePublicly?: boolean;
+  outOfOfficeStart?: string;
+  outOfOfficeEnd?: string;
   time?: string;
   className?: string;
 }
 
 const OOOSlot: React.FC<IOOOSlotProps> = (props) => {
   const isPlatform = useIsPlatform();
+  const { timeFormat, timezone } = useBookerTime();
+  const { i18n } = useLocale();
   const { fromUser, toUser, reason, emoji, notes, showNotePublicly, time, className = "" } = props;
+  const { outOfOfficeStart, outOfOfficeEnd } = props;
 
   if (isPlatform) return <></>;
+  const awayWindow =
+    outOfOfficeStart && outOfOfficeEnd
+      ? formatAwayWindow(outOfOfficeStart, outOfOfficeEnd, timezone, timeFormat, i18n.language)
+      : undefined;
   return (
     <OutOfOfficeInSlots
       fromUser={fromUser}
@@ -377,6 +394,7 @@ const OOOSlot: React.FC<IOOOSlotProps> = (props) => {
       emoji={emoji}
       notes={notes}
       showNotePublicly={showNotePublicly}
+      awayWindow={awayWindow}
       borderDashed
       className={className}
     />
