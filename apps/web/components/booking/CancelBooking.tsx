@@ -2,6 +2,7 @@
 
 import { sdkActionManager } from "@calcom/embed-core/embed-iframe";
 import { isCancellationReasonRequired } from "@calcom/features/bookings/lib/cancellationReason";
+import { MINIMUM_CANCELLATION_NOTICE_ERROR_CODE } from "@calcom/features/bookings/lib/minimumCancellationNotice";
 import { shouldChargeNoShowCancellationFee } from "@calcom/features/bookings/lib/payment/shouldChargeNoShowCancellationFee";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { useRefreshData } from "@calcom/lib/hooks/useRefreshData";
@@ -352,11 +353,14 @@ export default function CancelBooking(props: Props) {
                   } else {
                     const data = await res.json();
                     setLoading(false);
-                    const errorMessage =
+                    let errorMessage =
                       data.message ||
                       `${t("error_with_status_code_occured", { status: res.status })} ${t(
                         "please_try_again"
                       )}`;
+                    if (data.code === MINIMUM_CANCELLATION_NOTICE_ERROR_CODE) {
+                      errorMessage = t("cancellation_unavailable_minimum_notice");
+                    }
 
                     if (props.showErrorAsToast) {
                       showToast(errorMessage, "error");

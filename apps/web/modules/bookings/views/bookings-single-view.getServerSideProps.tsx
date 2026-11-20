@@ -3,6 +3,7 @@ import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
 import getBookingInfo from "@calcom/features/bookings/lib/getBookingInfo";
 import { BookingRepository } from "@calcom/features/bookings/repositories/BookingRepository";
 import { getDefaultEvent } from "@calcom/features/eventtypes/lib/defaultEvents";
+import { FeaturesRepository } from "@calcom/features/flags/features.repository";
 import { getBrandingForEventType } from "@calcom/features/profile/lib/getBranding";
 import { shouldHideBrandingForEvent } from "@calcom/features/profile/lib/hideBranding";
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
@@ -136,8 +137,16 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     }
   }
 
+  const isMinimumCancellationNoticeEnabled = await new FeaturesRepository(
+    prisma
+  ).checkIfFeatureIsEnabledGlobally("minimum-cancellation-notice");
+
   const eventType = {
     ...eventTypeRaw,
+    // Dropped while the flag is off so the page matches /api/cancel, which ignores saved notices then.
+    minimumCancellationNotice: isMinimumCancellationNoticeEnabled
+      ? eventTypeRaw.minimumCancellationNotice
+      : null,
     periodStartDate: eventTypeRaw.periodStartDate?.toString() ?? null,
     periodEndDate: eventTypeRaw.periodEndDate?.toString() ?? null,
     metadata: eventTypeMetaDataSchemaWithTypedApps.parse(eventTypeRaw.metadata),

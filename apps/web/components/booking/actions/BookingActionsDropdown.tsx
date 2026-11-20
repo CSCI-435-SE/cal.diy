@@ -1,3 +1,4 @@
+import { useFlagMap } from "@calcom/features/flags/context/provider";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type { bookingMetadataSchema } from "@calcom/prisma/zod-utils";
 import { trpc } from "@calcom/trpc/react";
@@ -70,6 +71,7 @@ export function BookingActionsDropdown({
   context,
 }: BookingActionsDropdownProps) {
   const { t } = useLocale();
+  const flags = useFlagMap();
   const utils = trpc.useUtils();
 
   const isRecurring = booking.recurringEventId !== null;
@@ -241,6 +243,7 @@ export function BookingActionsDropdown({
     isTabUnconfirmed,
     isDisabledCancelling,
     isDisabledRescheduling,
+    isMinimumCancellationNoticeEnabled: !!flags["minimum-cancellation-notice"],
     isCalVideoLocation,
     showPendingPayment,
     isAttendee,

@@ -828,6 +828,7 @@ export const EventAdvancedTab = ({
                 checked={value}
                 onCheckedChange={(val) => {
                   onChange(val);
+                  if (val) formMethods.setValue("minimumCancellationNotice", null, { shouldDirty: true });
                 }}
               />
             )}
