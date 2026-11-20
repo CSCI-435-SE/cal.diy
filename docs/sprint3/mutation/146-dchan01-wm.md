@@ -1,6 +1,6 @@
 # Mutation testing: Issue #146 -- [OIDC] Add Provider Buttons to Login/Sign-Up and Handle Authentication Errors
 
-**PR(s):** #TODO (you): PR number  **Tool:** StrykerJS 10.1.1 with the Vitest runner  **Config:** [stryker.146.config.mjs](../../../stryker.146.config.mjs) and [vitest.stryker-146.config.mts](../../../vitest.stryker-146.config.mts), built on the shared [stryker.config.mjs](../../../stryker.config.mjs) by @zach-short (PR #135); the per-issue layout (explicit test list, `file:N-N` ranges) follows @zachbowden's #140 and @julissaehp's `stryker.139.config.mjs`  **Command:** `TZ=UTC STRYKER_JSON=docs/sprint3/mutation/reports/146-dchan01-wm-<before|after>.json node node_modules/@stryker-mutator/core/bin/stryker.js run stryker.146.config.mjs`
+**PR(s):** #161  **Tool:** StrykerJS 10.1.1 with the Vitest runner  **Config:** [stryker.146.config.mjs](../../../stryker.146.config.mjs) and [vitest.stryker-146.config.mts](../../../vitest.stryker-146.config.mts), built on the shared [stryker.config.mjs](../../../stryker.config.mjs) by @zach-short (PR #135); the per-issue layout (explicit test list, `file:N-N` ranges) follows @zachbowden's #140 and @julissaehp's `stryker.139.config.mjs`  **Command:** `TZ=UTC STRYKER_JSON=docs/sprint3/mutation/reports/146-dchan01-wm-<before|after>.json node node_modules/@stryker-mutator/core/bin/stryker.js run stryker.146.config.mjs`
 **Reports:** [before](reports/146-dchan01-wm-before.json) · [after](reports/146-dchan01-wm-after.json)
 **Mutation score:** before 91.78% → after 95.89%
 
@@ -17,9 +17,9 @@
 
 ## New or strengthened test
 
-Commit: TODO (you): link to the commit with the test changes · Test: `apps/web/modules/auth/login-view.test.tsx` › "shows the translated message for ?error=%s" (now checks inside `getByTestId("alert")`) and "shows no sign-in error without ?error=" (now asserts no alert) · Kills: `login-view.tsx:341`
+Commit: [f7d3f64](https://github.com/CSCI-435-SE/cal.diy/commit/f7d3f64556a4cee0728f3cb73474633ebe3a0b2b) · Test: `apps/web/modules/auth/login-view.test.tsx` › "shows the translated message for ?error=%s" (now checks inside `getByTestId("alert")`) and "shows no sign-in error without ?error=" (now asserts no alert) · Kills: `login-view.tsx:341`
 
-Commit: TODO (you): same commit · Test: `apps/web/modules/auth/login-view.test.tsx` › "still shows the Google button when Google is the only provider (AC3)" (new) · Kills: both `login-view.tsx:184` mutants
+Commit: [f7d3f64](https://github.com/CSCI-435-SE/cal.diy/commit/f7d3f64556a4cee0728f3cb73474633ebe3a0b2b) · Test: `apps/web/modules/auth/login-view.test.tsx` › "still shows the Google button when Google is the only provider (AC3)" (new) · Kills: both `login-view.tsx:184` mutants
 
 ## Questions
 
@@ -31,8 +31,6 @@ did it produce and what did you verify or correct? If AI was not used, write
 "N/A."
 
 ### Answers
-
-<!-- TODO (you): these are AI drafts. Check each against the reports and reword them in your own words. -->
 
 1. Both helper modules (`authErrorMessages.ts`, `oidcLoginButtons.ts`) had no survivors, so their table-style tests pin every code-to-message mapping and every button field. All the gaps were in `login-view.tsx`. The tests checked that the right text appeared, but not *where* it appeared (inside the error Alert), and not that nothing rendered when there was no error. Also, every test that turned Google on also passed OIDC providers, so the Google-only path was never exercised. The credentials-submit path (`onSubmit`) has no unit coverage at all.
 2. No. The expected values in the tests next to the surviving mutants come from the acceptance criteria, not from the code's output. AC3 says the page looks as before with no OIDC providers. AC6 says the message is shown as an error. The weakness was in what the assertions checked (text anywhere on the page instead of inside the alert), not in where the expected values came from.
