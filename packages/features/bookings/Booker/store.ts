@@ -606,6 +606,8 @@ export const createBookerStore = () =>
         get().crmRecordId === crmRecordId
       )
         return;
+      // initialize also re-runs for unrelated changes (layout, durations), which must not clear the choice
+      const isReschedulingAnotherBooking = get().rescheduleUid !== rescheduleUid;
       set({
         username,
         eventSlug,
@@ -613,6 +615,7 @@ export const createBookerStore = () =>
         org,
         rescheduleUid,
         rescheduledBy,
+        rescheduleScope: isReschedulingAnotherBooking ? "single" : get().rescheduleScope,
         bookingUid,
         bookingData,
         layout: layout || BookerLayouts.MONTH_VIEW,
