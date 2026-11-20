@@ -1,0 +1,17 @@
+# Local OIDC test provider for the OIDC sign-in feature (#131). Not part of the shared docker-compose.yml.
+# See README.md in this folder for the commands and the test users.
+name: cal-diy-keycloak
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Fixes the issuer to localhost:8180 even when Keycloak is reached as 127.0.0.1.
+      KC_HOSTNAME: http://localhost:8180
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./realm-cal-diy.json:/opt/keycloak/data/import/realm-cal-diy.json:ro
