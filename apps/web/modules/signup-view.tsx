@@ -37,6 +37,8 @@ import { Button } from "@calcom/ui/components/button";
 import { CheckboxField, Form, PasswordField, SelectField, TextField } from "@calcom/ui/components/form";
 import { Icon } from "@calcom/ui/components/icon";
 import { showToast } from "@calcom/ui/components/toast";
+import type { OidcLoginButton } from "@calcom/web/modules/auth/lib/oidcLoginButtons";
+import { getOidcSignInProviderId } from "@calcom/web/modules/auth/lib/oidcLoginButtons";
 import { InfoIcon, ShieldCheckIcon, StarIcon } from "@coss/ui/icons";
 import { Analytics as DubAnalytics } from "@dub/analytics/react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -196,6 +198,7 @@ export default function Signup({
   orgSlug,
   isGoogleLoginEnabled,
   isOutlookLoginEnabled,
+  oidcProviders,
   orgAutoAcceptEmail,
   redirectUrl,
   emailVerificationEnabled,
@@ -731,7 +734,24 @@ export default function Signup({
                       </div>
                     )}
 
-                    {(isGoogleLoginEnabled || isOutlookLoginEnabled) && (
+                    {oidcProviders.map((provider: OidcLoginButton) => (
+                      <div key={provider.id} className="flex flex-col gap-2 md:flex-row">
+                        <Button
+                          color="secondary"
+                          disabled={isGoogleLoading || isMicrosoftLoading}
+                          className={classNames("w-full justify-center rounded-md text-center")}
+                          data-testid={`continue-with-oidc-${provider.id}`}
+                          onClick={async () => {
+                            await signIn(getOidcSignInProviderId(provider.id), {
+                              callbackUrl: redirectUrl || undefined,
+                            });
+                          }}>
+                          {t("continue_with_provider", { providerName: provider.displayName })}
+                        </Button>
+                      </div>
+                    ))}
+
+                    {(isGoogleLoginEnabled || isOutlookLoginEnabled || oidcProviders.length > 0) && (
                       <div>
                         <div className="relative flex items-center">
                           <div className="grow border-subtle border-t" />
