@@ -8,6 +8,7 @@ import {
   OUTLOOK_CLIENT_SECRET,
   OUTLOOK_LOGIN_ENABLED,
 } from "@calcom/features/auth/lib/outlook";
+import { isOidcProviderId } from "@calcom/features/auth/oidc/lib/oidcProviderId";
 import { CredentialRepository } from "@calcom/features/credentials/repositories/CredentialRepository";
 import { buildCredentialCreateData } from "@calcom/features/credentials/services/CredentialDataService";
 import { ProfileRepository } from "@calcom/features/profile/repositories/ProfileRepository";
@@ -378,11 +379,14 @@ const calcomAdapter = CalComAdapter(prisma);
 export const getOptions = ({
   getDubId,
   getTrackingData,
+  dynamicProviders = [],
 }: {
   /** so we can extract the Dub cookie in both pages and app routers */
   getDubId: () => string | undefined;
   /** Ad tracking data for Stripe customer metadata */
   getTrackingData: () => TrackingData;
+  /** Providers loaded per request (admin-configured OIDC providers), added after the built-in ones */
+  dynamicProviders?: Provider[];
 }): AuthOptions => ({
   adapter: calcomAdapter,
   session: {
@@ -417,7 +421,7 @@ export const getOptions = ({
     verifyRequest: "/auth/verify",
     // newUser: "/auth/new", // New users will be directed here on first sign in (leave the property out if not of interest)
   },
-  providers,
+  providers: [...providers, ...dynamicProviders],
   callbacks: {
     async jwt({
       // Always available but with a little difference in value
@@ -817,6 +821,16 @@ export const getOptions = ({
         profile,
         account,
       } = params;
+
+      // Temporary until OidcSignInService exists (#131 sub-issue 5b): the shared branches below would
+      // let an OIDC login match or take over an existing account by email (#131 criterion 28).
+      // next-auth runs signIn before it creates or links any account, so refusing here writes nothing.
+      if (account?.provider && isOidcProviderId(account.provider)) {
+        log.warn("callbacks:signIn - OIDC sign-in is not available yet, rejecting login", {
+          provider: account.provider,
+        });
+        return "/auth/error?error=unknown-provider";
+      }
 
       log.debug("callbacks:signin", safeStringify(params));
 
