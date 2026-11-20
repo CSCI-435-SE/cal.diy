@@ -4,7 +4,9 @@ import dayjs from "@calcom/dayjs";
 import { isBookingDryRun } from "@calcom/features/bookings/Booker/utils/isBookingDryRun";
 import { getRoutedTeamMemberIdsFromSearchParams } from "@calcom/lib/bookings/getRoutedTeamMemberIdsFromSearchParams";
 import { parseRecurringDates } from "@calcom/lib/parse-dates";
+import { shiftSeriesOccurrences } from "@calcom/lib/shift-recurring-series";
 import type { BookerEvent, BookingCreateBody, RecurringBookingCreateBody } from "../../../types";
+import type { SeriesOccurrence } from "../../get-booking";
 import type { Tracking } from "../../handleNewBooking/types";
 
 export type BookingOptions = {
@@ -126,6 +128,43 @@ export const mapRecurringBookingToMutationInput = (
     recurringEventId,
     schedulingType: booking.event.schedulingType || undefined,
     recurringCount: recurringDates.length,
+    tracking,
+  }));
+};
+
+// Reschedules "this and all following" occurrences: one request per existing occurrence, each replacing
+// it via `rescheduleUid`. The existing `recurringEventId` is kept so the series stays one unit and the
+// confirmation email describes the whole series.
+export const mapSeriesRescheduleToMutationInput = ({
+  booking,
+  seriesOccurrences,
+  recurringEventId,
+  tracking,
+}: {
+  booking: BookingOptions;
+  // Sorted by start time; the first entry is the occurrence being rescheduled.
+  seriesOccurrences: SeriesOccurrence[];
+  recurringEventId: string;
+  tracking?: Tracking;
+}): RecurringBookingCreateBody[] => {
+  const shiftedOccurrences = shiftSeriesOccurrences({
+    occurrences: seriesOccurrences,
+    oldAnchorStart: seriesOccurrences[0].startTime,
+    newAnchorStart: booking.date,
+    timeZone: booking.timeZone,
+    durationMinutes: booking.duration || booking.event.length,
+  });
+
+  const input = mapBookingToMutationInput({ ...booking, bookingUid: undefined });
+
+  return shiftedOccurrences.map(({ rescheduleUid, start, end }) => ({
+    ...input,
+    start,
+    end,
+    rescheduleUid,
+    recurringEventId,
+    schedulingType: booking.event.schedulingType || undefined,
+    recurringCount: shiftedOccurrences.length,
     tracking,
   }));
 };

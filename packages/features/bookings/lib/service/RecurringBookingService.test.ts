@@ -1,10 +1,13 @@
+import prismaMock from "@calcom/testing/lib/__mocks__/prisma";
 import {
+  BookingLocations,
   createBookingScenario,
   getBooker,
   getDate,
   getGoogleCalendarCredential,
   getOrganizer,
   getScenarioData,
+  mockCalendar,
   mockCalendarToHaveNoBusySlots,
   mockSuccessfulVideoMeetingCreation,
   TestData,
@@ -23,6 +26,7 @@ import { describe, expect } from "vitest";
 
 import { getRecurringBookingService } from "@calcom/features/bookings/di/RecurringBookingService.container";
 import { WEBAPP_URL } from "@calcom/lib/constants";
+import { ErrorCode } from "@calcom/lib/errorCodes";
 import logger from "@calcom/lib/logger";
 import { BookingStatus } from "@calcom/prisma/enums";
 import { test } from "@calcom/testing/lib/fixtures/fixtures";
@@ -254,6 +258,260 @@ describe("handleNewRecurringBooking", () => {
         timeout
       );
     });
+  });
+
+  describe("Series reschedule:", () => {
+    const seriesId = "series-reschedule-recurring-event-id";
+    const seriesDays = [1, 8, 15].map((dateIncrement) => getDate({ dateIncrement }).dateString);
+    const seriesUids = ["series-occurrence-1", "series-occurrence-2", "series-occurrence-3"];
+    const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+    const organizerEmail = "organizer@example.com";
+
+    const otherSeriesBookingUid = "other-series-occurrence";
+    const otherSeriesDay = getDate({ dateIncrement: 22 }).dateString;
+
+    async function setupSeries({
+      busySlots = [],
+      eventTypeOverrides = {},
+      withOtherSeriesBooking = false,
+    }: {
+      busySlots?: { start: `${string}Z`; end: `${string}Z` }[];
+      eventTypeOverrides?: { periodType?: "ROLLING"; periodDays?: number; periodCountCalendarDays?: boolean };
+      withOtherSeriesBooking?: boolean;
+    } = {}) {
+      const otherSeriesBookings = withOtherSeriesBooking
+        ? [
+            {
+              uid: otherSeriesBookingUid,
+              eventTypeId: 1,
+              userId: 101,
+              status: BookingStatus.ACCEPTED,
+              recurringEventId: "another-series-recurring-event-id",
+              startTime: `${otherSeriesDay}T04:00:00.000Z`,
+              endTime: `${otherSeriesDay}T04:30:00.000Z`,
+            },
+          ]
+        : [];
+      const organizer = getOrganizer({
+        name: "Organizer",
+        email: organizerEmail,
+        id: 101,
+        schedules: [TestData.schedules.IstWorkHours],
+        credentials: [getGoogleCalendarCredential()],
+        selectedCalendars: [TestData.selectedCalendars.google],
+      });
+
+      await createBookingScenario(
+        getScenarioData({
+          eventTypes: [
+            {
+              id: 1,
+              slotInterval: 30,
+              length: 30,
+              recurringEvent: { freq: 2, count: 3, interval: 1 },
+              users: [{ id: 101 }],
+              ...eventTypeOverrides,
+            },
+          ],
+          bookings: [
+            ...otherSeriesBookings,
+            ...seriesDays.map((day, index) => ({
+              uid: seriesUids[index],
+              eventTypeId: 1,
+              userId: 101,
+              status: BookingStatus.ACCEPTED,
+              recurringEventId: seriesId,
+              startTime: `${day}T04:00:00.000Z`,
+              endTime: `${day}T04:30:00.000Z`,
+              references: [
+                {
+                  type: "google_calendar",
+                  uid: `MOCK_EVENT_${index}`,
+                  meetingId: `MOCK_EVENT_${index}`,
+                  meetingPassword: "MOCK_PASSWORD",
+                  meetingUrl: "https://UNUSED_URL",
+                  externalCalendarId: "MOCK_EXTERNAL_CALENDAR_ID",
+                  credentialId: undefined,
+                },
+              ],
+            })),
+          ],
+          organizer,
+          apps: [TestData.apps["google-calendar"], TestData.apps["daily-video"]],
+        })
+      );
+
+      mockSuccessfulVideoMeetingCreation({ metadataLookupKey: "dailyvideo" });
+      await mockCalendar("googlecalendar", {
+        create: { uid: "MOCK_ID" },
+        update: { uid: "UPDATED_MOCK_ID" },
+        busySlots,
+      });
+    }
+
+    // Moves every occurrence from 04:00 to 04:15 UTC, which overlaps each occurrence's own old slot.
+    function getSeriesRescheduleRequest(rescheduleUids = seriesUids) {
+      const baseRequest = getMockRequestDataForBooking({
+        data: {
+          eventTypeId: 1,
+          start: `${seriesDays[0]}T04:15:00.000Z`,
+          end: `${seriesDays[0]}T04:45:00.000Z`,
+          recurringEventId: seriesId,
+          recurringCount: seriesDays.length,
+          rescheduledBy: booker.email,
+          responses: {
+            email: booker.email,
+            name: booker.name,
+            location: { optionValue: "", value: BookingLocations.CalVideo },
+          },
+        },
+      });
+
+      return seriesDays.map((day, index) => ({
+        ...baseRequest,
+        start: `${day}T04:15:00.000Z`,
+        end: `${day}T04:45:00.000Z`,
+        rescheduleUid: rescheduleUids[index],
+      }));
+    }
+
+    async function expectSeriesUnchanged() {
+      const bookings = await prismaMock.booking.findMany({ where: { recurringEventId: seriesId } });
+      expect(bookings).toHaveLength(seriesUids.length);
+      expect(bookings.every((booking) => booking.status === BookingStatus.ACCEPTED)).toBe(true);
+    }
+
+    test(
+      "moves every remaining occurrence, keeps the series and sends one set of emails",
+      async ({ emails }) => {
+        await setupSeries();
+
+        const createdBookings = await getRecurringBookingService().createBooking({
+          bookingData: getSeriesRescheduleRequest(),
+          bookingMeta: { userId: -1 },
+          creationSource: "WEBAPP",
+        });
+
+        expect(createdBookings).toHaveLength(seriesUids.length);
+        for (const [index, oldUid] of seriesUids.entries()) {
+          const oldBooking = await prismaMock.booking.findUnique({ where: { uid: oldUid } });
+          expect(oldBooking).toEqual(
+            expect.objectContaining({ status: BookingStatus.CANCELLED, rescheduled: true })
+          );
+
+          const newBooking = await prismaMock.booking.findUnique({
+            where: { uid: createdBookings[index].uid },
+          });
+          expect(newBooking).toEqual(
+            expect.objectContaining({
+              status: BookingStatus.ACCEPTED,
+              recurringEventId: seriesId,
+              fromReschedule: oldUid,
+              startTime: new Date(`${seriesDays[index]}T04:15:00.000Z`),
+            })
+          );
+        }
+
+        // Only the first slot sends: one rescheduled email to the organizer and one to the booker.
+        expect(emails.get()).toHaveLength(2);
+        const rescheduledTitle = "event_type_has_been_rescheduled_on_time_date";
+        expect(emails).toHaveEmail({ titleTag: rescheduledTitle, to: organizerEmail }, organizerEmail);
+        const bookerAddress = `${booker.name} <${booker.email}>`;
+        expect(emails).toHaveEmail({ titleTag: rescheduledTitle, to: bookerAddress }, bookerAddress);
+      },
+      timeout
+    );
+
+    test(
+      "reports the busy date and changes nothing when one date conflicts",
+      async () => {
+        await setupSeries({
+          busySlots: [{ start: `${seriesDays[1]}T04:30:00.000Z`, end: `${seriesDays[1]}T05:00:00.000Z` }],
+        });
+
+        await expect(
+          getRecurringBookingService().createBooking({
+            bookingData: getSeriesRescheduleRequest(),
+            bookingMeta: { userId: -1 },
+            creationSource: "WEBAPP",
+          })
+        ).rejects.toMatchObject({
+          code: ErrorCode.SeriesRescheduleConflict,
+          data: { conflictingDates: [`${seriesDays[1]}T04:15:00.000Z`] },
+        });
+
+        await expectSeriesUnchanged();
+      },
+      timeout
+    );
+
+    test(
+      "reports dates outside the booking window and changes nothing",
+      async () => {
+        await setupSeries({
+          eventTypeOverrides: { periodType: "ROLLING", periodDays: 10, periodCountCalendarDays: true },
+        });
+
+        await expect(
+          getRecurringBookingService().createBooking({
+            bookingData: getSeriesRescheduleRequest(),
+            bookingMeta: { userId: -1 },
+            creationSource: "WEBAPP",
+          })
+        ).rejects.toMatchObject({
+          code: ErrorCode.SeriesRescheduleConflict,
+          data: { conflictingDates: [`${seriesDays[2]}T04:15:00.000Z`] },
+        });
+
+        await expectSeriesUnchanged();
+      },
+      timeout
+    );
+
+    test(
+      "rejects a request that reuses an occurrence and changes nothing",
+      async () => {
+        await setupSeries();
+
+        await expect(
+          getRecurringBookingService().createBooking({
+            bookingData: getSeriesRescheduleRequest([seriesUids[0], seriesUids[0], seriesUids[2]]),
+            bookingMeta: { userId: -1 },
+            creationSource: "WEBAPP",
+          })
+        ).rejects.toMatchObject({ code: ErrorCode.BadRequest });
+
+        await expectSeriesUnchanged();
+      },
+      timeout
+    );
+
+    test(
+      "rejects a request that includes an occurrence from another series and changes nothing",
+      async () => {
+        await setupSeries({ withOtherSeriesBooking: true });
+
+        await expect(
+          getRecurringBookingService().createBooking({
+            bookingData: getSeriesRescheduleRequest([seriesUids[0], otherSeriesBookingUid, seriesUids[2]]),
+            bookingMeta: { userId: -1 },
+            creationSource: "WEBAPP",
+          })
+        ).rejects.toMatchObject({ code: ErrorCode.BadRequest });
+
+        await expectSeriesUnchanged();
+        const otherSeriesBooking = await prismaMock.booking.findUnique({
+          where: { uid: otherSeriesBookingUid },
+        });
+        expect(otherSeriesBooking).toEqual(
+          expect.objectContaining({
+            status: BookingStatus.ACCEPTED,
+            startTime: new Date(`${otherSeriesDay}T04:00:00.000Z`),
+          })
+        );
+      },
+      timeout
+    );
   });
 
   function getRecurrence({

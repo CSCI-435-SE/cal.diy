@@ -4,6 +4,8 @@ import type { PrismaClient } from "@calcom/prisma";
 import prisma from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 import { MembershipRole } from "@calcom/prisma/enums";
+import { isReschedulableOccurrenceStatus } from "./handleNewBooking/getSeriesRescheduleConflicts";
+import { BookingRepository } from "../repositories/BookingRepository";
 
 type BookingSelect = {
   description: true;
@@ -62,6 +64,7 @@ async function getBooking(prisma: PrismaClient, uid: string, isSeatedEvent?: boo
       eventTypeId: true,
       status: true,
       userId: true,
+      recurringEventId: true,
       eventType: {
         select: {
           disableRescheduling: true,
@@ -103,7 +106,14 @@ async function getBooking(prisma: PrismaClient, uid: string, isSeatedEvent?: boo
   return booking;
 }
 
-export type GetBookingType = Awaited<ReturnType<typeof getBooking>>;
+export type SeriesOccurrence = { uid: string; startTime: string };
+
+export type GetBookingType =
+  | (NonNullable<Awaited<ReturnType<typeof getBooking>>> & {
+      // Only set when loading a recurring booking for reschedule: this occurrence and every later one.
+      seriesOccurrences?: SeriesOccurrence[];
+    })
+  | null;
 
 export const getBookingWithResponses = <
   T extends Prisma.BookingGetPayload<{
@@ -122,6 +132,19 @@ export const getBookingWithResponses = <
 };
 
 export default getBooking;
+
+async function getUpcomingSeriesOccurrences(
+  recurringEventId: string,
+  fromStartTime: Date
+): Promise<SeriesOccurrence[]> {
+  const occurrences = await new BookingRepository(prisma).findByRecurringEventId({ recurringEventId });
+  return occurrences
+    .filter(
+      (occurrence) =>
+        isReschedulableOccurrenceStatus(occurrence.status) && occurrence.startTime >= fromStartTime
+    )
+    .map((occurrence) => ({ uid: occurrence.uid, startTime: occurrence.startTime.toISOString() }));
+}
 
 export const getBookingForReschedule = async (uid: string, userId?: number) => {
   let rescheduleUid: string | null = null;
@@ -222,8 +245,15 @@ export const getBookingForReschedule = async (uid: string, userId?: number) => {
     booking.description = bookingSeatData?.description ?? null;
     booking.responses = bookingResponsesDbSchema.parse(bookingSeatData?.responses ?? {});
   }
+
+  const seriesOccurrences =
+    booking.recurringEventId && !bookingSeatReferenceUid
+      ? await getUpcomingSeriesOccurrences(booking.recurringEventId, new Date(booking.startTime))
+      : undefined;
+
   return {
     ...booking,
+    seriesOccurrences,
     attendees: rescheduleUid
       ? booking.attendees.filter((attendee) => attendee.email === attendeeEmail)
       : hasOwnershipOnBooking
@@ -287,6 +317,7 @@ export const getBookingForSeatedEvent = async (uid: string) => {
     responses: {},
     smsReminderNumber: null,
     location: null,
+    recurringEventId: null,
     eventType: {
       disableRescheduling: false,
       minimumRescheduleNotice: null,
