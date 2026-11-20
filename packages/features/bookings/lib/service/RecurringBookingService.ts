@@ -2,6 +2,7 @@ import type { CreateBookingMeta, CreateRecurringBookingData } from "@calcom/feat
 import type { BookingResponse } from "@calcom/features/bookings/types";
 import { type CreationSource, SchedulingType } from "@calcom/prisma/enums";
 import type { AppsStatus } from "@calcom/types/Calendar";
+import type { SeriesRescheduleDate } from "../handleNewBooking/getSeriesRescheduleConflicts";
 import type { IBookingService } from "../interfaces/IBookingService";
 import type { RegularBookingService } from "./RegularBookingService";
 export type BookingHandlerInput = {
@@ -23,12 +24,14 @@ export const handleNewRecurringBooking = async function (
   const data = input.bookingData;
   const { regularBookingService } = deps;
   const createdBookings: BookingResponse[] = [];
-  const allRecurringDates: { start: string; end: string | undefined }[] = data.map((booking) => {
-    return { start: booking.start, end: booking.end };
+  const allRecurringDates: SeriesRescheduleDate[] = data.map((booking) => {
+    return { start: booking.start, end: booking.end, rescheduleUid: booking.rescheduleUid ?? undefined };
   });
   const appsStatus: AppsStatus[] | undefined = undefined;
 
-  const numSlotsToCheckForAvailability = 1;
+  // A series reschedule must be free on every date, not just the first, before anything is moved.
+  const isSeriesReschedule = data.some((booking) => booking.rescheduleUid);
+  const numSlotsToCheckForAvailability = isSeriesReschedule ? data.length : 1;
 
   let thirdPartyRecurringEventId = null;
 

@@ -164,6 +164,7 @@ export function getHttpStatusCode(cause: Error | ErrorWithCode): number {
     case ErrorCode.BookingSeatsFull:
     case ErrorCode.NotEnoughAvailableSeats:
     case ErrorCode.BookingConflict:
+    case ErrorCode.SeriesRescheduleConflict:
     case ErrorCode.PaymentCreationFailure:
       return 409;
     // 404 Not Found

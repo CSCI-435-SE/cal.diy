@@ -63,6 +63,7 @@ const recurringBookingCreateBodyPartialSchema = z.object({
       z.object({
         start: z.string(),
         end: z.string().optional(),
+        rescheduleUid: z.string().optional(),
       })
     )
     .optional(),

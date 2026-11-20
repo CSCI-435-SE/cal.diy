@@ -100,6 +100,12 @@ import type { getEventTypeResponse } from "../handleNewBooking/getEventTypesFrom
 import { getLocationValuesForDb } from "../handleNewBooking/getLocationValuesForDb";
 import { getRequiresConfirmationFlags } from "../handleNewBooking/getRequiresConfirmationFlags";
 import { getSeatedBooking } from "../handleNewBooking/getSeatedBooking";
+import {
+  getSeriesRescheduleConflicts,
+  hasInvalidSeriesRescheduleUids,
+  type SeriesRescheduleDate,
+  withRescheduleUidForDate,
+} from "../handleNewBooking/getSeriesRescheduleConflicts";
 import { getVideoCallDetails } from "../handleNewBooking/getVideoCallDetails";
 import { handleAppsStatus } from "../handleNewBooking/handleAppsStatus";
 import { loadAndValidateUsers } from "../handleNewBooking/loadAndValidateUsers";
@@ -917,53 +923,68 @@ async function handler(
       input.bookingData.isFirstRecurringSlot &&
       input.bookingData.numSlotsToCheckForAvailability
     ) {
+      const datesToCheck = input.bookingData.allRecurringDates.slice(
+        0,
+        input.bookingData.numSlotsToCheckForAvailability
+      );
       const isTeamEvent =
         eventType.schedulingType === SchedulingType.COLLECTIVE ||
         eventType.schedulingType === SchedulingType.ROUND_ROBIN;
+      // Team events need every fixed host free on their own; other events check all users together.
+      const usersToCheckPerDate = isTeamEvent
+        ? eventTypeWithUsers.users.filter((user) => user.isFixed).map((user) => [user])
+        : [eventTypeWithUsers.users];
 
-      const fixedUsers = isTeamEvent
-        ? eventTypeWithUsers.users.filter((user: IsFixedAwareUserWithCredentials) => user.isFixed)
-        : [];
+      const checkDateIsAvailable = async (date: SeriesRescheduleDate) => {
+        if (skipAvailabilityCheck) return;
+        for (const usersToCheck of usersToCheckPerDate) {
+          await ensureAvailableUsers(
+            { ...eventTypeWithUsers, users: usersToCheck },
+            {
+              dateFrom: dayjs(date.start).tz(reqBody.timeZone).format(),
+              dateTo: dayjs(date.end).tz(reqBody.timeZone).format(),
+              timeZone: reqBody.timeZone,
+              originalRescheduledBooking: withRescheduleUidForDate(originalRescheduledBooking, date),
+            },
+            tracingLogger,
+            calendarFetchMode
+          );
+        }
+      };
 
-      for (
-        let i = 0;
-        i < input.bookingData.allRecurringDates.length &&
-        i < input.bookingData.numSlotsToCheckForAvailability;
-        i++
-      ) {
-        const start = input.bookingData.allRecurringDates[i].start;
-        const end = input.bookingData.allRecurringDates[i].end;
-        if (isTeamEvent) {
-          // each fixed user must be available
-          for (const key in fixedUsers) {
-            if (!skipAvailabilityCheck) {
-              await ensureAvailableUsers(
-                { ...eventTypeWithUsers, users: [fixedUsers[key]] },
-                {
-                  dateFrom: dayjs(start).tz(reqBody.timeZone).format(),
-                  dateTo: dayjs(end).tz(reqBody.timeZone).format(),
-                  timeZone: reqBody.timeZone,
-                  originalRescheduledBooking: originalRescheduledBooking ?? null,
-                },
-                tracingLogger,
-                calendarFetchMode
-              );
-            }
-          }
-        } else {
-          if (!skipAvailabilityCheck) {
-            await ensureAvailableUsers(
-              eventTypeWithUsers,
-              {
-                dateFrom: dayjs(start).tz(reqBody.timeZone).format(),
-                dateTo: dayjs(end).tz(reqBody.timeZone).format(),
-                timeZone: reqBody.timeZone,
-                originalRescheduledBooking,
-              },
-              tracingLogger,
-              calendarFetchMode
-            );
-          }
+      if (datesToCheck.some((date) => date.rescheduleUid)) {
+        // Validate the whole series up front: later slots are written one by one, so anything that would
+        // fail mid-way (bad uid, occurrence cancelled meanwhile, busy date) must be caught before slot 0 writes.
+        const seriesOccurrences = originalRescheduledBooking?.recurringEventId
+          ? await deps.bookingRepository.findByRecurringEventId({
+              recurringEventId: originalRescheduledBooking.recurringEventId,
+            })
+          : [];
+        const requestedUids = datesToCheck.map((date) => date.rescheduleUid);
+        if (hasInvalidSeriesRescheduleUids(requestedUids, seriesOccurrences)) {
+          throw ErrorWithCode.Factory.BadRequest(
+            "Every date in a series reschedule must replace a different upcoming occurrence of the same series"
+          );
+        }
+
+        const conflictingDates = await getSeriesRescheduleConflicts(datesToCheck, async (date) => {
+          await validateBookingTimeIsNotOutOfBounds<typeof eventType>(
+            date.start,
+            reqBody.timeZone,
+            eventType,
+            eventTimeZone,
+            tracingLogger
+          );
+          await checkDateIsAvailable(date);
+        });
+        if (conflictingDates.length) {
+          throw new ErrorWithCode(ErrorCode.SeriesRescheduleConflict, ErrorCode.SeriesRescheduleConflict, {
+            conflictingDates,
+          });
+        }
+      } else {
+        for (const date of datesToCheck) {
+          await checkDateIsAvailable(date);
         }
       }
     }
@@ -1107,7 +1128,10 @@ async function handler(
                       dateFrom: dayjs(start).tz(reqBody.timeZone).format(),
                       dateTo: dayjs(end).tz(reqBody.timeZone).format(),
                       timeZone: reqBody.timeZone,
-                      originalRescheduledBooking,
+                      originalRescheduledBooking: withRescheduleUidForDate(
+                        originalRescheduledBooking,
+                        input.bookingData.allRecurringDates[i]
+                      ),
                     },
                     tracingLogger,
                     calendarFetchMode
