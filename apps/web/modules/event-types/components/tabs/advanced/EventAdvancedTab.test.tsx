@@ -24,6 +24,12 @@ vi.mock("@calcom/lib/hooks/useLocale", async () => {
   };
 });
 
+const isPlatformMock = vi.hoisted(() => vi.fn(() => false));
+
+vi.mock("@calcom/atoms/hooks/useIsPlatform", () => ({
+  useIsPlatform: isPlatformMock,
+}));
+
 vi.mock("@formkit/auto-animate/react", () => ({
   useAutoAnimate: () => [null],
 }));
@@ -207,5 +213,85 @@ describe("EventAdvancedTab - minimum cancellation notice", () => {
       disableCancelling: true,
       minimumCancellationNotice: null,
     });
+  });
+});
+
+describe("EventAdvancedTab - offer a waitlist", () => {
+  const withMetadata = (metadata: Record<string, unknown> | null) =>
+    ({ ...mockEventType, metadata }) as EventTypeSetupProps["eventType"];
+  const waitlistToggle = () => screen.getByTestId("offer-waitlist-toggle");
+  const saveAndGetPayload = async (onSubmit: ReturnType<typeof vi.fn>) => {
+    fireEvent.click(screen.getByRole("button", { name: "Save event type" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    return onSubmit.mock.calls[0][0];
+  };
+
+  it("is on by default for event types saved before the setting existed", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} eventType={withMetadata(null)} />);
+
+    expect(screen.getByText("offer_waitlist")).toBeInTheDocument();
+    expect(screen.getByText("offer_waitlist_description")).toBeInTheDocument();
+    expect(waitlistToggle()).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("sits between the Offer seats and Hide organizer email settings", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} />);
+
+    const seats = screen.getByTestId("offer-seats-toggle");
+    const hideOrganizerEmail = screen.getByText("hide_organizer_email");
+    expect(seats.compareDocumentPosition(waitlistToggle())).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(waitlistToggle().compareDocumentPosition(hideOrganizerEmail)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it("shows the waitlist as off when the event type is reopened after turning it off", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} eventType={withMetadata({ disableWaitlist: true })} />);
+
+    expect(waitlistToggle()).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("saves disableWaitlist in the metadata when turned off, keeping the other metadata", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AdvancedTabHarness onSubmit={onSubmit} eventType={withMetadata({ bookingReminderMinutes: 60 })} />
+    );
+
+    fireEvent.click(waitlistToggle());
+
+    expect(waitlistToggle()).toHaveAttribute("aria-checked", "false");
+    expect(await saveAndGetPayload(onSubmit)).toMatchObject({
+      id: 1,
+      metadata: { bookingReminderMinutes: 60, disableWaitlist: true },
+    });
+  });
+
+  it("saves the waitlist as on again when turned back on", async () => {
+    const onSubmit = vi.fn();
+    render(<AdvancedTabHarness onSubmit={onSubmit} eventType={withMetadata({ disableWaitlist: true })} />);
+
+    fireEvent.click(waitlistToggle());
+
+    expect(await saveAndGetPayload(onSubmit)).toMatchObject({ id: 1, metadata: { disableWaitlist: false } });
+  });
+
+  it("sends nothing about the waitlist when the host saves without touching it", async () => {
+    const onSubmit = vi.fn();
+    render(<AdvancedTabHarness onSubmit={onSubmit} />);
+
+    chooseRescheduleReason("mandatory_for_both");
+
+    expect(await saveAndGetPayload(onSubmit)).not.toHaveProperty("metadata");
+  });
+
+  it("is hidden in platform builds, which have no waitlist", () => {
+    isPlatformMock.mockReturnValue(true);
+    try {
+      render(<AdvancedTabHarness onSubmit={vi.fn()} />);
+      expect(screen.queryByTestId("offer-waitlist-toggle")).not.toBeInTheDocument();
+      expect(screen.getByTestId("offer-seats-toggle")).toBeInTheDocument();
+    } finally {
+      isPlatformMock.mockReturnValue(false);
+    }
   });
 });

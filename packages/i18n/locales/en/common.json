@@ -4856,6 +4856,8 @@
   "auth_error_unknown_provider": "This sign-in method is not available. Try another sign-in method.",
   "single_sign_on": "single sign-on",
   "continue_with_provider": "Continue with {{providerName}}",
+  "offer_waitlist": "Offer a waitlist",
+  "offer_waitlist_description": "When this event is fully booked, attendees can join a waitlist and are offered spots that open up. Turning it off keeps everyone already waiting, but sends no new offers until you turn it back on.",
   "running_late": "Running late",
   "running_late_dialog_description": "Let your attendees know you're running late. They'll get an email; the booking time stays the same.",
   "running_late_delay_label": "How late will you be?",

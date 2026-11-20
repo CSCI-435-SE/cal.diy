@@ -1,3 +1,4 @@
+import { ErrorCode } from "@calcom/lib/errorCodes";
 import { WaitlistStatus } from "@calcom/prisma/enums";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WaitlistEntryDto, WaitlistRepository } from "../repositories/WaitlistRepository";
@@ -16,6 +17,8 @@ function makeFakeRepo() {
   const attendeeCounts: { startTime: Date; attendees: number }[] = [];
   let seatsPerTimeSlot: number | null = null;
   let eventTypeDeleted = false;
+  // Event type 3 is a second event type of the same host, to check the setting is per event type
+  const waitlistDisabledFor = new Set<number>();
   // Bookings at one specific time; any other time falls back to `bookedEmails`
   const bookedAt = new Map<number, string[] | null>();
   let seq = 0;
@@ -72,13 +75,14 @@ function makeFakeRepo() {
       return true;
     },
     findEventTypeForWaitlist: async (id: number) =>
-      id === 1 && !eventTypeDeleted
+      (id === 1 && !eventTypeDeleted) || id === 3
         ? {
-            id: 1,
-            title: "Intro call",
-            slug: "intro",
+            id,
+            title: id === 1 ? "Intro call" : "Office hours",
+            slug: id === 1 ? "intro" : "office-hours",
             length: 30,
             seatsPerTimeSlot,
+            disableWaitlist: waitlistDisabledFor.has(id),
             team: null,
             owner: { username: "host" },
             users: [],
@@ -123,6 +127,10 @@ function makeFakeRepo() {
     },
     deleteEventType: () => {
       eventTypeDeleted = true;
+    },
+    setWaitlistDisabled: (disabled: boolean, eventTypeId = 1) => {
+      if (disabled) waitlistDisabledFor.add(eventTypeId);
+      else waitlistDisabledFor.delete(eventTypeId);
     },
   };
 }
@@ -529,6 +537,161 @@ describe("WaitlistService", () => {
 
       await service.releaseHoldAfterBooking({ uid: "uid-1", eventTypeId: 1, start: freedSlot().start });
       expect(fake.holds).toEqual([]);
+    });
+  });
+
+  describe("when the host turns the waitlist off", () => {
+    const range = { eventTypeId: 1, from: new Date(NOW), to: new Date(NOW + 48 * HOUR) };
+    const { WAITING, OFFERED, EXPIRED, LEFT } = WaitlistStatus;
+
+    it("rejects joining with Forbidden and adds no entry, and accepts joining once turned back on", async () => {
+      fake.setWaitlistDisabled(true);
+      // API callers only see the message, so it has to say why they were refused
+      await expect(join("a@x.com")).rejects.toMatchObject({
+        code: ErrorCode.Forbidden,
+        message: "The waitlist is turned off for event type 1",
+      });
+      expect(fake.rows).toEqual([]);
+
+      fake.setWaitlistDisabled(false);
+      await expect(join("a@x.com")).resolves.toBeTruthy();
+      expect(fake.rows).toHaveLength(1);
+    });
+
+    it("only affects the event type it was turned off for", async () => {
+      fake.bookedTimes.push(new Date(NOW + 8 * HOUR));
+      await join("first@x.com");
+      await service.join({
+        eventTypeId: 3,
+        name: "o",
+        email: "o@x.com",
+        timeZone: "UTC",
+        date: "2026-11-03",
+      });
+      fake.setWaitlistDisabled(true, 1);
+
+      await expect(join("second@x.com")).rejects.toMatchObject({ code: ErrorCode.Forbidden });
+      await expect(
+        service.join({ eventTypeId: 3, name: "p", email: "p@x.com", timeZone: "UTC", date: "2026-11-03" })
+      ).resolves.toMatchObject({ eventTypeId: 3 });
+      expect(await service.getBookedTimes(range)).toEqual([]);
+      expect(await service.getBookedTimes({ ...range, eventTypeId: 3 })).toEqual([new Date(NOW + 8 * HOUR)]);
+      expect(await service.offerSpot(freedSlot())).toEqual([]);
+      expect(await service.offerSpot({ ...freedSlot(), eventTypeId: 3 })).toEqual([2]);
+    });
+
+    it("reports no booked times, so the booking page shows no waitlist options, until turned back on", async () => {
+      fake.bookedTimes.push(new Date(NOW + 8 * HOUR));
+      fake.setWaitlistDisabled(true);
+      expect(await service.getBookedTimes(range)).toEqual([]);
+
+      fake.setWaitlistDisabled(false);
+      expect(await service.getBookedTimes(range)).toEqual([new Date(NOW + 8 * HOUR)]);
+    });
+
+    it("makes no offer, hold or email for a freed slot, and keeps everyone waiting in the queue", async () => {
+      await join("first@x.com");
+      await join("second@x.com");
+      fake.setWaitlistDisabled(true);
+
+      expect(await service.offerSpot(freedSlot())).toEqual([]);
+
+      expect(fake.rows.map((r) => r.status)).toEqual([WAITING, WAITING]);
+      expect(fake.holds).toEqual([]);
+      expect(scheduleOfferExpiry).not.toHaveBeenCalled();
+      expect(sendOfferEmail).not.toHaveBeenCalled();
+    });
+
+    it("keeps an offer made before it was turned off claimable, with its hold", async () => {
+      await join("first@x.com");
+      await service.offerSpot(freedSlot());
+      fake.setWaitlistDisabled(true);
+
+      expect(fake.rows[0].status).toBe(OFFERED);
+      expect(fake.holds.map((h) => h.uid)).toEqual(["uid-1"]);
+      expect(await service.getClaimUrl("uid-1")).toMatch(/^https:\/\/app\.test\/host\/intro\?/);
+
+      await service.releaseHoldAfterBooking({ uid: "uid-1", eventTypeId: 1, start: freedSlot().start });
+      expect(fake.holds).toEqual([]);
+    });
+
+    it("does not pass an expired offer on to the next person", async () => {
+      await join("first@x.com");
+      await join("second@x.com");
+      await service.offerSpot(freedSlot());
+      fake.setWaitlistDisabled(true);
+      sendOfferEmail.mockClear();
+
+      await expireAfterWindow(1);
+
+      expect(fake.rows.map((r) => r.status)).toEqual([EXPIRED, WAITING]);
+      expect(fake.holds).toEqual([]);
+      expect(sendOfferEmail).not.toHaveBeenCalled();
+    });
+
+    it("still lets people leave, without offering a released spot to the next person", async () => {
+      await join("first@x.com");
+      await join("second@x.com");
+      await service.offerSpot(freedSlot());
+      fake.setWaitlistDisabled(true);
+
+      expect(await service.leave("uid-1")).toBe(true);
+      expect(fake.rows.map((r) => r.status)).toEqual([LEFT, WAITING]);
+      expect(fake.holds).toEqual([]);
+
+      expect(await service.leave("uid-2")).toBe(true);
+      expect(fake.rows[1].status).toBe(LEFT);
+    });
+
+    it("offers the next freed slot to people who stayed waiting once turned back on", async () => {
+      await join("first@x.com");
+      fake.setWaitlistDisabled(true);
+      expect(await service.offerSpot(freedSlot())).toEqual([]);
+
+      fake.setWaitlistDisabled(false);
+      expect(await service.offerSpot(slot(47))).toEqual([1]);
+      expect(fake.rows[0]).toMatchObject({ status: OFFERED, offerStart: slot(47).start });
+      expect(fake.holds.map((h) => h.uid)).toEqual(["uid-1"]);
+    });
+
+    describe("on a seated event", () => {
+      beforeEach(() => fake.setSeats(3));
+
+      it("reports no full times until turned back on", async () => {
+        fake.attendeeCounts.push({ startTime: slot(10).start, attendees: 3 });
+        fake.setWaitlistDisabled(true);
+        expect(await service.getBookedTimes(range)).toEqual([]);
+
+        fake.setWaitlistDisabled(false);
+        expect(await service.getBookedTimes(range)).toEqual([slot(10).start]);
+      });
+
+      it("rejects joining a full time with Forbidden", async () => {
+        fake.setBooked(["a@x.com", "b@x.com", "c@x.com"]);
+        fake.setWaitlistDisabled(true);
+
+        await expect(
+          service.join({
+            eventTypeId: 1,
+            name: "d",
+            email: "d@x.com",
+            timeZone: "UTC",
+            date: "2026-11-03",
+            slotStart: freedSlot().start,
+          })
+        ).rejects.toMatchObject({ code: ErrorCode.Forbidden });
+        expect(fake.rows).toEqual([]);
+      });
+
+      it("offers no seat freed by one attendee cancelling while others stay booked", async () => {
+        await join("first@x.com");
+        fake.setBooked(["a@x.com", "b@x.com"]);
+        fake.setWaitlistDisabled(true);
+
+        expect(await service.offerSpot(freedSlot())).toEqual([]);
+        expect(fake.rows[0].status).toBe(WAITING);
+        expect(fake.holds).toEqual([]);
+      });
     });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import z from "zod";
 
-import { excludeOrRequireEmailSchema, recurringEventType } from "./zod-utils";
+import { EventTypeMetaDataSchema, excludeOrRequireEmailSchema, recurringEventType } from "./zod-utils";
 
 describe("excludeOrRequireEmailSchema", () => {
   const parse = (input: string) => z.object({ v: excludeOrRequireEmailSchema }).safeParse({ v: input });
@@ -117,5 +117,21 @@ describe("recurringEventType", () => {
 
   it.each([7, -1, 1.5, "SU"])("rejects wkst %j", (wkst) => {
     expect(recurringEventType.safeParse({ ...weekly, wkst }).success).toBe(false);
+  });
+});
+
+describe("EventTypeMetaDataSchema disableWaitlist", () => {
+  // The event type update input parses metadata with this schema, and zod drops keys it doesn't list, so a
+  // missing key here would silently discard the host's waitlist setting on save.
+  it.each([true, false])("keeps disableWaitlist: %s when event type metadata is saved", (disableWaitlist) => {
+    expect(EventTypeMetaDataSchema.parse({ disableWaitlist })).toEqual({ disableWaitlist });
+  });
+
+  it("accepts metadata without the setting, as on every existing event type", () => {
+    expect(EventTypeMetaDataSchema.parse({})).toEqual({});
+  });
+
+  it("rejects a value that isn't a boolean", () => {
+    expect(EventTypeMetaDataSchema.safeParse({ disableWaitlist: "yes" }).success).toBe(false);
   });
 });

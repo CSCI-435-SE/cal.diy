@@ -55,6 +55,9 @@ export class WaitlistService {
 
     const eventType = await this.deps.waitlistRepo.findEventTypeForWaitlist(input.eventTypeId);
     if (!eventType) throw ErrorWithCode.Factory.NotFound(`Event type ${input.eventTypeId} not found`);
+    if (eventType.disableWaitlist) {
+      throw ErrorWithCode.Factory.Forbidden(`The waitlist is turned off for event type ${input.eventTypeId}`);
+    }
     if (slotStart && eventType.seatsPerTimeSlot) {
       const bookedEmails = await this.deps.waitlistRepo.findActiveBookingAttendeeEmailsAt({
         eventTypeId: input.eventTypeId,
@@ -87,7 +90,8 @@ export class WaitlistService {
 
   /**
    * Start times of this event type's bookings that could still be waitlisted (more than 6 hours away).
-   * For seated events, only times with every seat booked.
+   * For seated events, only times with every seat booked. None when the host turned the waitlist off, which is
+   * what hides every waitlist option on the booking page.
    */
   async getBookedTimes(input: { eventTypeId: number; from: Date; to: Date }): Promise<Date[]> {
     const earliest = new Date(this.now() + WAITLIST_CLAIM_WINDOW_MS);
@@ -95,7 +99,9 @@ export class WaitlistService {
     if (from >= input.to) return [];
     const range = { eventTypeId: input.eventTypeId, from, to: input.to };
     const repo = this.deps.waitlistRepo;
-    const seats = (await repo.findEventTypeForWaitlist(input.eventTypeId))?.seatsPerTimeSlot;
+    const eventType = await repo.findEventTypeForWaitlist(input.eventTypeId);
+    if (eventType?.disableWaitlist) return [];
+    const seats = eventType?.seatsPerTimeSlot;
     if (!seats) return repo.findActiveBookingStartTimes(range);
 
     const attendeesByTime = new Map<number, number>();
@@ -135,7 +141,9 @@ export class WaitlistService {
 
     const repo = this.deps.waitlistRepo;
     const eventType = await repo.findEventTypeForWaitlist(slot.eventTypeId);
-    if (!eventType) return [];
+    // While the waitlist is off, people already waiting keep their place but get no new offers. Expired and
+    // left offers reach the next person through here too, so they stop as well.
+    if (!eventType || eventType.disableWaitlist) return [];
     const seatsPerTimeSlot = eventType.seatsPerTimeSlot;
 
     const offered: number[] = [];
