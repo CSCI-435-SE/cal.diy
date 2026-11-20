@@ -20,7 +20,7 @@ Full spec: `specs/oidc-sign-in/design.md` (criteria numbers below refer to it). 
 
 **Breakdown of #131 into sub-issues**
 
-Full draft spec (acceptance criteria, edge cases, decisions with alternatives): `specs/oidc-sign-in/` in draft PR #133 (branch `docs/oidc-spec`). Your answers of 2026-11-12 to our 13 questions are recorded in `customer-questions.md` and in the criteria. Q4 (password-login switch) and Q6 (accept the provider's MFA) are Sprint 4 work.
+Full draft spec (acceptance criteria, edge cases, decisions with alternatives): `specs/oidc-sign-in/` in draft PR #133 (branch `docs/oidc-spec`). Your answers of 2026-11-12 to our 13 questions are recorded in `staff-questions.md` and in the criteria. Q4 (password-login switch) and Q6 (accept the provider's MFA) are Sprint 4 work.
 
 | # | Sub-issue | Area in #131 | Size | Depends on | Sprint | Owner | Issue | Status on 2026-11-19 |
 |---|---|---|---|---|---|---|---|---|
@@ -45,11 +45,11 @@ Each seed is the starting spec. The owner expands it into a full issue (story, s
 
 ### 1. OIDC provider data model and repository (M, Sprint 3) (#136, `zach-short`)
 
-Add `OIDC` to `enum IdentityProvider` and a new `OidcProvider` model (fields in design.md, Database Changes) with a migration. Add `PrismaOidcProviderRepository` (#136 names: `findEnabled`, `list`, `findByIdWithEncryptedSecret`, `create`, `update`, `setEnabled`, `countLinkedAccounts`, `deleteWithAccounts`) using `select`, never `include`, and wire it with the moduleLoader DI pattern. The secret column stores only ciphertext. Criteria 3 (shape), 9, 39, 40. Unit tests for the repository with a mocked Prisma client. **Needs a yes before editing `schema.prisma`** (project rule). ~250 lines. Verifiable without the dev server. Follow-up from the customer answers: #136 has no `ownedDomains` or `acceptProviderMfa` column (design criterion 3a, ADR-010, ADR-011). The #136 owner decides whether to add them now or leave them to a Sprint 4 migration.
+Add `OIDC` to `enum IdentityProvider` and a new `OidcProvider` model (fields in design.md, Database Changes) with a migration. Add `PrismaOidcProviderRepository` (#136 names: `findEnabled`, `list`, `findByIdWithEncryptedSecret`, `create`, `update`, `setEnabled`, `countLinkedAccounts`, `deleteWithAccounts`) using `select`, never `include`, and wire it with the moduleLoader DI pattern. The secret column stores only ciphertext. Criteria 3 (shape), 9, 39, 40. Unit tests for the repository with a mocked Prisma client. **Needs a yes before editing `schema.prisma`** (project rule). ~250 lines. Verifiable without the dev server. Follow-up from the course staff answers: #136 has no `ownedDomains` or `acceptProviderMfa` column (design criterion 3a, ADR-010, ADR-011). The #136 owner decides whether to add them now or leave them to a Sprint 4 migration.
 
 ### 2. Local Keycloak test provider and realm (S, Sprint 3) (#151, no assignee)
 
-Add a compose file and a realm export with one client (`cal-diy`, confidential, redirect URI `http://localhost:3000/api/auth/callback/*`) and three users: verified email, unverified email, no email claim. Add a README with exact start and stop commands and the values to paste into the admin page. Where the compose service lives is an owner's call (ADR-008); #151 proposes `specs/oidc-sign-in/test-idp/`. The customer asked that the README let anyone on the team run the tests (Q12). Criterion 42. ~150 lines, mostly JSON. #151 has no assignee and no milestone.
+Add a compose file and a realm export with one client (`cal-diy`, confidential, redirect URI `http://localhost:3000/api/auth/callback/*`) and three users: verified email, unverified email, no email claim. Add a README with exact start and stop commands and the values to paste into the admin page. Where the compose service lives is an owner's call (ADR-008); #151 proposes `specs/oidc-sign-in/test-idp/`. The course staff asked that the README let anyone on the team run the tests (Q12). Criterion 42. ~150 lines, mostly JSON. #151 has no assignee and no milestone.
 
 ### 3. Admin provider service and tRPC procedures (M, Sprint 3) (#152, `julissaehp`)
 
@@ -69,7 +69,7 @@ First seeded as small; #146 sizes it as medium (7 to 9 files, 200 to 300 lines).
 
 ### 7. Link OIDC to existing accounts and accept invites (M, Sprint 4) (no issue yet)
 
-Implement the customer's answers to Q1, Q7 and Q8 (2026-11-12) inside `OidcSignInService`: auto-link only for a verified email on a domain the provider owns, never for `ADMIN` accounts, otherwise reject (27, 27a, ADR-004, ADR-011); a verified login with an invited email accepts the invite, even when "allow new accounts" is off or sign-up is disabled site-wide (29, 18a); two providers with one email (30); email change at the provider, where a taken email keeps the old one and the user sees a notice (31). Needs the `ownedDomains` column (criterion 3a). Calls `linkAccount` inside `signIn` so that next-auth finds the account by (provider, `sub`). **Gets a narrow Deep review.** Criteria 27–32. ~300 lines with tests.
+Implement the course staff's answers to Q1, Q7 and Q8 (2026-11-12) inside `OidcSignInService`: auto-link only for a verified email on a domain the provider owns, never for `ADMIN` accounts, otherwise reject (27, 27a, ADR-004, ADR-011); a verified login with an invited email accepts the invite, even when "allow new accounts" is off or sign-up is disabled site-wide (29, 18a); two providers with one email (30); email change at the provider, where a taken email keeps the old one and the user sees a notice (31). Needs the `ownedDomains` column (criterion 3a). Calls `linkAccount` inside `signIn` so that next-auth finds the account by (provider, `sub`). **Gets a narrow Deep review.** Criteria 27–32. ~300 lines with tests.
 
 ### 8. Connected logins in Settings → Security (M, Sprint 4) (no issue yet)
 
@@ -77,11 +77,11 @@ List linked providers with link dates (33). "Link" starts the flow for the signe
 
 ### 9. Provider removal, forgot-password proof, password-login switch, end-to-end tests (M, Sprint 4) (no issue yet)
 
-Delete with typed confirmation and linked-user counts (36, 37), with "Disable instead" offered first (36a); disable keeps links (38). A test that "Forgot password" works for a user created through OIDC with no password, before and after the provider is removed (37a, customer Q5). The password-login switch with the admin break-glass rule (41, customer Q4). Playwright test against the Keycloak realm for criteria 14 and 15 (43). Split into two PRs: removal and the forgot-password test; then the switch and the Playwright test. ~400 lines.
+Delete with typed confirmation and linked-user counts (36, 37), with "Disable instead" offered first (36a); disable keeps links (38). A test that "Forgot password" works for a user created through OIDC with no password, before and after the provider is removed (37a, course staff Q5). The password-login switch with the admin break-glass rule (41, course staff Q4). Playwright test against the Keycloak realm for criteria 14 and 15 (43). Split into two PRs: removal and the forgot-password test; then the switch and the Playwright test. ~400 lines.
 
 ### 10. Accept the provider's MFA (M, Sprint 4) (no issue yet)
 
-Added after customer Q6 (2026-11-12). A per-provider setting "accept this provider's MFA" (default off) on the admin form (44). Parse the ID token's `amr` claim with the ADR-010 rule; with the setting on and a second factor shown, skip the Cal.diy TOTP step and the site-wide required-setup step (45); otherwise apply Cal.diy 2FA as for a password user, which changes the non-`CAL` exemption in `requiresTwoFactorSetup` (46). Unit tests for each `amr` case (47); the `amr` parser suits mutation testing. Needs the `acceptProviderMfa` column (criterion 3a) and a Keycloak user with OTP. ~250 lines with tests.
+Added after course staff Q6 (2026-11-12). A per-provider setting "accept this provider's MFA" (default off) on the admin form (44). Parse the ID token's `amr` claim with the ADR-010 rule; with the setting on and a second factor shown, skip the Cal.diy TOTP step and the site-wide required-setup step (45); otherwise apply Cal.diy 2FA as for a password user, which changes the non-`CAL` exemption in `requiresTwoFactorSetup` (46). Unit tests for each `amr` case (47); the `amr` parser suits mutation testing. Needs the `acceptProviderMfa` column (criterion 3a) and a Keycloak user with OTP. ~250 lines with tests.
 
 ## Load notes for the team
 

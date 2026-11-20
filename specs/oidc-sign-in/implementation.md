@@ -4,22 +4,22 @@
 
 ## Completed
 
-- Draft spec: `design.md` (43 acceptance criteria), `decisions.md` (ADR-001 to ADR-009), `customer-questions.md`, `breakdown.md`.
+- Draft spec: `design.md` (43 acceptance criteria), `decisions.md` (ADR-001 to ADR-009), `staff-questions.md`, `breakdown.md`.
 - Code reading on `origin/main` at `e01d161c0c` (facts in design.md, Technical Design).
 
 ## In Progress
 
 - Team review of the breakdown and owners.
-- Customer questions not yet posted on #131.
+- Course staff questions not yet posted on #131.
 
 ## Blocked
 
 - Sub-issue 1 waits on a yes for the `schema.prisma` change.
-- Nothing waits on the customer. All 13 questions were answered on #131 on 2026-11-12. Follow-ups F1 to F6 in `customer-questions.md` are not posted; the spec uses the team proposal for each.
+- Nothing waits on the course staff. All 13 questions were answered on #131 on 2026-11-12. Follow-ups F1 to F6 in `staff-questions.md` are not posted; the spec uses the team proposal for each.
 
 ## Sprint 3 slice (demo by 2026-11-19)
 
-Path: an admin adds one Keycloak provider in **Settings → Admin → Identity providers** (secret encrypted), the login page shows "Continue with <name>", a user with a verified email signs in against the local Keycloak and gets a new Cal.diy account, and a user with an unverified email sees the `unverified-email` message. A first login whose email matches an existing account is rejected with `oidc-account-exists`; that is the safe rule under every answer to Q1, so the slice does not wait on the customer.
+Path: an admin adds one Keycloak provider in **Settings → Admin → Identity providers** (secret encrypted), the login page shows "Continue with <name>", a user with a verified email signs in against the local Keycloak and gets a new Cal.diy account, and a user with an unverified email sees the `unverified-email` message. A first login whose email matches an existing account is rejected with `oidc-account-exists`; that is the safe rule under every answer to Q1, so the slice does not wait on the course staff.
 
 Sub-issues on the path and merge order:
 
@@ -30,7 +30,7 @@ Sub-issues on the path and merge order:
 
 Demo script: start Keycloak; sign in as the instance admin; add the provider; Test connection; enable; sign out; click the button; sign in as the verified Keycloak user (new account, onboarding); sign out; sign in as the unverified user (error page).
 
-Moves to Sprint 4: sub-issues 7, 8, 9 and 10 (linking and invites, settings page, removal with counts and the forgot-password test, the password-login switch from customer Q4, Playwright test, and the "accept this provider's MFA" setting from customer Q6). The customer placed Q4 and Q6 in Sprint 4 on 2026-11-12.
+Moves to Sprint 4: sub-issues 7, 8, 9 and 10 (linking and invites, settings page, removal with counts and the forgot-password test, the password-login switch from course staff Q4, Playwright test, and the "accept this provider's MFA" setting from course staff Q6). The course staff placed Q4 and Q6 in Sprint 4 on 2026-11-12.
 
 Risk: sub-issue 5 is the largest and touches the 1,255-line `next-auth-options.ts`. Start it on day one after sub-issue 1 merges. Keep the change to that file to two delegation calls (top of `signIn`, top of `jwt`) and the `getOptions` argument.
 

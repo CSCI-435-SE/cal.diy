@@ -1,6 +1,6 @@
-# Questions for the customer (#131)
+# Questions for the course staff (#131)
 
-Status: all 13 questions answered by `ojcchar` on #131 on 2026-11-12. The questions were posted on #131 by `zach-short` on 2026-11-11, in a shorter wording than the draft below; the numbers match. Each answer below is a summary of the customer's comment. Where an answer changed or added behaviour, the spec criteria named after "Spec" were changed or added (numbers in `design.md`).
+Status: all 13 questions answered by `ojcchar` on #131 on 2026-11-12. The questions were posted on #131 by `zach-short` on 2026-11-11, in a shorter wording than the draft below; the numbers match. Each answer below is a summary of the course staff's comment. Where an answer changed or added behaviour, the spec criteria named after "Spec" were changed or added (numbers in `design.md`).
 
 Follow-up questions that the answers leave open are at the end of this file. They are not posted yet.
 
@@ -67,7 +67,7 @@ Thanks!
 
 ## Follow-up questions (not posted)
 
-The answers leave these points open. Each has the team's proposal, which the spec uses until the customer answers. Post them on #131 as one comment after the team agrees.
+The answers leave these points open. Each has the team's proposal, which the spec uses until the course staff answers. Post them on #131 as one comment after the team agrees.
 
 - F1 (from Q8). Does an invite also skip the provider's allowed-domains list and the global "disable signup" setting? Proposed: yes to both, because the admin or team chose that exact email (criterion 18a).
 - F2 (from Q8). Can an invite be accepted through auto-link when the invited email is on a domain the provider does not own? Proposed: yes, because criterion 29 needs only a verified email that equals the invited email.

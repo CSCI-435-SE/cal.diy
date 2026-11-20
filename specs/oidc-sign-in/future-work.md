@@ -4,7 +4,7 @@ Ideas and enhancements deferred from the initial implementation.
 
 ## Enhancements
 
-- Map provider groups or claims to Cal.diy roles and teams (customer Q9).
+- Map provider groups or claims to Cal.diy roles and teams (course staff Q9).
 - Single logout at the provider (out of scope in #131).
 - Per-provider button icon and color.
 - API v2 endpoints for provider management.

@@ -1,6 +1,6 @@
 # OIDC Sign-In Decisions
 
-Status of each ADR: **Proposed** (team picks, spec review confirms), **Customer** (the customer decides; we propose), or **Owner** (Zachary or the team decides before the PR that needs it). The customer answered every question on #131 on 2026-11-12 (`customer-questions.md`); no ADR still waits on the customer.
+Status of each ADR: **Proposed** (team picks, spec review confirms), **Course staff** (the course staff decides; we propose), or **Owner** (Zachary or the team decides before the PR that needs it). The course staff answered every question on #131 on 2026-11-12 (`staff-questions.md`); no ADR still waits on the course staff.
 
 ## ADR-001: How providers reach NextAuth without a restart
 
@@ -47,7 +47,7 @@ Option 1. New OIDC users get `identityProvider = OIDC` and `identityProviderId =
 
 - `getIdentityProvider` maps the `oidc-` prefix to `OIDC`.
 - Removing a provider means deleting its `Account` rows (criterion 37).
-- `requiresTwoFactorSetup` treats `OIDC` as non-`CAL`, so OIDC users are exempt from site-wide 2FA today. The customer answer to Q6 (2026-11-12) changes this in Sprint 4: OIDC users get Cal.diy 2FA unless the provider's MFA is accepted and shown in `amr` (criteria 44–47, ADR-010).
+- `requiresTwoFactorSetup` treats `OIDC` as non-`CAL`, so OIDC users are exempt from site-wide 2FA today. The course staff answer to Q6 (2026-11-12) changes this in Sprint 4: OIDC users get Cal.diy 2FA unless the provider's MFA is accepted and shown in `amr` (criteria 44–47, ADR-010).
 
 ## ADR-003: Provider id in URLs and `Account.provider`
 
@@ -64,7 +64,7 @@ Option 1.
 
 ## ADR-004: What happens when an OIDC email matches an existing account
 
-Status: **Customer, decided 2026-11-12** (Q1). The customer picked option 3 with option 2 as the fallback. This path gets a narrow Deep (Fable 5.1) review before implementation.
+Status: **Course staff, decided 2026-11-12** (Q1). The course staff picked option 3 with option 2 as the fallback. This path gets a narrow Deep (Fable 5.1) review before implementation.
 
 ### Context
 
@@ -76,15 +76,15 @@ Any provider an admin adds can assert any email, including the email of the inst
 2. **Reject and require linking from settings.** The user signs in with their existing method, then clicks "Link" in Settings → Security, which proves control of both accounts. Pros: no takeover path; simple to test. Cons: one extra step for every existing user at roll-out.
 3. **Auto-link only for allowed domains.** Each provider has a list of email domains the admin says the provider owns. A verified email in that list auto-links; any other match is rejected as in option 2. Accounts with role `ADMIN` never auto-link. Pros: smooth roll-out for the organization's own domain; takeover risk limited to domains the admin vouched for. Cons: more rules to test; a wrong list is still a takeover path for that domain.
 
-### Proposal to the customer
+### Proposal to the course staff
 
 Option 3 with option 2 as the fallback, and no auto-link for `ADMIN` accounts. Sprint 3 ships option 2 only (reject), because it is safe under every answer and the Sprint 3 demo needs only new accounts.
 
 ### Decision
 
-Customer answer, 2026-11-12: "auto-link only when the email is verified and the admin marked the provider as owning that domain. Otherwise reject and let the user link it from settings. Never auto-link admin accounts." That is option 3 with option 2 as the fallback, as proposed. Sprint 3 keeps option 2 for every match (criterion 27). Sprint 4 adds the auto-link (criterion 27a, sub-issue 7). The owned-domain list is a separate field from the sign-up "allowed email domains" (ADR-011).
+Course staff answer, 2026-11-12: "auto-link only when the email is verified and the admin marked the provider as owning that domain. Otherwise reject and let the user link it from settings. Never auto-link admin accounts." That is option 3 with option 2 as the fallback, as proposed. Sprint 3 keeps option 2 for every match (criterion 27). Sprint 4 adds the auto-link (criterion 27a, sub-issue 7). The owned-domain list is a separate field from the sign-up "allowed email domains" (ADR-011).
 
-Invited users (customer Q8) are a separate rule: a verified login with the invited email accepts the invite (criterion 29). It does not need the owned-domain list, because the admin or team chose that exact email.
+Invited users (course staff Q8) are a separate rule: a verified login with the invited email accepts the invite (criterion 29). It does not need the owned-domain list, because the admin or team chose that exact email.
 
 ### Consequences
 
@@ -146,7 +146,7 @@ Option 1. If the ID token has no `email`, the login fails with `missing-email` (
 
 ## ADR-008: Test identity provider
 
-Status: **Owner** (where the compose service lives). The customer accepted Keycloak as the only reference provider on 2026-11-12 (Q12) and asked that the setup be documented so that anyone on the team can run the tests. #151 proposes option 1 with the files in `specs/oidc-sign-in/test-idp/`; #151 has no assignee yet.
+Status: **Owner** (where the compose service lives). The course staff accepted Keycloak as the only reference provider on 2026-11-12 (Q12) and asked that the setup be documented so that anyone on the team can run the tests. #151 proposes option 1 with the files in `specs/oidc-sign-in/test-idp/`; #151 has no assignee yet.
 
 ### Options Considered
 
@@ -170,22 +170,22 @@ Status: Proposed.
 
 ### Decision
 
-Option 1, plus disable (criterion 38) as the reversible choice the page offers first. The customer agreed on 2026-11-12 (Q5) and added two points: admins can disable a provider in place of deleting it (criterion 36a), and the team must prove with a test that "Forgot password" works for users who were created through OIDC and have no password (criterion 37a).
+Option 1, plus disable (criterion 38) as the reversible choice the page offers first. The course staff agreed on 2026-11-12 (Q5) and added two points: admins can disable a provider in place of deleting it (criterion 36a), and the team must prove with a test that "Forgot password" works for users who were created through OIDC and have no password (criterion 37a).
 
 ## ADR-010: What counts as a second factor in the `amr` claim
 
-Status: Proposed. Follows the customer answer to Q6 (2026-11-12). Sprint 4. The customer may want to confirm the rule (follow-up F4 in `customer-questions.md`).
+Status: Proposed. Follows the course staff answer to Q6 (2026-11-12). Sprint 4. The course staff may want to confirm the rule (follow-up F4 in `staff-questions.md`).
 
 ### Context
 
-The customer wants a per-provider setting "accept this provider's MFA". When it is on and the ID token's `amr` claim shows a second factor, Cal.diy skips its own 2FA; when `amr` is missing or shows only a password, Cal.diy 2FA applies (criteria 44–47). `amr` is an optional array of strings. RFC 8176 registers values such as `pwd`, `pin`, `kba` (knowledge), `otp`, `sms`, `tel`, `hwk`, `swk`, `sc` (possession), `fpt`, `face`, `iris`, `retina`, `vbm` (inherence) and `mfa`. Providers send different subsets, and some send none unless configured. Keycloak's `amr` output must be checked against the realm in #151 before code.
+The course staff wants a per-provider setting "accept this provider's MFA". When it is on and the ID token's `amr` claim shows a second factor, Cal.diy skips its own 2FA; when `amr` is missing or shows only a password, Cal.diy 2FA applies (criteria 44–47). `amr` is an optional array of strings. RFC 8176 registers values such as `pwd`, `pin`, `kba` (knowledge), `otp`, `sms`, `tel`, `hwk`, `swk`, `sc` (possession), `fpt`, `face`, `iris`, `retina`, `vbm` (inherence) and `mfa`. Providers send different subsets, and some send none unless configured. Keycloak's `amr` output must be checked against the realm in #151 before code.
 
 ### Options Considered
 
 1. **`mfa`, or two or more different registered values of which at least one is not a knowledge factor.** Example: `["pwd", "otp"]` counts; `["pwd"]` and `["pwd", "kba"]` do not; `["hwk"]` alone does not. Unknown values are ignored. Pros: follows RFC 8176; works for providers that list each method and for providers that send only `mfa`. Cons: a single passkey (`["hwk"]`) does not count, so those users still get Cal.diy 2FA.
 2. **Only the exact value `mfa`.** Pros: simplest rule and test. Cons: many providers list the methods and never send `mfa`, so the setting would do nothing for them.
 3. **Any value other than `pwd`.** Pros: passkeys count. Cons: a single `otp` or `sms` login with no password is still one factor, and an unknown value would count, which is the wrong direction for a security check.
-4. **Use the `acr` claim instead.** Pros: some providers express assurance levels there. Cons: `acr` values are provider-specific strings, so the admin would have to type the expected value; the customer named `amr`.
+4. **Use the `acr` claim instead.** Pros: some providers express assurance levels there. Cons: `acr` values are provider-specific strings, so the admin would have to type the expected value; the course staff named `amr`.
 
 ### Proposal
 
@@ -198,7 +198,7 @@ Option 1. The parser is a pure function with its own unit tests (criterion 47), 
 
 ## ADR-011: One domain list or two
 
-Status: Proposed. Follows the customer answers to Q1 and Q2 (2026-11-12).
+Status: Proposed. Follows the course staff answers to Q1 and Q2 (2026-11-12).
 
 ### Context
 
