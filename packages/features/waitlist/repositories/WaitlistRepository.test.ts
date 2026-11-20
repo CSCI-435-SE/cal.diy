@@ -73,4 +73,29 @@ describe("WaitlistRepository", () => {
       data: expect.objectContaining({ uid: "waitlist:entry", isSeat: true }),
     });
   });
+
+  describe("whether the host turned the waitlist off", () => {
+    const eventTypeRow = (metadata: unknown) => ({ id: 7, title: "Intro", seatsPerTimeSlot: null, metadata });
+
+    it.each([
+      ["turned off", { disableWaitlist: true }, true],
+      ["turned back on", { disableWaitlist: false }, false],
+      ["never set, as on every existing event type", { bookingReminderMinutes: 60 }, false],
+      ["empty metadata", null, false],
+    ])("reads %s metadata as disableWaitlist %s", async (_label, metadata, expected) => {
+      prismaClient.eventType.findUnique.mockResolvedValue(eventTypeRow(metadata));
+
+      const eventType = await repository.findEventTypeForWaitlist(7);
+
+      expect(eventType).toEqual({ id: 7, title: "Intro", seatsPerTimeSlot: null, disableWaitlist: expected });
+      expect(prismaClient.eventType.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ select: expect.objectContaining({ metadata: true }) })
+      );
+    });
+
+    it("returns null for an unknown event type", async () => {
+      prismaClient.eventType.findUnique.mockResolvedValue(null);
+      await expect(repository.findEventTypeForWaitlist(7)).resolves.toBeNull();
+    });
+  });
 });

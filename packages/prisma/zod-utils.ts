@@ -157,6 +157,7 @@ const _eventTypeMetaDataSchemaWithoutApps = z.object({
     .min(1)
     .max(24 * 60)
     .optional(),
+  disableWaitlist: z.boolean().optional(),
   disableStandardEmails: z
     .object({
       all: z

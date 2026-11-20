@@ -1261,6 +1261,23 @@ export const EventAdvancedTab = ({
           </>
         )}
       />
+      {!isPlatform && (
+        <Controller
+          name="metadata.disableWaitlist"
+          render={({ field: { value, onChange } }) => (
+            <SettingsToggle
+              labelClassName="text-sm"
+              toggleSwitchAtTheEnd={true}
+              switchContainerClassName="border-subtle rounded-lg border py-6 px-4 sm:px-6"
+              title={t("offer_waitlist")}
+              description={t("offer_waitlist_description")}
+              data-testid="offer-waitlist-toggle"
+              checked={value !== true}
+              onCheckedChange={(enabled) => onChange(!enabled)}
+            />
+          )}
+        />
+      )}
       <Controller
         name="hideOrganizerEmail"
         render={({ field: { value, onChange } }) => (

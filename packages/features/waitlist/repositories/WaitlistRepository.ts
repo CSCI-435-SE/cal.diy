@@ -1,3 +1,4 @@
+import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import type { PrismaClient } from "@calcom/prisma";
 import { BookingStatus, WaitlistStatus } from "@calcom/prisma/enums";
 import { getWaitlistHoldUid } from "../lib/getWaitlistHoldUid";
@@ -110,7 +111,7 @@ export class WaitlistRepository {
   }
 
   async findEventTypeForWaitlist(eventTypeId: number) {
-    return this.prismaClient.eventType.findUnique({
+    const eventType = await this.prismaClient.eventType.findUnique({
       where: { id: eventTypeId },
       select: {
         id: true,
@@ -118,11 +119,16 @@ export class WaitlistRepository {
         slug: true,
         length: true,
         seatsPerTimeSlot: true,
+        metadata: true,
         team: { select: { slug: true } },
         owner: { select: { username: true } },
         users: { select: { username: true }, take: 1 },
       },
     });
+    if (!eventType) return null;
+    const { metadata, ...rest } = eventType;
+    // The setting lives in the metadata JSON so it needs no migration; callers only see the flag.
+    return { ...rest, disableWaitlist: isPrismaObjOrUndefined(metadata)?.disableWaitlist === true };
   }
 
   async createSlotHold(data: {

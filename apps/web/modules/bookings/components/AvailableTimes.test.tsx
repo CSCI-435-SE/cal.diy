@@ -250,3 +250,37 @@ describe("AvailableTimes with a partial-day out-of-office window", () => {
     expect(screen.queryByText("Back at four")).toBeNull();
   });
 });
+
+describe("AvailableTimes when the host turned the waitlist off", () => {
+  // The booked-times endpoint returns no times for such an event type, so the booker gets an empty list.
+  it("shows a fully booked day as all booked, without any waitlist option", () => {
+    render(<AvailableTimes slots={[]} date="2026-10-08" bookedTimes={[]} event={{ data: null }} />, {
+      mockStore: { eventId: 1 },
+    });
+
+    expect(screen.getByText("all_booked_today")).toBeTruthy();
+    expect(screen.queryByText("waitlist_join_day")).toBeNull();
+    expect(screen.queryByText("waitlist_join_time")).toBeNull();
+  });
+
+  it("keeps a full seated time as 'booking full' instead of offering to join its waitlist", () => {
+    render(
+      <AvailableTimes
+        slots={[seatedSlot("2026-10-08T10:00:00.000Z", 2), seatedSlot("2026-10-08T11:00:00.000Z", 1)]}
+        seatsPerTimeSlot={2}
+        date="2026-10-08"
+        bookedTimes={[]}
+        event={{ data: null }}
+      />,
+      { mockStore: { eventId: 1 } }
+    );
+
+    expect(screen.getAllByTestId("time").map((button) => button.dataset.time)).toEqual([
+      "2026-10-08T10:00:00.000Z",
+      "2026-10-08T11:00:00.000Z",
+    ]);
+    expect(screen.getByText("booking_full")).toBeTruthy();
+    expect(screen.queryByText("waitlist_join_time")).toBeNull();
+    expect(screen.queryByText("waitlist_join_day")).toBeNull();
+  });
+});
