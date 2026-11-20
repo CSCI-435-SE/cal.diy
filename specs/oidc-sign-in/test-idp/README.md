@@ -50,11 +50,13 @@ Cal.diy's callback for a provider is `http://localhost:3000/api/auth/callback/oi
 
 Every user's password is `test-password`. Sign in with the username.
 
-| Username | Email | `email_verified` | Name | Tests |
-|---|---|---|---|---|
-| `verified` | `verified@example.com` | `true` | Vera Verified | A first login creates a new account [14]; the demo |
-| `unverified` | `unverified@example.com` | `false` | Una Unverified | Rejected with `unverified-email` [15] |
-| `noemail` | none | `false` | Nora Noemail | No `email` claim; rejected with `missing-email` [16] |
+| Username | `sub` | Email | `email_verified` | Name | Tests |
+|---|---|---|---|---|---|
+| `verified` | `00000000-0000-4000-8000-000000000001` | `verified@example.com` | `true` | Vera Verified | A first login creates a new account [14]; the demo |
+| `unverified` | `00000000-0000-4000-8000-000000000002` | `unverified@example.com` | `false` | Una Unverified | Rejected with `unverified-email` [15] |
+| `noemail` | `00000000-0000-4000-8000-000000000003` | none | `false` | Nora Noemail | No `email` claim; rejected with `missing-email` [16] |
+
+Each user has a fixed `id` in the realm file, which Keycloak sends as the `sub` claim. A reset keeps the same `sub`, so the `Account` row Cal.diy linked before a reset still matches the user afterwards, and returning-user logins can be tested.
 
 Keycloak sends `email_verified: false` for a user with no email, so the `noemail` token also looks unverified. The login flow has to check for a missing `email` before it checks `email_verified`, or this user gets `unverified-email` instead of `missing-email`.
 
@@ -64,7 +66,7 @@ Keycloak sends `email_verified: false` for a user with no email, so the `noemail
 docker compose -f specs/oidc-sign-in/test-idp/docker-compose.yml down
 ```
 
-This removes the container and everything in it. The next start imports the realm again, so you begin from the same clean realm, users and client. Changes made in the admin console are lost. To pause and keep them, use `stop` and `start` in place of `down` and `up -d`.
+This removes the container and everything in it. The next start imports the realm again, so you begin from the same clean realm, users (with the same `sub`) and client. Changes made in the admin console are lost. To pause and keep them, use `stop` and `start` in place of `down` and `up -d`.
 
 ## Changing the realm
 

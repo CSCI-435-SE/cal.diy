@@ -38,6 +38,7 @@
   ],
   "users": [
     {
+      "id": "00000000-0000-4000-8000-000000000001",
       "username": "verified",
       "email": "verified@example.com",
       "emailVerified": true,
@@ -47,6 +48,7 @@
       "credentials": [{ "type": "password", "value": "test-password", "temporary": false }]
     },
     {
+      "id": "00000000-0000-4000-8000-000000000002",
       "username": "unverified",
       "email": "unverified@example.com",
       "emailVerified": false,
@@ -56,6 +58,7 @@
       "credentials": [{ "type": "password", "value": "test-password", "temporary": false }]
     },
     {
+      "id": "00000000-0000-4000-8000-000000000003",
       "username": "noemail",
       "firstName": "Nora",
       "lastName": "Noemail",
