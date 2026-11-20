@@ -25,6 +25,7 @@ const initialData: AppFlags = {
   "signup-watchlist-review": false,
   "sink-shortener": false,
   "require-two-factor-auth": false,
+  "minimum-cancellation-notice": false,
 };
 
 export function useFlags(): Partial<AppFlags> {

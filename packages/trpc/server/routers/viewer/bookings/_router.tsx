@@ -11,11 +11,13 @@ import { ZGetInputSchema } from "./get.schema";
 import { ZGetBookingAttendeesInputSchema } from "./getBookingAttendees.schema";
 import { ZGetBookingDetailsInputSchema } from "./getBookingDetails.schema";
 import { ZGetBookingHistoryInputSchema } from "./getBookingHistory.schema";
+import { ZGetRecurringOccurrencesInputSchema } from "./getRecurringOccurrences.schema";
 import { ZGetWrongAssignmentReportsInputSchema } from "./getWrongAssignmentReports.schema";
 import { ZHasWrongAssignmentReportInputSchema } from "./hasWrongAssignmentReport.schema";
 import { ZReportBookingInputSchema } from "./reportBooking.schema";
 import { ZReportWrongAssignmentInputSchema } from "./reportWrongAssignment.schema";
 import { ZRequestRescheduleInputSchema } from "./requestReschedule.schema";
+import { ZRunningLateInputSchema } from "./runningLate.schema";
 import { ZUpdateWrongAssignmentReportStatusInputSchema } from "./updateWrongAssignmentReportStatus.schema";
 import { bookingsProcedure } from "./util";
 
@@ -36,6 +38,15 @@ export const bookingsRouter = router({
       ctx,
       input,
       source: "WEBAPP",
+    });
+  }),
+
+  runningLate: authedProcedure.input(ZRunningLateInputSchema).mutation(async ({ input, ctx }) => {
+    const { runningLateHandler } = await import("./runningLate.handler");
+
+    return runningLateHandler({
+      ctx,
+      input,
     });
   }),
 
@@ -74,6 +85,17 @@ export const bookingsRouter = router({
       const { getBookingAttendeesHandler } = await import("./getBookingAttendees.handler");
 
       return getBookingAttendeesHandler({
+        ctx,
+        input,
+      });
+    }),
+
+  getRecurringOccurrences: authedProcedure
+    .input(ZGetRecurringOccurrencesInputSchema)
+    .query(async ({ input, ctx }) => {
+      const { getRecurringOccurrencesHandler } = await import("./getRecurringOccurrences.handler");
+
+      return getRecurringOccurrencesHandler({
         ctx,
         input,
       });

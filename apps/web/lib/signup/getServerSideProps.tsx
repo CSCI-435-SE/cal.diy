@@ -9,6 +9,8 @@ import { teamMetadataSchema } from "@calcom/prisma/zod-utils";
 import { IS_GOOGLE_LOGIN_ENABLED } from "@server/lib/constants";
 import type { GetServerSidePropsContext } from "next";
 import { z } from "zod";
+import type { OidcProviderForLogin } from "~/auth/lib/oidcLoginButtons";
+import { toOidcSignupButtons } from "~/auth/lib/oidcLoginButtons";
 
 const checkValidEmail = (email: string) => emailSchema.safeParse(email).success;
 
@@ -53,9 +55,17 @@ export const getServerSideProps = async (ctx: GetServerSidePropsContext) => {
     } as const;
   }
 
+  // Empty until #136 merges; then this becomes getOidcProviderRepository().findEnabled().
+  const enabledOidcProviders: OidcProviderForLogin[] = [];
+
   const props = {
     redirectUrl,
     isGoogleLoginEnabled: IS_GOOGLE_LOGIN_ENABLED,
+    // Invite links (with a token) still render this page when NEXT_PUBLIC_DISABLE_SIGNUP is set,
+    // so the site-wide switch is applied here too, not only in the redirect below.
+    oidcProviders: toOidcSignupButtons(enabledOidcProviders, {
+      signupDisabled: process.env.NEXT_PUBLIC_DISABLE_SIGNUP === "true" || signupDisabled,
+    }),
 
     prepopulateFormValues: undefined,
     emailVerificationEnabled,

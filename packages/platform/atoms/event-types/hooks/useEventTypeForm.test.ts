@@ -219,3 +219,69 @@ describe("useEventTypeForm - reschedule reason requirement", () => {
     expect(editor.current.form.formState.isDirty).toBe(false);
   });
 });
+
+const eventTypeWithCancellationNotice = (minimumCancellationNotice: number | null | undefined) =>
+  ({
+    id: 1,
+    title: "Test Event",
+    slug: "test-event",
+    metadata: {},
+    hashedLink: [],
+    hosts: [],
+    children: [],
+    team: null,
+    requiresCancellationReason: null,
+    minimumCancellationNotice,
+  }) as unknown as EventTypeSetupProps["eventType"];
+
+describe("useEventTypeForm - minimum cancellation notice", () => {
+  it.each([
+    [1440, 1440],
+    [null, null],
+    [undefined, null],
+  ])("loads a stored value of %s into the form as %s", (stored, expected) => {
+    const { result } = renderHook(() =>
+      useEventTypeForm({ eventType: eventTypeWithCancellationNotice(stored), onSubmit: vi.fn() })
+    );
+
+    expect(result.current.form.getValues("minimumCancellationNotice")).toBe(expected);
+  });
+
+  it.each([
+    ["saves a newly set notice", null, 1440],
+    ["clears the notice when the setting is turned off", 1440, null],
+  ])("%s", (_label, stored, edited) => {
+    const onSubmit = vi.fn();
+    const { result } = renderHook(() =>
+      useEventTypeForm({ eventType: eventTypeWithCancellationNotice(stored), onSubmit })
+    );
+
+    act(() => {
+      result.current.form.setValue("minimumCancellationNotice", edited, { shouldDirty: true });
+    });
+    act(() => {
+      result.current.handleSubmit(result.current.form.getValues());
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, minimumCancellationNotice: edited })
+    );
+  });
+
+  it("does not send the notice when it was not changed", () => {
+    const onSubmit = vi.fn();
+    const { result } = renderHook(() =>
+      useEventTypeForm({ eventType: eventTypeWithCancellationNotice(1440), onSubmit })
+    );
+
+    act(() => {
+      result.current.form.setValue("title", "Renamed", { shouldDirty: true });
+    });
+    act(() => {
+      result.current.handleSubmit(result.current.form.getValues());
+    });
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("minimumCancellationNotice");
+  });
+});

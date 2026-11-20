@@ -75,7 +75,6 @@ export type ManagedEventCancellationResult = {
   status: BookingStatus;
 };
 
-
 type TeamBookingsParamsBase = {
   user: { id: number; email: string };
   teamId: number;
@@ -683,6 +682,51 @@ export class BookingRepository implements IBookingRepository {
     });
   }
 
+  async findByRecurringEventId({ recurringEventId }: { recurringEventId: string }) {
+    return await this.prismaClient.booking.findMany({
+      where: { recurringEventId },
+      select: { id: true, uid: true, startTime: true, endTime: true, status: true },
+      orderBy: { startTime: "asc" },
+    });
+  }
+
+  async findFirstActiveRecurringBookingFromDate({
+    recurringEventId,
+    fromDate,
+  }: {
+    recurringEventId: string;
+    fromDate: Date;
+  }) {
+    return await this.prismaClient.booking.findFirst({
+      where: {
+        recurringEventId,
+        startTime: { gte: fromDate },
+        status: { in: [BookingStatus.ACCEPTED, BookingStatus.PENDING] },
+      },
+      select: { startTime: true },
+      orderBy: { startTime: "asc" },
+    });
+  }
+
+  async findByUidIncludeAttendeesAndEventTypeHosts({ bookingUid }: { bookingUid: string }) {
+    return await this.prismaClient.booking.findUnique({
+      where: { uid: bookingUid },
+      select: {
+        userId: true,
+        startTime: true,
+        recurringEventId: true,
+        attendees: { select: { email: true } },
+        eventType: {
+          select: {
+            minimumCancellationNotice: true,
+            hosts: { select: { user: { select: { id: true, email: true } } } },
+            users: { select: { id: true, email: true } },
+          },
+        },
+      },
+    });
+  }
+
   private async _findAllExistingBookingsForEventTypeBetween({
     eventTypeId,
     seatedEvent = false,
@@ -885,6 +929,40 @@ export class BookingRepository implements IBookingRepository {
           // Ascending order ensures that the first attendee in the list is the booker and others are guests
           // See why it is important https://github.com/calcom/cal.diy/pull/20935
           // TODO: Ideally we should return `booker` property directly from the booking
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+    });
+  }
+
+  async findByIdIncludeUserAndAttendeeTimeZones(bookingId: number) {
+    return await this.prismaClient.booking.findUnique({
+      where: {
+        id: bookingId,
+      },
+      select: {
+        id: true,
+        uid: true,
+        title: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+        userId: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        attendees: {
+          select: {
+            name: true,
+            email: true,
+            timeZone: true,
+            locale: true,
+          },
           orderBy: {
             id: "asc",
           },

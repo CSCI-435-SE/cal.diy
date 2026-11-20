@@ -71,6 +71,7 @@ import { DisableAllEmailsSetting } from "./DisableAllEmailsSetting";
 import type { DisableReschedulingCustomClassNames } from "./DisableReschedulingController";
 import DisableReschedulingController from "./DisableReschedulingController";
 import { FormBuilder } from "./FormBuilder";
+import MinimumCancellationNoticeSetting from "./MinimumCancellationNoticeController";
 import type { RequiresConfirmationCustomClassNames } from "./RequiresConfirmationController";
 import RequiresConfirmationController from "./RequiresConfirmationController";
 
@@ -827,6 +828,7 @@ export const EventAdvancedTab = ({
                 checked={value}
                 onCheckedChange={(val) => {
                   onChange(val);
+                  if (val) formMethods.setValue("minimumCancellationNotice", null, { shouldDirty: true });
                 }}
               />
             )}
@@ -838,6 +840,8 @@ export const EventAdvancedTab = ({
             onDisableRescheduling={setDisableRescheduling}
             customClassNames={customClassNames?.disableRescheduling}
           />
+
+          <MinimumCancellationNoticeSetting />
         </>
       )}
 

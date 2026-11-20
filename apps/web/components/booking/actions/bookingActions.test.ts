@@ -8,6 +8,7 @@ import {
   getVideoOptionsActions,
   getEditEventActions,
   getAfterEventActions,
+  getRunningLateAction,
   shouldShowPendingActions,
   shouldShowEditActions,
   shouldShowRecurringCancelAction,
@@ -762,5 +763,177 @@ describe("Booking Actions", () => {
 
       expect(getActionLabel("no_show", contextWithNoShow)).toBe("unmark_as_no_show");
     });
+  });
+});
+
+describe("cancel action with a minimum cancellation notice", () => {
+  const ORGANIZER_ID = 1;
+  const CO_HOST = { id: 2, email: "cohost@example.com" };
+  const ATTENDEE = { id: 99, email: "john@example.com" };
+
+  const contextWithNotice = ({
+    minutesUntilStart,
+    minimumCancellationNotice = 60,
+    loggedInUser = ATTENDEE,
+    isMinimumCancellationNoticeEnabled = true,
+  }: {
+    minutesUntilStart: number;
+    minimumCancellationNotice?: number | null;
+    loggedInUser?: { id: number; email: string };
+    isMinimumCancellationNoticeEnabled?: boolean;
+  }) => {
+    const base = createMockContext();
+    const startTime = new Date(Date.now() + minutesUntilStart * 60 * 1000);
+    return createMockContext({
+      isMinimumCancellationNoticeEnabled,
+      booking: {
+        ...base.booking,
+        startTime: startTime.toISOString(),
+        attendees: [...base.booking.attendees, { ...base.booking.attendees[0], id: 2, email: CO_HOST.email }],
+        eventType: {
+          ...base.booking.eventType,
+          minimumCancellationNotice,
+          hosts: [{ userId: CO_HOST.id, user: CO_HOST }],
+        },
+        loggedInUser: {
+          ...base.booking.loggedInUser,
+          userId: loggedInUser.id,
+          userEmail: loggedInUser.email,
+        },
+      } as BookingActionContext["booking"],
+    });
+  };
+
+  it("disables cancel for an attendee inside the window", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30 });
+
+    expect(isActionDisabled("cancel", context)).toBe(true);
+    expect(getCancelEventAction(context).disabled).toBe(true);
+  });
+
+  // The list query returns `user: null` when the organizer's account no longer exists; the reschedule rule
+  // already handles that, and the attendee is still inside the window.
+  it("still disables cancel for an attendee when the organizer's account no longer exists", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30 });
+    const bookingWithoutOrganizer = { ...context.booking, user: null } as BookingActionContext["booking"];
+
+    expect(isActionDisabled("cancel", { ...context, booking: bookingWithoutOrganizer })).toBe(true);
+  });
+
+  // The list query returns `user: null` for a host whose user record is missing; the row must still work out
+  // the attendee's restriction instead of failing on that entry.
+  it("keeps blocking an attendee when a host entry has no user record", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30 });
+    const booking = {
+      ...context.booking,
+      eventType: { ...context.booking.eventType, hosts: [{ userId: CO_HOST.id, user: null }] },
+    } as BookingActionContext["booking"];
+
+    expect(isActionDisabled("cancel", { ...context, booking })).toBe(true);
+  });
+
+  it("disables cancel for an attendee once the booking has started", () => {
+    expect(isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: -5 }))).toBe(true);
+  });
+
+  it("allows cancel for an attendee outside the window", () => {
+    expect(isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: 120 }))).toBe(false);
+  });
+
+  it("allows the organizer to cancel inside the window", () => {
+    const context = contextWithNotice({
+      minutesUntilStart: 30,
+      loggedInUser: { id: ORGANIZER_ID, email: "organizer@example.com" },
+    });
+
+    expect(isActionDisabled("cancel", context)).toBe(false);
+  });
+
+  it("allows a co-host attending the booking to cancel inside the window", () => {
+    expect(
+      isActionDisabled("cancel", contextWithNotice({ minutesUntilStart: 30, loggedInUser: CO_HOST }))
+    ).toBe(false);
+  });
+
+  it("ignores the notice while the feature flag is off", () => {
+    const context = contextWithNotice({ minutesUntilStart: 30, isMinimumCancellationNoticeEnabled: false });
+
+    expect(isActionDisabled("cancel", context)).toBe(false);
+  });
+
+  it("keeps cancel available when the event type has no notice", () => {
+    expect(
+      isActionDisabled(
+        "cancel",
+        contextWithNotice({ minutesUntilStart: 30, minimumCancellationNotice: null })
+      )
+    ).toBe(false);
+  });
+});
+
+describe("getRunningLateAction", () => {
+  const now = new Date("2026-11-12T12:00:00Z");
+  const MINUTE = 60 * 1000;
+
+  function contextStartingIn(
+    msFromNow: number,
+    overrides: Partial<BookingActionContext> = {},
+    bookingOverrides: Partial<BookingActionContext["booking"]> = {}
+  ) {
+    const base = createMockContext(overrides);
+    const startTime = new Date(now.getTime() + msFromNow);
+    const endTime = new Date(startTime.getTime() + 30 * MINUTE);
+    return {
+      ...base,
+      booking: {
+        ...base.booking,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        ...bookingOverrides,
+      },
+    } as BookingActionContext;
+  }
+
+  it("shows the action to the organizer of an accepted booking starting soon", () => {
+    const action = getRunningLateAction(contextStartingIn(30 * MINUTE), now);
+
+    expect(action).toEqual({
+      id: "running_late",
+      label: "running_late",
+      icon: "clock",
+      disabled: false,
+      bookingUid: "booking-123",
+    });
+  });
+
+  it("shows the action while the booking is in progress", () => {
+    expect(getRunningLateAction(contextStartingIn(-10 * MINUTE), now)).not.toBeNull();
+  });
+
+  it("hides the action for bookings more than 2 hours away", () => {
+    expect(getRunningLateAction(contextStartingIn(3 * 60 * MINUTE), now)).toBeNull();
+  });
+
+  it("hides the action once the booking has ended", () => {
+    expect(getRunningLateAction(contextStartingIn(-60 * MINUTE), now)).toBeNull();
+  });
+
+  it("hides the action for bookings that are not confirmed", () => {
+    expect(getRunningLateAction(contextStartingIn(30 * MINUTE, { isConfirmed: false }), now)).toBeNull();
+  });
+
+  it("hides the action from attendees viewing the booking", () => {
+    const base = createMockContext();
+    const context = contextStartingIn(
+      30 * MINUTE,
+      {},
+      { loggedInUser: { ...base.booking.loggedInUser, userId: 2, userEmail: "john@example.com" } }
+    );
+
+    expect(getRunningLateAction(context, now)).toBeNull();
+  });
+
+  it("hides the action when the booking has no owner", () => {
+    expect(getRunningLateAction(contextStartingIn(30 * MINUTE, {}, { user: null }), now)).toBeNull();
   });
 });

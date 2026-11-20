@@ -23,6 +23,7 @@ import { describe, test, vi, expect } from "vitest";
 
 import { appStoreMetadata } from "@calcom/app-store/apps.metadata.generated";
 import * as emailManager from "@calcom/emails/email-manager";
+import tasker from "@calcom/features/tasker";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { SchedulingType } from "@calcom/prisma/enums";
 import { BookingStatus } from "@calcom/prisma/enums";
@@ -1967,6 +1968,7 @@ describe("handleSeats", () => {
           uid: bookingUid,
           seatReferenceUid: bookingSeatToBeCancelledUid,
         });
+        const taskerCreate = vi.spyOn(tasker, "create").mockResolvedValue("task-id");
 
         await handleCancelBooking({
           bookingData: {
@@ -1975,6 +1977,15 @@ describe("handleSeats", () => {
           },
           userId: organizer.id,
         });
+
+        // The freed seat is offered to the waitlist even though the booking itself stays
+        expect(taskerCreate).toHaveBeenCalledWith("offerWaitlistSpot", {
+          eventTypeId: 1,
+          hostUserId: organizer.id,
+          start: new Date(bookingStartTime).toISOString(),
+          end: new Date(bookingEndTime).toISOString(),
+        });
+        taskerCreate.mockRestore();
 
         // Ensure that the booking has been cancelled
         const cancelledBooking = await prismaMock.booking.findFirst({

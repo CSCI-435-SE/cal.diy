@@ -26,6 +26,7 @@ export type AppFlags = {
   "signup-watchlist-review": boolean;
   "sink-shortener": boolean;
   "require-two-factor-auth": boolean;
+  "minimum-cancellation-notice": boolean;
 };
 
 export type TeamFeatures = Record<keyof AppFlags, boolean>;

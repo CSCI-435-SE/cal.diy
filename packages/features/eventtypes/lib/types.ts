@@ -121,6 +121,7 @@ export type FormValues = {
   disabledCancelling: boolean;
   disabledRescheduling: boolean;
   minimumRescheduleNotice: number | null;
+  minimumCancellationNotice: number | null;
   periodType: PeriodType;
   /**
    * Number of days(Applicable only for ROLLING period type)
@@ -372,6 +373,7 @@ export type EventTypeUpdateInput = {
   requiresCancellationReason?: CancellationReasonRequirement | null;
   requiresRescheduleReason?: RescheduleReasonRequirement | null;
   minimumRescheduleNotice?: number | null;
+  minimumCancellationNotice?: number | null;
   seatsShowAttendees?: boolean | null;
   seatsShowAvailabilityCount?: boolean | null;
   scheduleId?: number | null;

@@ -287,7 +287,8 @@ export const AvailableTimes = ({
 
   // A partial-day entry leaves a run of away slots in the middle of the day. One panel stands in for each run,
   // at the first away slot, so the panel sits between the slots before and after the window.
-  const merged = mergeByTime(slots, date ? bookedTimes : []);
+  const merged = mergeByTime(slots, date ? bookedTimes : [], props.seatsPerTimeSlot);
+  const isDayFull = slots.every((slot) => isSeatedSlotFull(slot, props.seatsPerTimeSlot));
   const items: ReactNode[] = [];
   for (let index = 0; index < merged.length; index++) {
     const slot = merged[index];
@@ -317,7 +318,7 @@ export const AvailableTimes = ({
   return (
     <div className={classNames("text-default flex flex-col", className)}>
       <div className="h-full pb-4">
-        {!slots.length && (
+        {isDayFull && (
           <div
             data-testId="no-slots-available"
             className="bg-subtle border-subtle flex h-full flex-col items-center rounded-md border p-6 dark:bg-transparent">
@@ -336,13 +337,27 @@ export const AvailableTimes = ({
   );
 };
 
-/** Interleaves booked times (as ISO strings) with open slots in time order, skipping times that are still open. */
-const mergeByTime = (slots: Slot[], bookedTimes: string[]): (Slot | string)[] => {
+const isSeatedSlotFull = (slot: Slot, seatsPerTimeSlot?: number | null) =>
+  !!seatsPerTimeSlot && (slot.attendees ?? 0) >= seatsPerTimeSlot;
+
+/**
+ * Interleaves booked times (as ISO strings) with open slots in time order, skipping times that are still open.
+ * A full seated slot that can be waitlisted is replaced by its booked time.
+ */
+const mergeByTime = (
+  slots: Slot[],
+  bookedTimes: string[],
+  seatsPerTimeSlot?: number | null
+): (Slot | string)[] => {
   if (!bookedTimes.length) return slots;
-  const openTimes = new Set(slots.map((slot) => dayjs(slot.time).valueOf()));
+  const bookedSet = new Set(bookedTimes.map((time) => dayjs(time).valueOf()));
+  const shown = slots.filter(
+    (slot) => !(isSeatedSlotFull(slot, seatsPerTimeSlot) && bookedSet.has(dayjs(slot.time).valueOf()))
+  );
+  const openTimes = new Set(shown.map((slot) => dayjs(slot.time).valueOf()));
   const booked = bookedTimes.filter((time) => !openTimes.has(dayjs(time).valueOf()));
   const timeOf = (item: Slot | string) => dayjs(typeof item === "string" ? item : item.time).valueOf();
-  return [...slots, ...booked].sort((a, b) => timeOf(a) - timeOf(b));
+  return [...shown, ...booked].sort((a, b) => timeOf(a) - timeOf(b));
 };
 
 interface IOOOSlotProps {

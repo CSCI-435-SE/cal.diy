@@ -1,5 +1,7 @@
 import { useEventTypeForm } from "@calcom/atoms/event-types/hooks/useEventTypeForm";
 import type { EventTypeSetupProps, EventTypeUpdateInput } from "@calcom/features/eventtypes/lib/types";
+import type { Flags } from "@calcom/features/flags/context/provider";
+import { FeatureProvider } from "@calcom/features/flags/context/provider";
 import { CancellationReasonRequirement, RescheduleReasonRequirement } from "@calcom/prisma/enums";
 import { Form } from "@calcom/ui/components/form";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
@@ -7,9 +9,20 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { vi } from "vitest";
 import { EventAdvancedTab } from "./EventAdvancedTab";
 
-vi.mock("@calcom/lib/hooks/useLocale", () => ({
-  useLocale: () => ({ t: (key: string) => key }),
-}));
+// Keys stay untranslated, except templates with <0></0> placeholders: without them ServerTrans
+// would not render the inputs embedded in those sentences.
+vi.mock("@calcom/lib/hooks/useLocale", async () => {
+  const { default: enCommon } = await import("@calcom/i18n/locales/en/common.json");
+  const translations: Record<string, unknown> = enCommon;
+  return {
+    useLocale: () => ({
+      t: (key: string) => {
+        const translation = translations[key];
+        return typeof translation === "string" && translation.includes("<0>") ? translation : key;
+      },
+    }),
+  };
+});
 
 vi.mock("@formkit/auto-animate/react", () => ({
   useAutoAnimate: () => [null],
@@ -35,8 +48,9 @@ vi.mock("./RequiresConfirmationController", () => ({
   default: () => null,
 }));
 
+// Renders a marker so tests can check where neighbouring settings are placed.
 vi.mock("./DisableReschedulingController", () => ({
-  default: () => null,
+  default: () => <div data-testid="disable-rescheduling-controller" />,
 }));
 
 const mockEventType = {
@@ -57,23 +71,33 @@ const mockEventType = {
   requiresRescheduleReason: RescheduleReasonRequirement.OPTIONAL_BOTH,
 } as unknown as EventTypeSetupProps["eventType"];
 
-function AdvancedTabHarness({ onSubmit }: { onSubmit: (data: EventTypeUpdateInput) => void }) {
-  const { form, handleSubmit } = useEventTypeForm({ eventType: mockEventType, onSubmit });
+function AdvancedTabHarness({
+  onSubmit,
+  flags = {},
+  eventType = mockEventType,
+}: {
+  onSubmit: (data: EventTypeUpdateInput) => void;
+  flags?: Flags;
+  eventType?: EventTypeSetupProps["eventType"];
+}) {
+  const { form, handleSubmit } = useEventTypeForm({ eventType, onSubmit });
 
   return (
-    <TooltipProvider>
-      <Form form={form} handleSubmit={handleSubmit}>
-        <EventAdvancedTab
-          eventType={mockEventType}
-          team={null}
-          calendarsQuery={{ data: undefined, isPending: false, error: null }}
-          showToast={vi.fn()}
-          showBookerLayoutSelector={false}
-          orgId={null}
-        />
-        <button type="submit">Save event type</button>
-      </Form>
-    </TooltipProvider>
+    <FeatureProvider value={flags}>
+      <TooltipProvider>
+        <Form form={form} handleSubmit={handleSubmit}>
+          <EventAdvancedTab
+            eventType={eventType}
+            team={null}
+            calendarsQuery={{ data: undefined, isPending: false, error: null }}
+            showToast={vi.fn()}
+            showBookerLayoutSelector={false}
+            orgId={null}
+          />
+          <button type="submit">Save event type</button>
+        </Form>
+      </TooltipProvider>
+    </FeatureProvider>
   );
 }
 
@@ -107,5 +131,81 @@ describe("EventAdvancedTab - require reschedule reason", () => {
     const payload = onSubmit.mock.calls[0][0];
     expect(payload).toMatchObject({ id: 1, requiresRescheduleReason: savedValue });
     expect(payload).not.toHaveProperty("requiresCancellationReason");
+  });
+});
+
+describe("EventAdvancedTab - minimum cancellation notice", () => {
+  it("hides the setting while the feature flag is off", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} />);
+
+    expect(screen.getByTestId("disable-rescheduling-controller")).toBeInTheDocument();
+    expect(screen.queryByTestId("minimum-cancellation-notice-toggle")).not.toBeInTheDocument();
+  });
+
+  it("places the setting directly after Disable rescheduling, below Disable Cancelling", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} flags={{ "minimum-cancellation-notice": true }} />);
+
+    const disableCancelling = screen.getByTestId("disable-cancelling-toggle");
+    const disableRescheduling = screen.getByTestId("disable-rescheduling-controller");
+    const cancellationNotice = screen.getByTestId("minimum-cancellation-notice-toggle");
+
+    expect(disableCancelling.compareDocumentPosition(disableRescheduling)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(disableRescheduling.nextElementSibling).toContainElement(cancellationNotice);
+  });
+
+  const flagOn = { "minimum-cancellation-notice": true };
+  const withSavedNotice = (minimumCancellationNotice: number) =>
+    ({ ...mockEventType, minimumCancellationNotice }) as EventTypeSetupProps["eventType"];
+  const noticeToggle = () => screen.getByTestId("minimum-cancellation-notice-toggle");
+  const noticeInput = () => screen.getByTestId("minimum-cancellation-notice-input") as HTMLInputElement;
+  const saveAndGetPayload = async (onSubmit: ReturnType<typeof vi.fn>) => {
+    fireEvent.click(screen.getByRole("button", { name: "Save event type" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    return onSubmit.mock.calls[0][0];
+  };
+
+  it("shows the saved notice when the event type is reopened", () => {
+    render(<AdvancedTabHarness onSubmit={vi.fn()} flags={flagOn} eventType={withSavedNotice(1440)} />);
+
+    expect(noticeToggle()).toHaveAttribute("aria-checked", "true");
+    expect(noticeInput().value).toBe("24");
+    expect(screen.getByText("hours")).toBeInTheDocument();
+  });
+
+  it("saves the notice the host sets, in minutes", async () => {
+    const onSubmit = vi.fn();
+    render(<AdvancedTabHarness onSubmit={onSubmit} flags={flagOn} />);
+
+    fireEvent.click(noticeToggle());
+    const unitSelect = screen.getByLabelText("minimum_cancellation_notice_unit");
+    fireEvent.keyDown(unitSelect, { key: "ArrowDown", code: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "hours" }));
+    fireEvent.change(noticeInput(), { target: { value: "24" } });
+
+    expect(await saveAndGetPayload(onSubmit)).toMatchObject({ id: 1, minimumCancellationNotice: 1440 });
+  });
+
+  it("saves no notice when the host switches the setting off", async () => {
+    const onSubmit = vi.fn();
+    render(<AdvancedTabHarness onSubmit={onSubmit} flags={flagOn} eventType={withSavedNotice(1440)} />);
+
+    fireEvent.click(noticeToggle());
+
+    expect(await saveAndGetPayload(onSubmit)).toMatchObject({ id: 1, minimumCancellationNotice: null });
+  });
+
+  it("clears the saved notice when Disable Cancelling is turned on", async () => {
+    const onSubmit = vi.fn();
+    render(<AdvancedTabHarness onSubmit={onSubmit} flags={flagOn} eventType={withSavedNotice(1440)} />);
+
+    fireEvent.click(screen.getByTestId("disable-cancelling-toggle"));
+
+    expect(screen.queryByTestId("minimum-cancellation-notice-toggle")).not.toBeInTheDocument();
+    expect(await saveAndGetPayload(onSubmit)).toMatchObject({
+      disableCancelling: true,
+      minimumCancellationNotice: null,
+    });
   });
 });
