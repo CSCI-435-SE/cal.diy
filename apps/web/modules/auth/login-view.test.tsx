@@ -61,7 +61,7 @@ describe("Login page: ?error= messages (AC6)", () => {
   ])("shows the translated message for ?error=%s", (code, key) => {
     mocks.searchParams = new URLSearchParams({ error: code });
     renderLogin();
-    expect(screen.getByText(key)).toBeInTheDocument();
+    expect(within(screen.getByTestId("alert")).getByText(key)).toBeInTheDocument();
   });
 
   it("does not show the raw error code", () => {
@@ -73,6 +73,7 @@ describe("Login page: ?error= messages (AC6)", () => {
   it("shows no sign-in error without ?error=", () => {
     renderLogin();
     expect(screen.queryByText(/^auth_error_/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -104,6 +105,12 @@ describe("Login page: OIDC buttons", () => {
     renderLogin({ oidcProviders: [acme] });
     expect(screen.getByTestId("oidc-cl_acme")).toBeInTheDocument();
     expect(screen.getByText("or")).toBeInTheDocument();
+  });
+
+  it("still shows the Google button when Google is the only provider (AC3)", () => {
+    renderLogin({ isGoogleLoginEnabled: true });
+    expect(screen.getByTestId("google")).toBeInTheDocument();
+    expect(screen.queryByTestId(/^oidc-/)).not.toBeInTheDocument();
   });
 
   it("looks as before with no providers: no OIDC buttons and no divider (AC3)", () => {
